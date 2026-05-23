@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "Founding_of_Santa_Maria_Maggiore.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "width" : 0.8
+  }
+}

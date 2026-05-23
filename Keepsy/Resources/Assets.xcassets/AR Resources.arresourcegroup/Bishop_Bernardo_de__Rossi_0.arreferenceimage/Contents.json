@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "Bishop_Bernardo_de__Rossi.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "width" : 0.8
+  }
+}

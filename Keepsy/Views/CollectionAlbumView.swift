@@ -1,0 +1,183 @@
+import SwiftUI
+
+struct CollectionAlbumView: View {
+    var museumLocation: String? = nil // nil = all
+    var showCloseButton: Bool = false
+    var onClose: (() -> Void)? = nil
+    
+    // 5 colonne come richiesto
+    let columns = [
+        GridItem(.flexible(), spacing: 6),
+        GridItem(.flexible(), spacing: 6),
+        GridItem(.flexible(), spacing: 6),
+        GridItem(.flexible(), spacing: 6),
+        GridItem(.flexible(), spacing: 6)
+    ]
+    
+    @State private var foundCards: Set<String> = []
+    @State private var revealedCards: Set<String> = []
+    @State private var inspectedCard: ArtworkCard? = nil
+    
+    var headerTitle: String {
+        guard let loc = museumLocation?.uppercased() else { return "CAPODIMONTE" }
+        if loc == "FULL_COLLECTION" {
+            return "CAPODIMONTE"
+        } else if loc == "FIRENZE" {
+            return "UFFIZI"
+        } else {
+            return loc // "LOUVRE"
+        }
+    }
+    
+    var filteredArtworks: [String] {
+        if let location = museumLocation {
+            if location == "FULL_COLLECTION" {
+                return CardDatabase.artworksFor(location: "NAPLES")
+            } else {
+                return CardDatabase.artworksFor(location: location)
+            }
+        } else {
+            return CardDatabase.allArtworkNames
+        }
+    }
+    
+    var body: some View {
+        ZStack {
+            // Sfondo scuro con griglia
+            Color(red: 0.05, green: 0.05, blue: 0.1).edgesIgnoringSafeArea(.all)
+            GridBackground()
+            
+            VStack(spacing: 20) {
+                // Se è presente il tasto chiudi, mostriamo una Top Bar
+                if showCloseButton {
+                    HStack {
+                        Button(action: {
+                            onClose?()
+                        }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "chevron.left")
+                                    .bold()
+                                Text("Indietro")
+                                    .font(.headline)
+                            }
+                            .foregroundColor(.white)
+                        }
+                        Spacer()
+                        
+                        Text(headerTitle)
+                            .font(.system(.headline, design: .monospaced))
+                            .bold()
+                            .foregroundColor(.white)
+                            .padding(.trailing, 40) // per bilanciare il tasto indietro
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                }
+                
+                // Collection Box
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(white: 0.12)) // Grigio scuro simile al mockup
+                        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.2), lineWidth: 0.5))
+                    
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 6) {
+                            ForEach(filteredArtworks, id: \.self) { name in
+                                let isLouvre = CardDatabase.louvreArtworks.contains(name)
+                                AlbumCardCell(
+                                    name: name,
+                                    isFound: isLouvre ? true : foundCards.contains(name),
+                                    isRevealed: isLouvre ? true : revealedCards.contains(name)
+                                )
+                                .onTapGesture {
+                                    if isLouvre || foundCards.contains(name) {
+                                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                            inspectedCard = ArtworkCard(
+                                                name: name,
+                                                imageName: name,
+                                                gradient: CardDatabase.gradientFor(name: name),
+                                                isFlipped: true // Per assicurarci che parta girata frontalmente o con il behavior giusto
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(12)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 16)) // Non fa uscire la ScrollView dai bordi arrotondati
+                }
+                .padding(.horizontal, 15)
+                .padding(.bottom, 20)
+            }
+        }
+        .onAppear {
+            foundCards = CardDatabase.getFoundCards()
+            revealedCards = CardDatabase.getRevealedCards()
+        }
+        .overlay(
+            Group {
+                if let inspectedCard = inspectedCard {
+                    CardInspectionView(card: inspectedCard) {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            self.inspectedCard = nil
+                        }
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    .zIndex(100)
+                }
+            }
+        )
+    }
+}
+
+struct AlbumCardCell: View {
+    let name: String
+    let isFound: Bool
+    let isRevealed: Bool
+    
+    var body: some View {
+        ZStack {
+            if isFound {
+                // Card trovata nel pacchetto
+                VStack(spacing: 0) {
+                    Group {
+                        if !isRevealed, let uiImage = UIImage(named: name)?.resize(to: CGSize(width: 20, height: 25)) {
+                            // Non ancora rivelata: pixelata
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .interpolation(.none)
+                        } else if UIImage(named: name) != nil {
+                            // Rivelata in AR: immagine chiara
+                            Image(name)
+                                .resizable()
+                        } else {
+                            // Fallback per card di cui manca l'asset d'immagine (es. Louvre)
+                            Image("CardBackLogo")
+                                .resizable()
+                        }
+                    }
+                    .aspectRatio(contentMode: .fill)
+                    .padding(.top, 3)
+                    .padding(.horizontal, 3)
+                    .cornerRadius(4)
+                    
+                    Spacer()
+                    
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(height: 15)
+                }
+                .background(CardDatabase.gradientFor(name: name))
+                .cornerRadius(6)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(CardDatabase.borderGradientFor(name: name), lineWidth: 1))
+            } else {
+                // Card bloccata (sagoma nera)
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.black)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(white: 0.15), lineWidth: 1))
+            }
+        }
+        .aspectRatio(111/168, contentMode: .fit) // Mantiene le proporzioni originali Figma
+    }
+}

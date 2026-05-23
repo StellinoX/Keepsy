@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "Madonna_of_Humility.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "width" : 0.8
+  }
+}

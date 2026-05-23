@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "Portrait_medal_of_Bianca_Pellegrini.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "width" : 0.8
+  }
+}

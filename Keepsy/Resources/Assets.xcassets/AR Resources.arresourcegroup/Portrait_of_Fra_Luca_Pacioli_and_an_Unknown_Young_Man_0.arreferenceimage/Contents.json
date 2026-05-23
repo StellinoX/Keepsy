@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "Portrait_of_Fra_Luca_Pacioli_and_an_Unknown_Young_Man.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "width" : 0.8
+  }
+}

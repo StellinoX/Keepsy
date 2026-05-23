@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "Absalom_s_Feast.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "width" : 0.8
+  }
+}

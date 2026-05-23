@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "Storm_over_the_Bay_of_Amalfi.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "width" : 0.8
+  }
+}

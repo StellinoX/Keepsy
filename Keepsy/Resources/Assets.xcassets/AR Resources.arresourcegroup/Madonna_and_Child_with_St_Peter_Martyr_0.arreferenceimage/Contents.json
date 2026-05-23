@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "Madonna_and_Child_with_St_Peter_Martyr.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "width" : 0.8
+  }
+}

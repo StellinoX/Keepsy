@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "Altar_of_St_Louis_of_Toulouse.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "width" : 0.8
+  }
+}

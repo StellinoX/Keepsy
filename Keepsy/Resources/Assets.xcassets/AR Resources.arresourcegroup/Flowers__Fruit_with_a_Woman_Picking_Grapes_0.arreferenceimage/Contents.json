@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "Flowers__Fruit_with_a_Woman_Picking_Grapes.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "width" : 0.8
+  }
+}

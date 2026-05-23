@@ -1,0 +1,15 @@
+{
+  "images" : [
+    {
+      "filename" : "Allegory_of_the_Night.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  },
+  "properties" : {
+    "width" : 0.8
+  }
+}
