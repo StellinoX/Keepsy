@@ -133,22 +133,145 @@ fileprivate func createCardFrontTexture(name: String) -> UIImage {
     }
 }
 
+@available(iOS 14.0, *)
+fileprivate func createHorizontalFlareTexture() -> UIImage {
+    let size = CGSize(width: 512, height: 128)
+    let renderer = UIGraphicsImageRenderer(size: size)
+    
+    return renderer.image { ctx in
+        let context = ctx.cgContext
+        context.clear(CGRect(origin: .zero, size: size))
+        
+        let colors = [
+            UIColor.clear.cgColor,
+            UIColor(red: 0.3, green: 0.6, blue: 1.0, alpha: 0.35).cgColor, // Cyan
+            UIColor(red: 1.0, green: 0.85, blue: 0.4, alpha: 0.55).cgColor, // Gold/Yellow
+            UIColor(red: 0.3, green: 0.6, blue: 1.0, alpha: 0.35).cgColor, // Cyan
+            UIColor.clear.cgColor
+        ]
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let glowGradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: [0.0, 0.3, 0.5, 0.7, 1.0])!
+        
+        let glowRect = CGRect(x: 0, y: 16, width: size.width, height: 96)
+        context.saveGState()
+        context.clip(to: glowRect)
+        context.drawLinearGradient(glowGradient, start: CGPoint(x: 0, y: glowRect.minY), end: CGPoint(x: 0, y: glowRect.maxY), options: [])
+        context.restoreGState()
+        
+        let coreColors = [
+            UIColor.clear.cgColor,
+            UIColor.white.cgColor,
+            UIColor.white.cgColor,
+            UIColor.clear.cgColor
+        ]
+        let coreGradient = CGGradient(colorsSpace: colorSpace, colors: coreColors as CFArray, locations: [0.0, 0.25, 0.75, 1.0])!
+        
+        let coreRect = CGRect(x: 0, y: 56, width: size.width, height: 16)
+        context.saveGState()
+        context.clip(to: coreRect)
+        context.drawLinearGradient(coreGradient, start: CGPoint(x: 0, y: coreRect.minY), end: CGPoint(x: 0, y: coreRect.maxY), options: [])
+        context.restoreGState()
+    }
+}
+
+@available(iOS 14.0, *)
+fileprivate func createTearParticleSystem() -> SCNParticleSystem {
+    let ps = SCNParticleSystem()
+    ps.loops = false
+    ps.birthRate = 500
+    ps.emissionDuration = 0.22
+    ps.particleLifeSpan = 0.65
+    ps.particleLifeSpanVariation = 0.2
+    
+    // Emitter Shape: Horizontal bar matching packet tear width
+    let emitterShape = SCNBox(width: 5.5, height: 0.1, length: 0.1, chamferRadius: 0.0)
+    ps.emitterShape = emitterShape
+    ps.emittingDirection = SCNVector3(0, 0, 1) // Shoot out towards camera
+    ps.spreadingAngle = 35.0
+    ps.particleVelocity = 3.5
+    ps.particleVelocityVariation = 1.5
+    
+    ps.particleSize = 0.07
+    ps.particleSizeVariation = 0.03
+    ps.particleColor = UIColor(red: 1.0, green: 0.82, blue: 0.4, alpha: 1.0) // Gold
+    ps.particleColorVariation = SCNVector4(0.08, 0.08, 0.15, 0.0)
+    
+    let sizeController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "size"))
+    if let sizeAnim = sizeController.animation as? CAKeyframeAnimation {
+        sizeAnim.values = [1.0, 0.7, 0.0]
+        sizeAnim.keyTimes = [0.0, 0.5, 1.0]
+    }
+    
+    let opacityController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "opacity"))
+    if let opacityAnim = opacityController.animation as? CAKeyframeAnimation {
+        opacityAnim.values = [1.0, 0.8, 0.0]
+        opacityAnim.keyTimes = [0.0, 0.6, 1.0]
+    }
+    
+    ps.propertyControllers = [
+        .size: sizeController,
+        .opacity: opacityController
+    ]
+    
+    ps.blendMode = .additive
+    return ps
+}
+
+@available(iOS 14.0, *)
+fileprivate func createCenterBlastParticleSystem() -> SCNParticleSystem {
+    let ps = SCNParticleSystem()
+    ps.loops = false
+    ps.birthRate = 600
+    ps.emissionDuration = 0.12
+    ps.particleLifeSpan = 0.85
+    ps.particleLifeSpanVariation = 0.3
+    
+    ps.emitterShape = SCNSphere(radius: 0.15)
+    ps.particleVelocity = 7.0
+    ps.particleVelocityVariation = 3.0
+    
+    ps.particleSize = 0.11
+    ps.particleSizeVariation = 0.05
+    ps.particleColor = UIColor(red: 0.3, green: 0.75, blue: 1.0, alpha: 1.0) // Electric Cyan
+    
+    let sizeController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "size"))
+    if let sizeAnim = sizeController.animation as? CAKeyframeAnimation {
+        sizeAnim.values = [1.0, 0.0]
+        sizeAnim.keyTimes = [0.0, 1.0]
+    }
+    
+    let opacityController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "opacity"))
+    if let opacityAnim = opacityController.animation as? CAKeyframeAnimation {
+        opacityAnim.values = [1.0, 0.0]
+        opacityAnim.keyTimes = [0.0, 1.0]
+    }
+    
+    ps.propertyControllers = [
+        .size: sizeController,
+        .opacity: opacityController
+    ]
+    
+    ps.blendMode = .additive
+    return ps
+}
 
 @available(iOS 14.0, *)
 public struct SceneKitPacketView: UIViewRepresentable {
     var onOpen: (() -> Void)?
+    var onTearComplete: (() -> Void)?
     var interactive: Bool
     var isTorn: Bool
     var firstCardName: String?
     var isFirstCardRevealed: Bool
     var tearMaskImage: UIImage?
     
-    public init(interactive: Bool = true, isTorn: Bool = false, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, onOpen: (() -> Void)? = nil) {
+    public init(interactive: Bool = true, isTorn: Bool = false, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, onTearComplete: (() -> Void)? = nil, onOpen: (() -> Void)? = nil) {
         self.interactive = interactive
         self.isTorn = isTorn
         self.firstCardName = firstCardName
         self.isFirstCardRevealed = isFirstCardRevealed
         self.tearMaskImage = tearMaskImage
+        self.onTearComplete = onTearComplete
         self.onOpen = onOpen
     }
     
@@ -174,7 +297,7 @@ public struct SceneKitPacketView: UIViewRepresentable {
     public func updateUIView(_ uiView: SCNView, context: Context) {}
     
     public func makeCoordinator() -> PacketCoordinator {
-        return PacketCoordinator(isTorn: isTorn, firstCardName: firstCardName, isFirstCardRevealed: isFirstCardRevealed, tearMaskImage: tearMaskImage, onOpen: onOpen)
+        return PacketCoordinator(isTorn: isTorn, firstCardName: firstCardName, isFirstCardRevealed: isFirstCardRevealed, tearMaskImage: tearMaskImage, onTearComplete: onTearComplete, onOpen: onOpen)
     }
 }
 
@@ -199,13 +322,17 @@ public class PacketCoordinator: NSObject {
     let tiltContainerNode: SCNNode
     let topGroupNode: SCNNode
     let bottomGroupNode: SCNNode
+    let flareNode: SCNNode
     
     var touchPoints: [CGPoint] = []
     let maskProp = SCNMaterialProperty(contents: UIColor.black)
     var onOpen: (() -> Void)?
+    var onTearComplete: (() -> Void)?
     var lastMaskImage: UIImage?
+    var lastHapticFingerX: Float = -10.0
     
-    public init(isTorn: Bool = false, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, onOpen: (() -> Void)? = nil) {
+    public init(isTorn: Bool = false, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, onTearComplete: (() -> Void)? = nil, onOpen: (() -> Void)? = nil) {
+        self.onTearComplete = onTearComplete
         self.onOpen = onOpen
         scene = SCNScene()
         
@@ -583,6 +710,21 @@ public class PacketCoordinator: NSObject {
         let tilt = SCNVector3(0, 0, -0.06)
         tiltContainerNode.eulerAngles = tilt
         
+        // Initialize Horizontal Lens Flare Node
+        let flareGeo = SCNPlane(width: 30.0, height: 1.2)
+        let flareMat = SCNMaterial()
+        flareMat.lightingModel = .constant
+        flareMat.diffuse.contents = createHorizontalFlareTexture()
+        flareMat.blendMode = .screen
+        flareMat.readsFromDepthBuffer = false
+        flareMat.writesToDepthBuffer = false
+        flareGeo.materials = [flareMat]
+        
+        flareNode = SCNNode(geometry: flareGeo)
+        flareNode.position = SCNVector3(0, 3.0, 0.3) // Slightly in front of packet and cards
+        flareNode.opacity = 0.0
+        tiltContainerNode.addChildNode(flareNode)
+        
         if isTorn {
             topGroupNode.isHidden = true
             backFlapNode.isHidden = true
@@ -625,6 +767,7 @@ public class PacketCoordinator: NSObject {
             // Only allow the tear to start if the user touches the upper half of the packet
             if local.y > 1.0 {
                 touchPoints = [location]
+                lastHapticFingerX = -10.0
             }
         case .changed:
             if !touchPoints.isEmpty {
@@ -732,6 +875,14 @@ public class PacketCoordinator: NSObject {
         let fingerX = Float(screenToLocal(point: touchPoints.last!, view: view).x)
         let uniforms = SCNVector4(0, 0, 0, fingerX)
         
+        // Trigger a haptic tick when the finger cuts further to the right
+        if lastHapticFingerX == -10.0 {
+            lastHapticFingerX = fingerX
+        } else if fingerX > lastHapticFingerX + 0.45 {
+            HapticManager.shared.triggerSelection()
+            lastHapticFingerX = fingerX
+        }
+        
         SCNTransaction.begin()
         SCNTransaction.animationDuration = 0.0
         bodyNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
@@ -765,6 +916,12 @@ public class PacketCoordinator: NSObject {
             backFlapNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
             SCNTransaction.commit()
             
+            // Trigger haptic success vibration
+            HapticManager.shared.triggerNotification(type: .success)
+            
+            // Trigger callbacks
+            self.onTearComplete?()
+            
             animateOpen()
         } else {
             // Cut failed (too short), reset mask
@@ -781,6 +938,52 @@ public class PacketCoordinator: NSObject {
     }
     
     private func animateOpen() {
+        // === FLARE: Flash bright, expand vertically, then fade out ===
+        flareNode.opacity = 0.0
+        flareNode.scale = SCNVector3(1.0, 0.1, 1.0)
+        
+        let flashDuration = 0.12
+        let fadeDuration = 0.6
+        
+        let fadeIn = SCNAction.fadeIn(duration: 0.08)
+        let scaleYUp = SCNAction.customAction(duration: flashDuration) { node, elapsedTime in
+            let progress = Float(elapsedTime / flashDuration)
+            node.scale = SCNVector3(1.0, 0.1 + progress * 1.7, 1.0)
+        }
+        let flashGroup = SCNAction.group([fadeIn, scaleYUp])
+        
+        let fadeOut = SCNAction.fadeOut(duration: fadeDuration)
+        let scaleYDown = SCNAction.customAction(duration: fadeDuration) { node, elapsedTime in
+            let progress = Float(elapsedTime / fadeDuration)
+            node.scale = SCNVector3(1.0, 1.8 - progress * 1.78, 1.0)
+        }
+        let fadeGroup = SCNAction.group([fadeOut, scaleYDown])
+        
+        let flareSequence = SCNAction.sequence([
+            flashGroup,
+            SCNAction.wait(duration: 0.08),
+            fadeGroup,
+            SCNAction.removeFromParentNode()
+        ])
+        flareNode.runAction(flareSequence)
+        
+        // === PARTICLES: Explosion of glowing sparks at the tear line ===
+        let particleNode = SCNNode()
+        particleNode.position = SCNVector3(0, 3.0, 0.2)
+        
+        let tearPS = createTearParticleSystem()
+        let blastPS = createCenterBlastParticleSystem()
+        
+        particleNode.addParticleSystem(tearPS)
+        particleNode.addParticleSystem(blastPS)
+        tiltContainerNode.addChildNode(particleNode)
+        
+        let removeAction = SCNAction.sequence([
+            SCNAction.wait(duration: 1.5),
+            SCNAction.removeFromParentNode()
+        ])
+        particleNode.runAction(removeAction)
+        
         // === TOP: flap + back flap + top seal fly away AS ONE RIGID BODY ===
         // Separate Y (gravity) and Z (shoot forward) to avoid clipping during tumbling
         let fallY = SCNAction.moveBy(x: 2.5, y: -20.0, z: 0.0, duration: 1.5)

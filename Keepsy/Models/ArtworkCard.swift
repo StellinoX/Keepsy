@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct ArtworkCard: Identifiable {
+struct ArtworkCard: Identifiable, Equatable {
     let id = UUID()
     let name: String
     let imageName: String
@@ -8,6 +8,10 @@ struct ArtworkCard: Identifiable {
     var description: String? = nil
     let gradient: LinearGradient
     var isFlipped: Bool = false
+    
+    static func == (lhs: ArtworkCard, rhs: ArtworkCard) -> Bool {
+        return lhs.name == rhs.name && lhs.isFlipped == rhs.isFlipped
+    }
 }
 
 enum PackState {

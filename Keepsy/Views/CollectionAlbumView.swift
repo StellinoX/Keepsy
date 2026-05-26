@@ -28,36 +28,26 @@ struct CollectionAlbumView: View {
     }
     
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             // Sfondo scuro con griglia
-            Color(red: 0.05, green: 0.05, blue: 0.1).edgesIgnoringSafeArea(.all)
+            Color(red: 0.05, green: 0.05, blue: 0.1).ignoresSafeArea()
             GridBackground()
             
             VStack(spacing: 20) {
-                // Se è presente il tasto chiudi, mostriamo una Top Bar
                 if showCloseButton {
+                    // Header title centered horizontally, pushed down to avoid overlapping notch/Back button
                     HStack {
-                        Button(action: {
-                            onClose?()
-                        }) {
-                            HStack(spacing: 5) {
-                                Image(systemName: "chevron.left")
-                                    .bold()
-                                Text("Indietro")
-                                    .font(.headline)
-                            }
-                            .foregroundColor(.white)
-                        }
                         Spacer()
-                        
                         Text(headerTitle)
                             .font(.system(.headline, design: .monospaced))
                             .bold()
                             .foregroundColor(.white)
-                            .padding(.trailing, 40) // per bilanciare il tasto indietro
+                        Spacer()
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 10)
+                    .padding(.top, 83 + 12) // Aligned nicely with the center-line of the Back button
+                } else {
+                    Spacer()
+                        .frame(height: 40)
                 }
                 
                 // Collection Box
@@ -94,7 +84,36 @@ struct CollectionAlbumView: View {
                 .padding(.horizontal, 15)
                 .padding(.bottom, 20)
             }
+            
+            if showCloseButton {
+                // Elegant Back Button aligned exactly with the target coordinates
+                Button(action: {
+                    HapticManager.shared.triggerImpact(style: .light)
+                    onClose?()
+                }) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .bold))
+                        Text("Back")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: 85, height: 44)
+                    .background(
+                        Capsule().fill(
+                            LinearGradient(
+                                colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    )
+                    .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
+                }
+                .position(x: 30 + 85/2, y: 83 + 44/2)
+            }
         }
+        .ignoresSafeArea()
         .onAppear {
             foundCards = CardDatabase.getFoundCards()
             revealedCards = CardDatabase.getRevealedCards()
@@ -112,7 +131,7 @@ struct CollectionAlbumView: View {
                             self.inspectedCard = nil
                         }
                     }
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    .transition(.opacity)
                     .zIndex(100)
                 }
             }

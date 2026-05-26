@@ -12,128 +12,170 @@ struct ARArtworkView: View {
     @State private var detectedArtwork: String = "Trova l'opera per sbloccarla!"
     @State private var isTargetUnlocked: Bool = false
     @State private var selectedTargetCard: String? = nil
+    @GestureState private var gestureDragOffset: CGFloat = 0.0
     
     var revealedCards: Set<String> {
         return CardDatabase.getRevealedCards()
     }
     
     var body: some View {
-        ZStack {
-            // Camera feed showing AR tracking
-            ARViewContainer(
-                detectedArtwork: $detectedArtwork,
-                isTargetUnlocked: $isTargetUnlocked,
-                activeView: $activeView,
-                targetName: selectedTargetCard ?? ""
-            )
-            .edgesIgnoringSafeArea(.all)
+        GeometryReader { geometry in
+            let screenWidth = geometry.size.width
+            let screenHeight = geometry.size.height
             
-            // Elegant Back Button (top-left)
-            VStack {
-                HStack {
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.35)) {
-                            activeView = .opening
-                        }
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .bold))
-                            Text("Indietro")
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(Color.black.opacity(0.6)))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
-                    }
-                    .padding(.leading, 20)
-                    .padding(.top, 60)
-                    
-                    Spacer()
-                }
-                Spacer()
-            }
-            
-            // Bottom Overlay: Carousel of cards (if active pack exists)
-            VStack {
-                Spacer()
+            ZStack(alignment: .topLeading) {
+                Color.black.ignoresSafeArea()
                 
-                if CardDatabase.hasActivePack(), let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
-                    // Title/hint
-                    Text(isTargetUnlocked ? "✨ OPERA TROVATA! ✨" : "TROVA: \(cleanedArtworkName(selectedTargetCard ?? ""))")
-                        .font(.system(size: 14, weight: .black))
-                        .italic()
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(isTargetUnlocked ? Color.green.opacity(0.8) : Color.black.opacity(0.6)))
-                        .padding(.bottom, 12)
+                // Camera feed showing AR tracking (fullscreen as before)
+                ARViewContainer(
+                    detectedArtwork: $detectedArtwork,
+                    isTargetUnlocked: $isTargetUnlocked,
+                    activeView: $activeView,
+                    targetName: selectedTargetCard ?? ""
+                )
+                .ignoresSafeArea()
+                
+                // Elegant Back Button (top-left aligned with the specified coordinates)
+                Button(action: {
+                    HapticManager.shared.triggerImpact(style: .light)
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        activeView = .opening
+                    }
+                }) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .bold))
+                        Text("Back")
+                            .font(.system(size: 14, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: 85, height: 44)
+                    .background(
+                        Capsule().fill(
+                            LinearGradient(
+                                colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    )
+                    .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
+                }
+                .position(x: 30 + 85/2, y: 83 + 44/2)
+                
+                // Bottom Overlay: Carousel of cards (if active pack exists)
+                VStack(spacing: 12) {
+                    Spacer()
                     
-                    // Carousel of 5 cards (with overlapping offset)
-                    let displayedCards = reorderedCards(selected: selectedTargetCard ?? activePack[0], original: activePack)
-                    HStack(alignment: .bottom, spacing: -35) {
-                        ForEach(displayedCards, id: \.self) { cardName in
-                            let isSelected = cardName == selectedTargetCard
-                            let isRevealed = revealedCards.contains(cardName)
-                            
-                            VStack(spacing: 0) {
-                                ZStack(alignment: .topTrailing) {
-                                    let currentWidth = isSelected ? 160.0 : 100.0
-                                    let currentHeight = isSelected ? 242.0 : 151.0
-                                    let currentCornerRadius = currentWidth * 12.0 / 111.0
-                                    
-                                    ScannerCardView(
-                                        name: cardName,
-                                        width: currentWidth,
-                                        height: currentHeight
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: currentCornerRadius)
-                                            .stroke(isSelected ? Color(hex: "F1B40A") : Color.white.opacity(0.2), lineWidth: isSelected ? 3 : 1)
-                                    )
-                                    .shadow(color: isSelected ? Color(hex: "F1B40A").opacity(0.4) : .black.opacity(0.3), radius: isSelected ? 15 : 5)
-                                    
-                                    if isRevealed {
-                                        // Checked overlay badge
-                                        ZStack {
-                                            Circle()
-                                                .fill(Color.green)
-                                                .frame(width: 28, height: 28)
-                                            Image(systemName: "checkmark")
-                                                .font(.system(size: 14, weight: .bold))
-                                                .foregroundColor(.white)
+                    if CardDatabase.hasActivePack(), let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
+                        // Title/hint
+                        Text(isTargetUnlocked ? "✨ OPERA TROVATA! ✨" : "TROVA: \(cleanedArtworkName(selectedTargetCard ?? ""))")
+                            .font(.system(size: 14, weight: .black))
+                            .italic()
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(isTargetUnlocked ? Color.green.opacity(0.8) : Color.black.opacity(0.6)))
+                            .padding(.bottom, 12)
+                        
+                        // Carousel of 5 cards (with overlapping offset, keeping fixed order)
+                        let selectedIndex = activePack.firstIndex(of: selectedTargetCard ?? "") ?? 0
+                        let spacing: CGFloat = -5
+                        let cardWidth: CGFloat = 100
+                        let totalWidth = CGFloat(activePack.count) * cardWidth + CGFloat(activePack.count - 1) * spacing
+                        let cardCenter = CGFloat(selectedIndex) * (cardWidth + spacing) + (cardWidth / 2)
+                        let baseOffset = (screenWidth / 2) - cardCenter
+                        
+                        HStack(alignment: .bottom, spacing: spacing) {
+                            ForEach(0..<activePack.count, id: \.self) { index in
+                                let cardName = activePack[index]
+                                let isSelected = cardName == selectedTargetCard
+                                let isRevealed = revealedCards.contains(cardName)
+                                
+                                // Calculate distance from the center of the screen
+                                let indexDiff = CGFloat(index - selectedIndex)
+                                let cardCenterDiff = cardWidth + spacing
+                                let distanceFromCenter = indexDiff * cardCenterDiff + gestureDragOffset
+                                
+                                // Calculate dynamic scale and zIndex
+                                let scale = scaleForDistance(distanceFromCenter)
+                                let zIndexVal = 10.0 - (min(abs(distanceFromCenter), 190.0) / 190.0)
+                                
+                                VStack(spacing: 0) {
+                                    ZStack(alignment: .topTrailing) {
+                                        let currentCornerRadius = cardWidth * 12.0 / 111.0
+                                        
+                                        ScannerCardView(
+                                            name: cardName,
+                                            width: cardWidth,
+                                            height: 151.0
+                                        )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: currentCornerRadius)
+                                                .stroke(isSelected ? Color(hex: "F1B40A") : Color.white.opacity(0.2), lineWidth: isSelected ? 3 : 1)
+                                        )
+                                        .shadow(color: isSelected ? Color(hex: "F1B40A").opacity(0.4) : .black.opacity(0.3), radius: isSelected ? 15 : 5)
+                                        
+                                        if isRevealed {
+                                            // Checked overlay badge
+                                            ZStack {
+                                                Circle()
+                                                    .fill(Color.green)
+                                                    .frame(width: 28, height: 28)
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 14, weight: .bold))
+                                                    .foregroundColor(.white)
+                                            }
+                                            .padding(8)
                                         }
-                                        .padding(8)
                                     }
                                 }
-                            }
-                            .zIndex(isSelected ? 10 : 1)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if selectedTargetCard != cardName {
-                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                                        selectedTargetCard = cardName
-                                        isTargetUnlocked = revealedCards.contains(cardName)
-                                        detectedArtwork = isTargetUnlocked ? "Già sbloccata!" : "Trova l'opera per sbloccarla!"
+                                .scaleEffect(scale)
+                                .zIndex(zIndexVal)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    if selectedTargetCard != cardName {
+                                        HapticManager.shared.triggerSelection()
+                                        changeSelection(to: cardName)
                                     }
                                 }
                             }
                         }
+                        .frame(width: totalWidth)
+                        .offset(x: baseOffset + gestureDragOffset)
+                        .frame(height: 260)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture()
+                                .updating($gestureDragOffset) { value, state, _ in
+                                    state = value.translation.width
+                                }
+                                .onEnded { value in
+                                    let dragDistance = value.translation.width
+                                    let shift = Int(round(-dragDistance / 95.0))
+                                    let newIndex = max(0, min(activePack.count - 1, selectedIndex + shift))
+                                    
+                                    if newIndex != selectedIndex {
+                                        HapticManager.shared.triggerSelection()
+                                        changeSelection(to: activePack[newIndex])
+                                    }
+                                }
+                        )
+                    } else {
+                        // No active pack: show classic scan text
+                        Text(detectedArtwork)
+                            .font(.headline)
+                            .padding()
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(10)
+                            .padding(.bottom, 50)
                     }
-                    .frame(height: 260)
-                    .ignoresSafeArea(edges: .bottom)
-                } else {
-                    // No active pack: show classic scan text
-                    Text(detectedArtwork)
-                        .font(.headline)
-                        .padding()
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(10)
-                        .padding(.bottom, 50)
                 }
+                .frame(width: screenWidth)
+                .frame(height: screenHeight - 83)
+                .position(x: screenWidth / 2, y: 83 + (screenHeight - 83) / 2)
             }
+            .ignoresSafeArea()
         }
         .onAppear {
             if let active = CardDatabase.getActivePack(), !active.isEmpty {
@@ -156,15 +198,37 @@ struct ARArtworkView: View {
             .trimmingCharacters(in: .whitespaces)
     }
     
-    func reorderedCards(selected: String, original: [String]) -> [String] {
-        guard let index = original.firstIndex(of: selected) else { return original }
-        let shift = (index - 2 + original.count) % original.count
-        var result = original
-        for _ in 0..<shift {
-            let first = result.removeFirst()
-            result.append(first)
+    private func scaleForDistance(_ distance: CGFloat) -> CGFloat {
+        let maxDistance: CGFloat = 190.0
+        let absDistance = min(abs(distance), maxDistance)
+        // Interpolate scale from 1.6 (at 0) to 0.8 (at maxDistance)
+        return 1.6 - 0.8 * (absDistance / maxDistance)
+    }
+    
+    private func selectNextCard(activePack: [String]) {
+        guard let current = selectedTargetCard,
+              let currentIndex = activePack.firstIndex(of: current) else { return }
+        if currentIndex < activePack.count - 1 {
+            HapticManager.shared.triggerSelection()
+            changeSelection(to: activePack[currentIndex + 1])
         }
-        return result
+    }
+    
+    private func selectPreviousCard(activePack: [String]) {
+        guard let current = selectedTargetCard,
+              let currentIndex = activePack.firstIndex(of: current) else { return }
+        if currentIndex > 0 {
+            HapticManager.shared.triggerSelection()
+            changeSelection(to: activePack[currentIndex - 1])
+        }
+    }
+    
+    private func changeSelection(to cardName: String) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+            selectedTargetCard = cardName
+            isTargetUnlocked = revealedCards.contains(cardName)
+            detectedArtwork = isTargetUnlocked ? "Già sbloccata!" : "Trova l'opera per sbloccarla!"
+        }
     }
 }
 

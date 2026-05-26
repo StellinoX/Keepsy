@@ -5,7 +5,10 @@ struct CardInspectionView: View {
     let onClose: () -> Void
     
     @State private var dragOffset: CGSize = .zero
-    @State private var accumulatedRotation: Double = 0.0 // Rotazione continua
+    @State private var accumulatedRotation: Double = 0.0
+    
+    // Smooth internal animation trigger
+    @State private var animateContent: Bool = false
     
     private var isRevealed: Bool {
         CardDatabase.getRevealedCards().contains(card.name)
@@ -14,9 +17,10 @@ struct CardInspectionView: View {
     var body: some View {
         ZStack {
             // Sfondo scuro per focalizzare la carta. Un tap qui chiude l'ispezione.
-            Color.black.opacity(0.85)
+            Color.black
+                .opacity(animateContent ? 0.85 : 0.0)
                 .edgesIgnoringSafeArea(.all)
-                .onTapGesture { onClose() }
+                .onTapGesture { closeAction() }
             
             // Contenitore della carta fronte/retro con effetto olografico metallico
             SilverMetalCardView(
@@ -107,9 +111,9 @@ struct CardInspectionView: View {
                     .opacity(abs(currentRotation.truncatingRemainder(dividingBy: 360)) > 90 && abs(currentRotation.truncatingRemainder(dividingBy: 360)) < 270 ? 0 : 1)
                 }
             }
-            
-            // Gestures: Tap per chiudere, Drag per girare/inclinare
-            .onTapGesture { onClose() }
+            .scaleEffect(animateContent ? 1.0 : 0.6)
+            .opacity(animateContent ? 1.0 : 0.0)
+            .onTapGesture { closeAction() }
             .gesture(
                 DragGesture()
                     .onChanged { value in
@@ -127,6 +131,48 @@ struct CardInspectionView: View {
                         }
                     }
             )
+            
+            // Elegant Back Button (top-left aligned with same Figma specifications)
+            Button(action: {
+                closeAction()
+            }) {
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .bold))
+                    Text("Back")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(width: 85, height: 44)
+                .background(
+                    Capsule().fill(
+                        LinearGradient(
+                            colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                )
+                .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
+            }
+            .position(x: 30 + 85/2, y: 83 + 44/2)
+            .opacity(animateContent ? 1.0 : 0.0)
+        }
+        .edgesIgnoringSafeArea(.all)
+        .onAppear {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) {
+                animateContent = true
+            }
+        }
+    }
+    
+    private func closeAction() {
+        HapticManager.shared.triggerImpact(style: .light)
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.85)) {
+            animateContent = false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            onClose()
         }
     }
     

@@ -18,6 +18,8 @@ struct PackOpeningView: View {
     @State private var packOpacity: Double = 1.0
     @State private var inspectedCard: ArtworkCard? = nil
     @State private var hasSyncedWithCloud = false
+    @State private var showLightBeam = false
+    @State private var flashOpacity: Double = 0.0
 
     var body: some View {
         ZStack {
@@ -28,6 +30,20 @@ struct PackOpeningView: View {
             )
             .edgesIgnoringSafeArea(.all)
             GridBackground()
+
+            if showLightBeam {
+                LightBeamView()
+                    .transition(.opacity)
+                    .zIndex(15)
+            }
+            
+            // Full screen flash for peak opening impact
+            Color.white
+                .edgesIgnoringSafeArea(.all)
+                .opacity(flashOpacity)
+                .blendMode(.screen)
+                .allowsHitTesting(false)
+                .zIndex(200)
 
             if packState == .selecting {
                 SingleScrollPackView(
@@ -44,9 +60,22 @@ struct PackOpeningView: View {
             } else {
                 ZStack {
                     if packState == .tearing || packState == .opened {
-                        SceneKitPacketView(onOpen: {
-                            completeOpening()
-                        })
+                        SceneKitPacketView(
+                            onTearComplete: {
+                                withAnimation(.easeOut(duration: 0.08)) {
+                                    showLightBeam = true
+                                    flashOpacity = 1.0
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation(.easeIn(duration: 0.45)) {
+                                        flashOpacity = 0.0
+                                    }
+                                }
+                            },
+                            onOpen: {
+                                completeOpening()
+                            }
+                        )
                         .ignoresSafeArea()
                         .opacity(packState == .opened ? 0 : 1)
                         .animation(.easeInOut(duration: 0.3), value: packState)
@@ -109,13 +138,46 @@ struct PackOpeningView: View {
                 }
             }
 
+            if packState == .opened && inspectedCard == nil {
+                ZStack(alignment: .topLeading) {
+                    Button(action: {
+                        HapticManager.shared.triggerImpact(style: .light)
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            resetPack()
+                        }
+                    }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("Back")
+                                .font(.system(size: 14, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 85, height: 44)
+                        .background(
+                            Capsule().fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        )
+                        .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
+                    }
+                    .position(x: 30 + 85/2, y: 83 + 44/2)
+                }
+                .ignoresSafeArea()
+                .zIndex(150)
+            }
+
             if let card = inspectedCard {
                 CardInspectionView(card: card) {
                     withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                         self.inspectedCard = nil
                     }
                 }
-                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                .transition(.opacity)
                 .zIndex(100)
             }
         }
@@ -177,6 +239,8 @@ struct PackOpeningView: View {
         packTearOffset = 0
         packOpacity = 1.0
         inspectedCard = nil
+        showLightBeam = false
+        flashOpacity = 0.0
     }
 }
 
@@ -461,6 +525,99 @@ struct PackExpansionRow: View {
             .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Light Beam Overlay View
+struct LightBeamView: View {
+    @State private var rotateAngle: Double = 0.0
+    @State private var scale: CGFloat = 0.05
+    @State private var opacity: Double = 0.0
+    
+    var body: some View {
+        ZStack {
+            // Main central soft gold/warm glow
+            RadialGradient(
+                colors: [
+                    Color(hex: "FFFFFF").opacity(0.95),
+                    Color(hex: "FFF4D0").opacity(0.7),
+                    Color(hex: "E5A93C").opacity(0.3),
+                    .clear
+                ],
+                center: .center,
+                startRadius: 0,
+                endRadius: 280
+            )
+            .scaleEffect(scale)
+            .opacity(opacity)
+            .blendMode(.screen)
+            
+            // Volumetric light shafts (soft, blurry rays)
+            ZStack {
+                ForEach(0..<12, id: \.self) { i in
+                    Capsule() // Capsule has rounded ends which blend better than hard edges
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    .clear,
+                                    Color(hex: "FFEAA7").opacity(0.22),
+                                    .clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 14 + CGFloat((i * 5) % 12), height: 900)
+                        .rotationEffect(.degrees(Double(i) * 30.0 + rotateAngle))
+                }
+            }
+            .blur(radius: 14) // Softens ray edges to feel volumetric and misty
+            .scaleEffect(scale)
+            .opacity(opacity)
+            .blendMode(.screen)
+            
+            // Secondary counter-rotating rays for parallax depth
+            ZStack {
+                ForEach(0..<8, id: \.self) { i in
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    .clear,
+                                    Color(hex: "FFEAA7").opacity(0.12),
+                                    .clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 8 + CGFloat((i * 3) % 8), height: 800)
+                        .rotationEffect(.degrees(Double(i) * 45.0 - rotateAngle * 0.5))
+                }
+            }
+            .blur(radius: 18)
+            .scaleEffect(scale * 1.1)
+            .opacity(opacity * 0.8)
+            .blendMode(.screen)
+        }
+        .onAppear {
+            // Fast build up as packet tears open
+            withAnimation(.easeOut(duration: 0.75)) {
+                scale = 1.6
+                opacity = 1.0
+            }
+            // Slow, majestic rotation
+            withAnimation(.linear(duration: 25.0).repeatForever(autoreverses: false)) {
+                rotateAngle = 360.0
+            }
+            // Fade out after the deck is fully presented and cards are ready to be inspected
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                withAnimation(.easeOut(duration: 0.8)) {
+                    opacity = 0.0
+                    scale = 2.3
+                }
+            }
+        }
     }
 }
 
