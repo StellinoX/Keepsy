@@ -2,6 +2,23 @@ import SwiftUI
 import UIKit
 
 struct CardDatabase {
+    // Cache for artworks fetched from the cloud
+    static var remoteArtworks: [String: NetworkArtwork] = [:]
+    
+    static func syncWithCloud() async {
+        do {
+            let fetched = try await NetworkService.shared.fetchArtworks()
+            var dict: [String: NetworkArtwork] = [:]
+            for art in fetched {
+                dict[art.internalName] = art
+            }
+            remoteArtworks = dict
+            print("Successfully synced \(fetched.count) artworks from cloud API")
+        } catch {
+            print("Failed to sync artworks: \(error)")
+        }
+    }
+    
     static let capodimonteArtworks = [
         "A_Boy_Blowing_on_an_Ember_to_Light_a_Candle__Sopl_n_", "Alfonso_II_of_Aragon", 
         "Asdrubale_Bitten_by_a_Crawfish", "Bishop_Bernardo_de__Rossi", "Bust_of_Pope_Paul_III", 

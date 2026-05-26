@@ -7,6 +7,10 @@ struct CardInspectionView: View {
     @State private var dragOffset: CGSize = .zero
     @State private var accumulatedRotation: Double = 0.0 // Rotazione continua
     
+    private var isRevealed: Bool {
+        CardDatabase.getRevealedCards().contains(card.name)
+    }
+    
     var body: some View {
         ZStack {
             // Sfondo scuro per focalizzare la carta. Un tap qui chiude l'ispezione.
@@ -43,8 +47,21 @@ struct CardInspectionView: View {
                     // FRONTE DELLA CARTA
                     VStack(spacing: 0) {
                         Group {
-                            Image(card.imageName)
-                                .resizable()
+                            if let url = card.imageUrl {
+                                AsyncImage(url: url) { phase in
+                                    if let image = phase.image {
+                                        image
+                                            .resizable()
+                                            .blur(radius: isRevealed ? 0 : 15)
+                                    } else if phase.error != nil {
+                                        Image("CardBackLogo").resizable()
+                                    } else {
+                                        ProgressView()
+                                    }
+                                }
+                            } else {
+                                Image("CardBackLogo").resizable()
+                            }
                         }
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 280, height: 350)
@@ -54,9 +71,34 @@ struct CardInspectionView: View {
                         
                         Spacer()
                         
-                        Rectangle()
-                            .fill(Color.clear)
-                            .frame(height: 105)
+                        ZStack {
+                            Rectangle()
+                                .fill(Color.clear)
+                                .frame(height: 105)
+                                
+                            if isRevealed {
+                                VStack(spacing: 4) {
+                                    Text(card.name.replacingOccurrences(of: "_", with: " "))
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(2)
+                                    
+                                    if let description = card.description {
+                                        Text(description)
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.white.opacity(0.8))
+                                            .multilineTextAlignment(.center)
+                                            .lineLimit(3)
+                                    }
+                                }
+                                .padding(.horizontal, 10)
+                            } else {
+                                Text("UNKNOWN ARTWORK")
+                                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.5))
+                            }
+                        }
                     }
                     .frame(width: 310, height: 470)
                     .background(card.gradient)

@@ -17,6 +17,7 @@ struct PackOpeningView: View {
     @State private var packTearOffset: CGFloat = 0
     @State private var packOpacity: Double = 1.0
     @State private var inspectedCard: ArtworkCard? = nil
+    @State private var hasSyncedWithCloud = false
 
     var body: some View {
         ZStack {
@@ -118,6 +119,11 @@ struct PackOpeningView: View {
                 .zIndex(100)
             }
         }
+        .task {
+            // Pre-cache remote artworks before opening a pack
+            await CardDatabase.syncWithCloud()
+            hasSyncedWithCloud = true
+        }
         .onAppear {
             loadActivePack()
         }
@@ -127,7 +133,16 @@ struct PackOpeningView: View {
         let artworks = CardDatabase.artworksFor(location: locationManager.currentCity).shuffled()
         let selectedArtworks = Array(artworks.prefix(5))
         self.cards = selectedArtworks.map {
-            ArtworkCard(name: $0, imageName: $0, gradient: CardDatabase.gradientFor(name: $0), isFlipped: false)
+            let urlString = CardDatabase.remoteArtworks[$0]?.imageUrl
+            let url = urlString != nil ? URL(string: urlString!) : nil
+            return ArtworkCard(
+                name: $0, 
+                imageName: $0, 
+                imageUrl: url,
+                description: CardDatabase.remoteArtworks[$0]?.description,
+                gradient: CardDatabase.gradientFor(name: $0),
+                isFlipped: false
+            )
         }
         CardDatabase.addFoundCards(selectedArtworks)
         UserDefaults.standard.set(selectedArtworks, forKey: "activePackCards")

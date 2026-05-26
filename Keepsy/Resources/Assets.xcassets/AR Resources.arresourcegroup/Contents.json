@@ -2,5 +2,235 @@
   "info" : {
     "author" : "xcode",
     "version" : 1
-  }
+  },
+  "resources" : [
+    {
+      "filename" : "A_Boy_Blowing_on_an_Ember_to_Light_a_Candle__Sopl_n__0.arreferenceimage"
+    },
+    {
+      "filename" : "Abduction_Scene_0.arreferenceimage"
+    },
+    {
+      "filename" : "Absalom_s_Feast_0.arreferenceimage"
+    },
+    {
+      "filename" : "Alfonso_II_of_Aragon_0.arreferenceimage"
+    },
+    {
+      "filename" : "Allegory_of_the_Night_0.arreferenceimage"
+    },
+    {
+      "filename" : "Altar_of_St_Louis_of_Toulouse__predella_0.arreferenceimage"
+    },
+    {
+      "filename" : "Altar_of_St_Louis_of_Toulouse__without_predella__0.arreferenceimage"
+    },
+    {
+      "filename" : "Altar_of_St_Louis_of_Toulouse_0.arreferenceimage"
+    },
+    {
+      "filename" : "Altar_of_St_Louis_of_Toulouse_1.arreferenceimage"
+    },
+    {
+      "filename" : "Annunciation_to_the_Shepherds_0.arreferenceimage"
+    },
+    {
+      "filename" : "Asdrubale_Bitten_by_a_Crawfish_0.arreferenceimage"
+    },
+    {
+      "filename" : "Bishop_Bernardo_de__Rossi_0.arreferenceimage"
+    },
+    {
+      "filename" : "Blessing_Christ_0.arreferenceimage"
+    },
+    {
+      "filename" : "Bust_of_Pope_Paul_III_0.arreferenceimage"
+    },
+    {
+      "filename" : "Cardinal_Alessandro_Farnese_0.arreferenceimage"
+    },
+    {
+      "filename" : "Charles_III_at_St_Peter_s_0.arreferenceimage"
+    },
+    {
+      "filename" : "Christ_Served_by_Angels_0.arreferenceimage"
+    },
+    {
+      "filename" : "Composite_Head_0.arreferenceimage"
+    },
+    {
+      "filename" : "Crucifixion_0.arreferenceimage"
+    },
+    {
+      "filename" : "Dana__0.arreferenceimage"
+    },
+    {
+      "filename" : "Flagellation_0.arreferenceimage"
+    },
+    {
+      "filename" : "Flagellation_1.arreferenceimage"
+    },
+    {
+      "filename" : "Flowers__Fruit_with_a_Woman_Picking_Grapes_0.arreferenceimage"
+    },
+    {
+      "filename" : "Flowers_0.arreferenceimage"
+    },
+    {
+      "filename" : "Founding_of_Santa_Maria_Maggiore_0.arreferenceimage"
+    },
+    {
+      "filename" : "Giulio_Clovio_0.arreferenceimage"
+    },
+    {
+      "filename" : "God_the_Father_and_the_Virgin_Mary__fragments_of_the_Baronci_Altarpiece__0.arreferenceimage"
+    },
+    {
+      "filename" : "Hairy_Harry__Mad_Peter_and_Tiny_Amon_0.arreferenceimage"
+    },
+    {
+      "filename" : "Hairy_Harry__Mad_Peter_and_Tiny_Amon_1.arreferenceimage"
+    },
+    {
+      "filename" : "Judith_Beheading_Holofernes_0.arreferenceimage"
+    },
+    {
+      "filename" : "Judith_Beheading_Holofernes_1.arreferenceimage"
+    },
+    {
+      "filename" : "Madonna_and_Child_and_Two_Angels_0.arreferenceimage"
+    },
+    {
+      "filename" : "Madonna_and_Child_with_St_Peter_Martyr_0.arreferenceimage"
+    },
+    {
+      "filename" : "Madonna_del_Divino_Amore__Madonna_of_Divine_Love__0.arreferenceimage"
+    },
+    {
+      "filename" : "Madonna_Enthroned_with_Saints_0.arreferenceimage"
+    },
+    {
+      "filename" : "Madonna_of_Humility_0.arreferenceimage"
+    },
+    {
+      "filename" : "Mary_Magdalen_Raised_by_Angels_0.arreferenceimage"
+    },
+    {
+      "filename" : "Mutiny_of_the_Swiss_Pikemen_0.arreferenceimage"
+    },
+    {
+      "filename" : "Piet__0.arreferenceimage"
+    },
+    {
+      "filename" : "Pope_Clement_VII_0.arreferenceimage"
+    },
+    {
+      "filename" : "Pope_Paul_III_0.arreferenceimage"
+    },
+    {
+      "filename" : "Pope_Paul_III_with_his_Grandsons_Alessandro_and_Ottavio_Farnese_0.arreferenceimage"
+    },
+    {
+      "filename" : "Pope_Paul_III_with_his_Grandsons_Alessandro_and_Ottavio_Farnese_1.arreferenceimage"
+    },
+    {
+      "filename" : "Portrait_medal_of_Bianca_Pellegrini_0.arreferenceimage"
+    },
+    {
+      "filename" : "Portrait_of_a_Girl_0.arreferenceimage"
+    },
+    {
+      "filename" : "Portrait_of_a_Young_Lady_0.arreferenceimage"
+    },
+    {
+      "filename" : "Portrait_of_Fra_Luca_Pacioli_and_an_Unknown_Young_Man_0.arreferenceimage"
+    },
+    {
+      "filename" : "Portrait_of_Francesco_Gonzaga_0.arreferenceimage"
+    },
+    {
+      "filename" : "Portraits_of_the_Princess_Marie_de_Valois_0.arreferenceimage"
+    },
+    {
+      "filename" : "Self_Portrait_Playing_the_Spinet_0.arreferenceimage"
+    },
+    {
+      "filename" : "Sloth_and_Work_0.arreferenceimage"
+    },
+    {
+      "filename" : "St_Euphemia_0.arreferenceimage"
+    },
+    {
+      "filename" : "St_James_the_Greater_0.arreferenceimage"
+    },
+    {
+      "filename" : "St_James_the_Greater_1.arreferenceimage"
+    },
+    {
+      "filename" : "St_Jerome_and_the_Angel_0.arreferenceimage"
+    },
+    {
+      "filename" : "St_Mary_Magdalene_0.arreferenceimage"
+    },
+    {
+      "filename" : "St_Sebastian_0.arreferenceimage"
+    },
+    {
+      "filename" : "Still_Life_with_a_Head_of_a_Ram_0.arreferenceimage"
+    },
+    {
+      "filename" : "Still_Life_with_Fruit_and_Flowers_0.arreferenceimage"
+    },
+    {
+      "filename" : "Storm_over_the_Bay_of_Amalfi_0.arreferenceimage"
+    },
+    {
+      "filename" : "The_Charity_of_St_Elizabeth_of_Hungary_0.arreferenceimage"
+    },
+    {
+      "filename" : "The_Choice_of_Heracles_0.arreferenceimage"
+    },
+    {
+      "filename" : "The_Death_of_Julius_Caesar_0.arreferenceimage"
+    },
+    {
+      "filename" : "The_Ecstasy_of_St_Cecilia_0.arreferenceimage"
+    },
+    {
+      "filename" : "The_Iconoclasts_0.arreferenceimage"
+    },
+    {
+      "filename" : "The_Massacre_of_the_Giustiniani_at_Chios_0.arreferenceimage"
+    },
+    {
+      "filename" : "The_Misanthrope_0.arreferenceimage"
+    },
+    {
+      "filename" : "The_Mystic_Marriage_of_St_Catherine_0.arreferenceimage"
+    },
+    {
+      "filename" : "The_Parable_of_the_Blind_Leading_the_Blind_0.arreferenceimage"
+    },
+    {
+      "filename" : "The_Parable_of_the_Blind_Leading_the_Blind_1.arreferenceimage"
+    },
+    {
+      "filename" : "The_Plague_of_1656_0.arreferenceimage"
+    },
+    {
+      "filename" : "The_Royal_Procession_to_the_Church_of_Santa_Maria_di_Piedigrotta_0.arreferenceimage"
+    },
+    {
+      "filename" : "The_Sicilian_Vespers_0.arreferenceimage"
+    },
+    {
+      "filename" : "Transfiguration_of_Christ_0.arreferenceimage"
+    },
+    {
+      "filename" : "View_of_Campo_Santi_Giovanni_e_Paolo_0.arreferenceimage"
+    },
+    {
+      "filename" : "Vision_of_St_Bruno_0.arreferenceimage"
+    }
+  ]
 }

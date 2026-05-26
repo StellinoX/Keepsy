@@ -16,6 +16,7 @@ struct CollectionAlbumView: View {
     
     @State private var foundCards: Set<String> = []
     @State private var revealedCards: Set<String> = []
+    @State private var hasSyncedWithCloud = false
     @State private var inspectedCard: ArtworkCard? = nil
     
     var headerTitle: String {
@@ -98,6 +99,11 @@ struct CollectionAlbumView: View {
             foundCards = CardDatabase.getFoundCards()
             revealedCards = CardDatabase.getRevealedCards()
         }
+        .task {
+            // Fetch latest artwork links from cloud API
+            await CardDatabase.syncWithCloud()
+            hasSyncedWithCloud = true // Triggers a UI refresh!
+        }
         .overlay(
             Group {
                 if let inspectedCard = inspectedCard {
@@ -117,6 +123,12 @@ struct CollectionAlbumView: View {
 struct AlbumCardCell: View {
     let name: String
     let isRevealed: Bool
+    private var remoteURL: URL? {
+        if let urlString = CardDatabase.remoteArtworks[name]?.imageUrl {
+            return URL(string: urlString)
+        }
+        return nil
+    }
     
     var body: some View {
         ZStack {
@@ -124,11 +136,20 @@ struct AlbumCardCell: View {
                 // Card sbloccata (rivelata in AR): immagine chiara
                 VStack(spacing: 0) {
                     Group {
-                        if UIImage(named: name) != nil {
-                            Image(name)
-                                .resizable()
+                        if let url = remoteURL {
+                            AsyncImage(url: url) { phase in
+                                if let image = phase.image {
+                                    image
+                                        .resizable()
+                                        .blur(radius: isRevealed ? 0 : 15) // Blur se non rivelata
+                                } else if phase.error != nil {
+                                    Image("CardBackLogo").resizable()
+                                } else {
+                                    ProgressView()
+                                }
+                            }
                         } else {
-                            // Fallback per card di cui manca l'asset d'immagine
+                            // Nessun URL dal cloud
                             Image("CardBackLogo")
                                 .resizable()
                         }
