@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct CardDatabase {
     static let capodimonteArtworks = [
@@ -16,32 +17,12 @@ struct CardDatabase {
         "View_of_Campo_Santi_Giovanni_e_Paolo", "Vision_of_St_Bruno", "St_Sebastian"
     ]
     
-    static let uffiziArtworks: [String] = []
-    
-    static let colosseoArtworks: [String] = []
-    
-    static let louvreArtworks = [
-        "Mona_Lisa", "Venus_de_Milo", "Winged_Victory", "The_Raft_of_the_Medusa", "Liberty_Leading_the_People",
-        "The_Lacemaker", "The_Astronomer", "The_Rape_of_the_Sabine_Women", "The_Wedding_at_Cana", "Death_of_the_Virgin"
-    ]
-    
     static func artworksFor(location: String) -> [String] {
-        switch location.uppercased() {
-        case "NAPLES", "NAPOLI", "FULL_COLLECTION":
-            return capodimonteArtworks
-        case "FIRENZE", "FLORENCE":
-            return uffiziArtworks
-        case "ROMA", "ROME":
-            return colosseoArtworks
-        case "LOUVRE":
-            return louvreArtworks
-        default:
-            return allArtworkNames
-        }
+        return capodimonteArtworks
     }
     
     static var allArtworkNames: [String] {
-        return capodimonteArtworks + uffiziArtworks + colosseoArtworks + louvreArtworks
+        return capodimonteArtworks
     }
     
     static let orangeGradient = LinearGradient(colors: [Color(hex: "DD8812"), Color(hex: "DE611B")], startPoint: .top, endPoint: .bottom)
@@ -49,27 +30,50 @@ struct CardDatabase {
     static let silverGradient = LinearGradient(colors: [Color(hex: "C0C0C0"), Color(hex: "8E8E93")], startPoint: .top, endPoint: .bottom)
     static let purpleGradient = LinearGradient(colors: [Color(hex: "6A1B9A"), Color(hex: "4A148C")], startPoint: .top, endPoint: .bottom)
     
-    // Sfumature specifiche Louvre completato (arancione/oro)
-    static let louvreCardGradient = LinearGradient(colors: [Color(hex: "F1B40A"), Color(hex: "E55812")], startPoint: .top, endPoint: .bottom)
-    static let louvreBorderGradient = LinearGradient(colors: [Color(hex: "F2CA03"), Color(hex: "C7A245")], startPoint: .top, endPoint: .bottom)
-    
     static let allGradients = [orangeGradient, goldGradient, silverGradient, purpleGradient]
     
     // Restituisce un gradiente pseudo-casuale stabile basato sul nome, in modo che 
     // nella collezione la carta abbia sempre lo stesso aspetto.
     static func gradientFor(name: String) -> LinearGradient {
-        if louvreArtworks.contains(name) {
-            return louvreCardGradient
-        }
         let hash = abs(name.hashValue)
         return allGradients[hash % allGradients.count]
     }
     
     static func borderGradientFor(name: String) -> LinearGradient {
-        if louvreArtworks.contains(name) {
-            return louvreBorderGradient
-        }
         return gradientFor(name: name)
+    }
+    
+    static func colorsFor(name: String) -> [UIColor] {
+        let hash = abs(name.hashValue)
+        let colors = [
+            [UIColor(Color(hex: "DD8812")), UIColor(Color(hex: "DE611B"))],
+            [UIColor(Color(hex: "F2AB49")), UIColor(Color(hex: "D48F2A"))],
+            [UIColor(Color(hex: "C0C0C0")), UIColor(Color(hex: "8E8E93"))],
+            [UIColor(Color(hex: "6A1B9A")), UIColor(Color(hex: "4A148C"))]
+        ]
+        return colors[hash % colors.count]
+    }
+    
+    static func getActivePack() -> [String]? {
+        return UserDefaults.standard.stringArray(forKey: "activePackCards")
+    }
+    
+    static func hasActivePack() -> Bool {
+        guard let active = getActivePack(), !active.isEmpty else {
+            return false
+        }
+        let revealed = getRevealedCards()
+        return !active.allSatisfy { revealed.contains($0) }
+    }
+    
+    static func clearActivePackIfNeeded() {
+        if let active = getActivePack(), !active.isEmpty {
+            let revealed = getRevealedCards()
+            if active.allSatisfy({ revealed.contains($0) }) {
+                UserDefaults.standard.removeObject(forKey: "activePackCards")
+                UserDefaults.standard.removeObject(forKey: "activePackTearMask")
+            }
+        }
     }
     
     // Gestione salvataggio carte trovate nei pacchetti (pixelate)

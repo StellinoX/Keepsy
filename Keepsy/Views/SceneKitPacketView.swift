@@ -48,14 +48,111 @@ fileprivate func createCardBackTexture() -> UIImage {
 }
 
 @available(iOS 14.0, *)
+fileprivate func createTornMask() -> UIImage {
+    let texSize = CGSize(width: 256, height: 256)
+    let renderer = UIGraphicsImageRenderer(size: texSize)
+    
+    return renderer.image { ctx in
+        // Background is Black (Body)
+        UIColor.black.setFill()
+        ctx.fill(CGRect(origin: .zero, size: texSize))
+        
+        // Draw Flap (Red) with a wavy tear line
+        let path = UIBezierPath()
+        path.move(to: CGPoint(x: 0, y: 0))
+        
+        // Start of tear line
+        let startY = 60.0
+        path.addLine(to: CGPoint(x: 0, y: startY))
+        
+        for x in stride(from: 0.0, through: Double(texSize.width), by: 5.0) {
+            let y = startY + sin(x * 0.1) * 6.0 + cos(x * 0.05) * 3.0
+            path.addLine(to: CGPoint(x: x, y: y))
+        }
+        
+        path.addLine(to: CGPoint(x: texSize.width, y: 0))
+        path.close()
+        
+        // Apply blur shadow for smooth edge
+        ctx.cgContext.setShadow(offset: .zero, blur: 10.0, color: UIColor.red.cgColor)
+        UIColor.red.setFill()
+        path.fill()
+    }
+}
+
+@available(iOS 14.0, *)
+fileprivate func createCardFrontTexture(name: String) -> UIImage {
+    let size = CGSize(width: 540, height: 818) // matches aspect ratio 111x168
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 2.0
+    let renderer = UIGraphicsImageRenderer(size: size, format: format)
+    
+    return renderer.image { ctx in
+        let context = ctx.cgContext
+        
+        // 1. Draw gradient background
+        let rectPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 40)
+        context.addPath(rectPath.cgPath)
+        context.clip()
+        
+        let uiColors = CardDatabase.colorsFor(name: name)
+        let colors = uiColors.map { $0.cgColor }
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: [0.0, 1.0])!
+        context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: size.height), options: [])
+        context.resetClip()
+        
+        // 2. Draw border
+        rectPath.lineWidth = 12
+        UIColor(white: 1.0, alpha: 0.15).setStroke()
+        rectPath.stroke()
+        
+        // 3. Draw artwork image
+        let imgWidth: CGFloat = 491
+        let imgHeight: CGFloat = 608
+        let imgRect = CGRect(x: (size.width - imgWidth)/2, y: 24, width: imgWidth, height: imgHeight)
+        
+        let img = UIImage(named: name)
+        
+        if let imageToDraw = img {
+            let imagePath = UIBezierPath(roundedRect: imgRect, cornerRadius: 36)
+            context.saveGState()
+            imagePath.addClip()
+            context.interpolationQuality = .high
+            imageToDraw.draw(in: imgRect)
+            context.restoreGState()
+        } else {
+            if let logoImg = UIImage(named: "CardBackLogo") {
+                let logoPath = UIBezierPath(roundedRect: imgRect, cornerRadius: 36)
+                context.saveGState()
+                logoPath.addClip()
+                logoImg.draw(in: imgRect)
+                context.restoreGState()
+            }
+        }
+    }
+}
+
+
+@available(iOS 14.0, *)
 public struct SceneKitPacketView: UIViewRepresentable {
     var onOpen: (() -> Void)?
     var interactive: Bool
+    var isTorn: Bool
+    var firstCardName: String?
+    var isFirstCardRevealed: Bool
+    var tearMaskImage: UIImage?
     
-    public init(interactive: Bool = true, onOpen: (() -> Void)? = nil) {
+    public init(interactive: Bool = true, isTorn: Bool = false, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, onOpen: (() -> Void)? = nil) {
         self.interactive = interactive
+        self.isTorn = isTorn
+        self.firstCardName = firstCardName
+        self.isFirstCardRevealed = isFirstCardRevealed
+        self.tearMaskImage = tearMaskImage
         self.onOpen = onOpen
     }
+    
+    public func fillBackground(context: Context) {}
     
     public func makeUIView(context: Context) -> SCNView {
         let view = SCNView()
@@ -77,7 +174,7 @@ public struct SceneKitPacketView: UIViewRepresentable {
     public func updateUIView(_ uiView: SCNView, context: Context) {}
     
     public func makeCoordinator() -> PacketCoordinator {
-        return PacketCoordinator(onOpen: onOpen)
+        return PacketCoordinator(isTorn: isTorn, firstCardName: firstCardName, isFirstCardRevealed: isFirstCardRevealed, tearMaskImage: tearMaskImage, onOpen: onOpen)
     }
 }
 
@@ -106,8 +203,9 @@ public class PacketCoordinator: NSObject {
     var touchPoints: [CGPoint] = []
     let maskProp = SCNMaterialProperty(contents: UIColor.black)
     var onOpen: (() -> Void)?
+    var lastMaskImage: UIImage?
     
-    public init(onOpen: (() -> Void)? = nil) {
+    public init(isTorn: Bool = false, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, onOpen: (() -> Void)? = nil) {
         self.onOpen = onOpen
         scene = SCNScene()
         
@@ -485,6 +583,35 @@ public class PacketCoordinator: NSObject {
         let tilt = SCNVector3(0, 0, -0.06)
         tiltContainerNode.eulerAngles = tilt
         
+        if isTorn {
+            topGroupNode.isHidden = true
+            backFlapNode.isHidden = true
+            topSealNode.isHidden = true
+            
+            let tornMask = tearMaskImage ?? createTornMask()
+            maskProp.contents = tornMask
+            
+            let uniforms = SCNVector4(0, 0, 0, 10.0) // fingerX far right
+            bodyNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
+            backBodyNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
+            
+            // Move deck container up so it sticks out of the packet
+            deckContainer.position = SCNVector3(0, 1.2, -0.05)
+            
+            // Remove Z-tilt rotation when the packet is already torn, keeping it centered and straight
+            tiltContainerNode.eulerAngles = SCNVector3(0, 0, 0)
+            
+            if let firstCardName = firstCardName {
+                let uniqueCardGeo = cardGeo.copy() as! SCNPlane
+                let uniqueCardMat = SCNMaterial()
+                uniqueCardMat.lightingModel = .physicallyBased
+                uniqueCardMat.diffuse.contents = createCardFrontTexture(name: firstCardName)
+                uniqueCardMat.emission.contents = UIColor.black
+                uniqueCardGeo.materials = [uniqueCardMat]
+                cardNodes[0].geometry = uniqueCardGeo
+            }
+        }
+        
         super.init()
     }
     
@@ -599,6 +726,7 @@ public class PacketCoordinator: NSObject {
         
         // Update the material mask dynamically!
         maskProp.contents = maskImage
+        self.lastMaskImage = maskImage
         
         // Pass fingerX to the shader to activate the curl ONLY where the finger has passed
         let fingerX = Float(screenToLocal(point: touchPoints.last!, view: view).x)
@@ -620,6 +748,13 @@ public class PacketCoordinator: NSObject {
         
         // If cut spans across at least 35% of the screen width
         if dx > view.bounds.width * 0.35 {
+            let maskToSave = self.lastMaskImage
+            DispatchQueue.global(qos: .utility).async {
+                if let lastMask = maskToSave, let pngData = lastMask.pngData() {
+                    UserDefaults.standard.set(pngData, forKey: "activePackTearMask")
+                }
+            }
+            
             // Force curl across the whole packet before dropping
             let uniforms = SCNVector4(0, 0, 0, 10.0) // fingerX far right
             SCNTransaction.begin()

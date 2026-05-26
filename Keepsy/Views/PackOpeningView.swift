@@ -8,6 +8,7 @@ struct LocationContainer: Identifiable {
 
 // MARK: - Main Pack Opening View
 struct PackOpeningView: View {
+    @Binding var activeView: ContentView.ActiveView
     @StateObject private var locationManager = LocationManager()
     @State private var packState: PackState = .selecting
 
@@ -29,10 +30,14 @@ struct PackOpeningView: View {
 
             if packState == .selecting {
                 SingleScrollPackView(
+                    currentCity: locationManager.currentCity,
                     onStart: {
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
                             packState = .tearing
                         }
+                    },
+                    onTapActivePack: {
+                        onTapActivePack()
                     }
                 )
             } else {
@@ -82,7 +87,12 @@ struct PackOpeningView: View {
                             }
                             Spacer()
                             if cards.allSatisfy({ $0.isFlipped }) {
-                                Button(action: { resetPack() }) {
+                                Button(action: {
+                                    resetPack()
+                                    withAnimation(.easeInOut(duration: 0.35)) {
+                                        activeView = .arScanner
+                                    }
+                                }) {
                                     Text("NEXT")
                                         .font(.system(.headline, design: .monospaced))
                                         .bold()
@@ -108,19 +118,41 @@ struct PackOpeningView: View {
                 .zIndex(100)
             }
         }
+        .onAppear {
+            loadActivePack()
+        }
     }
 
     func completeOpening() {
-        let artworks = CardDatabase.artworksFor(location: "NAPLES").shuffled()
-        self.cards = Array(artworks.prefix(5)).map {
-            ArtworkCard(name: $0, imageName: $0, gradient: CardDatabase.gradientFor(name: $0))
+        let artworks = CardDatabase.artworksFor(location: locationManager.currentCity).shuffled()
+        let selectedArtworks = Array(artworks.prefix(5))
+        self.cards = selectedArtworks.map {
+            ArtworkCard(name: $0, imageName: $0, gradient: CardDatabase.gradientFor(name: $0), isFlipped: false)
         }
-        CardDatabase.addFoundCards(self.cards.map { $0.name })
+        CardDatabase.addFoundCards(selectedArtworks)
+        UserDefaults.standard.set(selectedArtworks, forKey: "activePackCards")
         
         packState = .opened
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             showCards = true
         }
+    }
+
+    func loadActivePack() {
+        if CardDatabase.hasActivePack() {
+            let activeNames = CardDatabase.getActivePack() ?? []
+            self.cards = activeNames.map { name in
+                ArtworkCard(name: name, imageName: name, gradient: CardDatabase.gradientFor(name: name), isFlipped: true)
+            }
+        } else {
+            self.cards = []
+        }
+    }
+
+    func onTapActivePack() {
+        loadActivePack()
+        packState = .opened
+        showCards = true
     }
 
     func resetPack() {
@@ -135,23 +167,30 @@ struct PackOpeningView: View {
 
 // MARK: - Single Continuous Scroll View
 struct SingleScrollPackView: View {
+    let currentCity: String
     let onStart: () -> Void
+    let onTapActivePack: () -> Void
 
     @State private var foundCards: Set<String> = []
     @State private var revealedCards: Set<String> = []
     @State private var activeLocation: LocationContainer? = nil
 
     var hasPixelatedCapodimonteCards: Bool {
-        let capodimonteArtworks = CardDatabase.artworksFor(location: "NAPLES")
+        let capodimonteArtworks = CardDatabase.artworksFor(location: currentCity)
         return capodimonteArtworks.contains { name in
             foundCards.contains(name) && !revealedCards.contains(name)
         }
     }
 
+    func loadSavedTearMask() -> UIImage? {
+        if let data = UserDefaults.standard.data(forKey: "activePackTearMask") {
+            return UIImage(data: data)
+        }
+        return nil
+    }
+
     let expansions: [(location: String, title: String)] = [
-        ("FULL_COLLECTION", "Capodimonte"),
-        ("FIRENZE",         "Uffizi"),
-        ("LOUVRE",          "Louvre")
+        ("FULL_COLLECTION", "Capodimonte")
     ]
 
     var body: some View {
@@ -179,7 +218,7 @@ struct SingleScrollPackView: View {
                                 .foregroundColor(.white)
                         }
                         
-                        Text("NAPLES")
+                        Text(currentCity)
                             .font(.system(size: 11, weight: .black))
                             .italic()
                             .foregroundColor(.white)
@@ -204,60 +243,89 @@ struct SingleScrollPackView: View {
                     .padding(.top, 105)
                     .padding(.bottom, 30)
 
-                    // Roulette: 3 packs
-                    ZStack {
-                        // Ghost left
-                        SceneKitPacketView(interactive: false)
-                            .frame(width: 170, height: 250)
-                            .opacity(0.4)
-                            .scaleEffect(0.82)
-                            .rotation3DEffect(.degrees(28), axis: (x: 0, y: 1, z: 0))
-                            .offset(x: -200, y: 10)
+                    if CardDatabase.hasActivePack(), let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
+                        let firstCardName = activePack[0]
+                        let isFirstCardRevealed = revealedCards.contains(firstCardName)
+                        
+                        // Torn center pack showing first card
+                        ZStack(alignment: .center) {
+                            SceneKitPacketView(
+                                interactive: false,
+                                isTorn: true,
+                                firstCardName: firstCardName,
+                                isFirstCardRevealed: isFirstCardRevealed,
+                                tearMaskImage: loadSavedTearMask()
+                            )
+                            .frame(width: 310, height: 457)
+                            .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
+                        }
+                        .frame(width: 310, height: 400)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            onTapActivePack()
+                        }
+                        .padding(.bottom, 24)
 
-                        // Ghost right
-                        SceneKitPacketView(interactive: false)
-                            .frame(width: 170, height: 250)
-                            .opacity(0.4)
-                            .scaleEffect(0.82)
-                            .rotation3DEffect(.degrees(-28), axis: (x: 0, y: 1, z: 0))
-                            .offset(x: 200, y: 10)
+                        // VEDI CARTE button
+                        Button(action: {
+                            onTapActivePack()
+                        }) {
+                            Text("VEDI CARTE")
+                                .font(.system(size: 16, weight: .black))
+                                .italic()
+                                .foregroundColor(.black)
+                                .frame(width: 160, height: 44)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.orange)
+                                        .shadow(color: .black.opacity(0.5), radius: 39, x: 0, y: 4)
+                                )
+                        }
+                        .padding(.bottom, 40)
+                    } else {
+                        // Roulette: 3 packs
+                        ZStack {
+                            // Ghost left
+                            SceneKitPacketView(interactive: false)
+                                .frame(width: 170, height: 250)
+                                .opacity(0.4)
+                                .scaleEffect(0.82)
+                                .rotation3DEffect(.degrees(28), axis: (x: 0, y: 1, z: 0))
+                                .offset(x: -200, y: 10)
 
-                        // Center pack
-                        ZStack(alignment: .topTrailing) {
+                            // Ghost right
+                            SceneKitPacketView(interactive: false)
+                                .frame(width: 170, height: 250)
+                                .opacity(0.4)
+                                .scaleEffect(0.82)
+                                .rotation3DEffect(.degrees(-28), axis: (x: 0, y: 1, z: 0))
+                                .offset(x: 200, y: 10)
+
+                            // Center pack
                             SceneKitPacketView(interactive: false)
                                 .frame(width: 310, height: 457)
                                 .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
-
-                            Text("FREE")
-                                .font(.system(size: 13, design: .monospaced))
-                                .bold()
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 7)
-                                .background(Color(red: 0.46, green: 0.83, blue: 0.17))
-                                .foregroundColor(.black)
-                                .clipShape(Capsule())
-                                .offset(x: 14, y: -4)
                         }
-                    }
-                    .frame(height: 400)
-                    .padding(.bottom, 24)
+                        .frame(height: 400)
+                        .padding(.bottom, 24)
 
-                    // START button
-                    Button(action: {
-                        onStart()
-                    }) {
-                        Text("START")
-                            .font(.system(size: 16, weight: .black))
-                            .italic()
-                            .foregroundColor(.black)
-                            .frame(width: 134, height: 44)
-                            .background(
-                                Capsule()
-                                    .fill(Color(hex: "D8D8D8"))
-                                    .shadow(color: .black.opacity(0.5), radius: 39, x: 0, y: 4)
-                            )
+                        // START button
+                        Button(action: {
+                            onStart()
+                        }) {
+                            Text("START")
+                                .font(.system(size: 16, weight: .black))
+                                .italic()
+                                .foregroundColor(.black)
+                                .frame(width: 134, height: 44)
+                                .background(
+                                    Capsule()
+                                        .fill(Color(hex: "D8D8D8"))
+                                        .shadow(color: .black.opacity(0.5), radius: 39, x: 0, y: 4)
+                                )
+                        }
+                        .padding(.bottom, 40)
                     }
-                    .padding(.bottom, 40)
                 }
 
                 // ── SECTION 2: Expansions rows ───────────────────────
@@ -292,19 +360,9 @@ struct SingleScrollPackView: View {
     }
 
     func progressFor(_ location: String, title: String) -> (progress: Double, found: Int, total: Int) {
-        if location == "FULL_COLLECTION" {
-            // Capodimonte mostra il progresso reale (dal database di Capodimonte)
-            let artworks = CardDatabase.artworksFor(location: "NAPLES")
-            let found = artworks.filter { revealedCards.contains($0) }.count
-            return (artworks.isEmpty ? 0 : Double(found) / Double(artworks.count), found, artworks.count)
-        } else if location == "LOUVRE" {
-            // Louvre fisso al 100%
-            return (1.0, 10, 10)
-        } else {
-            let artworks = CardDatabase.artworksFor(location: location)
-            let found = artworks.filter { revealedCards.contains($0) }.count
-            return (artworks.isEmpty ? 0 : Double(found) / Double(artworks.count), found, artworks.count)
-        }
+        let artworks = CardDatabase.artworksFor(location: "NAPLES")
+        let found = artworks.filter { revealedCards.contains($0) }.count
+        return (artworks.isEmpty ? 0 : Double(found) / Double(artworks.count), found, artworks.count)
     }
 }
 
@@ -394,6 +452,6 @@ struct PackExpansionRow: View {
 // MARK: - Preview
 struct PackOpeningView_Previews: PreviewProvider {
     static var previews: some View {
-        PackOpeningView()
+        PackOpeningView(activeView: .constant(.opening))
     }
 }

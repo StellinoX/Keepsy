@@ -8,19 +8,21 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State private var activeView: ActiveView = .opening
+    
+    enum ActiveView {
+        case opening, arScanner
+    }
+    
     var body: some View {
-        TabView {
-            PackOpeningView()
-                .tabItem {
-                    Label("Apri Pacchetti", systemImage: "bag.fill")
-                }
-            
-            ARArtworkView()
-                .tabItem {
-                    Label("Scanner AR", systemImage: "camera.viewfinder")
-                }
+        Group {
+            switch activeView {
+            case .opening:
+                PackOpeningView(activeView: $activeView)
+            case .arScanner:
+                ARArtworkView(activeView: $activeView)
+            }
         }
-        .accentColor(.orange)
     }
 }
 

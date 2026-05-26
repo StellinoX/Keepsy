@@ -19,26 +19,11 @@ struct CollectionAlbumView: View {
     @State private var inspectedCard: ArtworkCard? = nil
     
     var headerTitle: String {
-        guard let loc = museumLocation?.uppercased() else { return "CAPODIMONTE" }
-        if loc == "FULL_COLLECTION" {
-            return "CAPODIMONTE"
-        } else if loc == "FIRENZE" {
-            return "UFFIZI"
-        } else {
-            return loc // "LOUVRE"
-        }
+        return "CAPODIMONTE"
     }
     
     var filteredArtworks: [String] {
-        if let location = museumLocation {
-            if location == "FULL_COLLECTION" {
-                return CardDatabase.artworksFor(location: "NAPLES")
-            } else {
-                return CardDatabase.artworksFor(location: location)
-            }
-        } else {
-            return CardDatabase.allArtworkNames
-        }
+        return CardDatabase.allArtworkNames
     }
     
     var body: some View {
@@ -83,14 +68,12 @@ struct CollectionAlbumView: View {
                     ScrollView {
                         LazyVGrid(columns: columns, spacing: 6) {
                             ForEach(filteredArtworks, id: \.self) { name in
-                                let isLouvre = CardDatabase.louvreArtworks.contains(name)
                                 AlbumCardCell(
                                     name: name,
-                                    isFound: isLouvre ? true : foundCards.contains(name),
-                                    isRevealed: isLouvre ? true : revealedCards.contains(name)
+                                    isRevealed: revealedCards.contains(name)
                                 )
                                 .onTapGesture {
-                                    if isLouvre || foundCards.contains(name) {
+                                    if revealedCards.contains(name) {
                                         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                                             inspectedCard = ArtworkCard(
                                                 name: name,
@@ -133,26 +116,19 @@ struct CollectionAlbumView: View {
 
 struct AlbumCardCell: View {
     let name: String
-    let isFound: Bool
     let isRevealed: Bool
     
     var body: some View {
         ZStack {
-            if isFound {
-                // Card trovata nel pacchetto
+            if isRevealed {
+                // Card sbloccata (rivelata in AR): immagine chiara
                 VStack(spacing: 0) {
                     Group {
-                        if !isRevealed, let uiImage = UIImage(named: name)?.resize(to: CGSize(width: 20, height: 25)) {
-                            // Non ancora rivelata: pixelata
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .interpolation(.none)
-                        } else if UIImage(named: name) != nil {
-                            // Rivelata in AR: immagine chiara
+                        if UIImage(named: name) != nil {
                             Image(name)
                                 .resizable()
                         } else {
-                            // Fallback per card di cui manca l'asset d'immagine (es. Louvre)
+                            // Fallback per card di cui manca l'asset d'immagine
                             Image("CardBackLogo")
                                 .resizable()
                         }

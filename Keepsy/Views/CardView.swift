@@ -27,15 +27,8 @@ struct CardView: View {
             VStack(spacing: 0) {
                 // Immagine pixelata con padding di 5px
                 Group {
-                    // Aumentata la risoluzione (da 12x15 a 25x30) per rendere i pixel più piccoli
-                    if let uiImage = UIImage(named: card.imageName)?.resize(to: CGSize(width: 25, height: 30)) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .interpolation(.none) // Effetto pixel netto
-                    } else {
-                        Image(card.imageName)
-                            .resizable()
-                    }
+                    Image(card.imageName)
+                        .resizable()
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 101, height: 125)
@@ -66,6 +59,11 @@ struct CardView: View {
                 }
             } else {
                 onInspect?()
+            }
+        }
+        .onAppear {
+            if card.isFlipped {
+                rotation = 180
             }
         }
     }
