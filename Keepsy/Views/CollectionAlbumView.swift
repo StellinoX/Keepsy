@@ -61,7 +61,9 @@ struct CollectionAlbumView: View {
                             ForEach(filteredArtworks, id: \.self) { name in
                                 AlbumCardCell(
                                     name: name,
-                                    isRevealed: revealedCards.contains(name)
+                                    isFound: foundCards.contains(name),
+                                    isRevealed: revealedCards.contains(name),
+                                    hasSynced: hasSyncedWithCloud
                                 )
                                 .onTapGesture {
                                     if revealedCards.contains(name) {
@@ -141,7 +143,10 @@ struct CollectionAlbumView: View {
 
 struct AlbumCardCell: View {
     let name: String
+    let isFound: Bool
     let isRevealed: Bool
+    let hasSynced: Bool
+    
     private var remoteURL: URL? {
         if let urlString = CardDatabase.remoteArtworks[name]?.imageUrl {
             return URL(string: urlString)
@@ -151,27 +156,11 @@ struct AlbumCardCell: View {
     
     var body: some View {
         ZStack {
-            if isRevealed {
-                // Card sbloccata (rivelata in AR): immagine chiara
+            if isFound {
+                // Card trovata nel pacchetto
                 VStack(spacing: 0) {
                     Group {
-                        if let url = remoteURL {
-                            AsyncImage(url: url) { phase in
-                                if let image = phase.image {
-                                    image
-                                        .resizable()
-                                        .blur(radius: isRevealed ? 0 : 15) // Blur se non rivelata
-                                } else if phase.error != nil {
-                                    Image("CardBackLogo").resizable()
-                                } else {
-                                    ProgressView()
-                                }
-                            }
-                        } else {
-                            // Nessun URL dal cloud
-                            Image("CardBackLogo")
-                                .resizable()
-                        }
+                        ArtImageView(cardName: name)
                     }
                     .aspectRatio(contentMode: .fill)
                     .padding(.top, 3)
@@ -188,7 +177,7 @@ struct AlbumCardCell: View {
                 .cornerRadius(6)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(CardDatabase.borderGradientFor(name: name), lineWidth: 1))
             } else {
-                // Card bloccata (sagoma nera)
+                // Card non ancora trovata (sagoma nera)
                 RoundedRectangle(cornerRadius: 6)
                     .fill(Color.black)
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(white: 0.15), lineWidth: 1))

@@ -6,7 +6,6 @@ struct LocationContainer: Identifiable {
     let name: String
 }
 
-// MARK: - Main Pack Opening View
 struct PackOpeningView: View {
     @Binding var activeView: ContentView.ActiveView
     @StateObject private var locationManager = LocationManager()
@@ -186,6 +185,11 @@ struct PackOpeningView: View {
             await CardDatabase.syncWithCloud()
             hasSyncedWithCloud = true
         }
+        .onChange(of: hasSyncedWithCloud) { synced in
+            if synced && packState == .opened {
+                loadActivePack()
+            }
+        }
         .onAppear {
             loadActivePack()
         }
@@ -195,13 +199,9 @@ struct PackOpeningView: View {
         let artworks = CardDatabase.artworksFor(location: locationManager.currentCity).shuffled()
         let selectedArtworks = Array(artworks.prefix(5))
         self.cards = selectedArtworks.map {
-            let urlString = CardDatabase.remoteArtworks[$0]?.imageUrl
-            let url = urlString != nil ? URL(string: urlString!) : nil
             return ArtworkCard(
                 name: $0, 
                 imageName: $0, 
-                imageUrl: url,
-                description: CardDatabase.remoteArtworks[$0]?.description,
                 gradient: CardDatabase.gradientFor(name: $0),
                 isFlipped: false
             )

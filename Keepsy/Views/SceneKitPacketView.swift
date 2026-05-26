@@ -11,7 +11,7 @@ fileprivate func createCardBackTexture() -> UIImage {
     return renderer.image { ctx in
         let context = ctx.cgContext
         
-        // 1. Draw gradient background
+    
         let rectPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 40)
         context.addPath(rectPath.cgPath)
         context.clip()
@@ -22,12 +22,10 @@ fileprivate func createCardBackTexture() -> UIImage {
         context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: 0), end: CGPoint(x: size.width, y: size.height), options: [])
         context.resetClip()
         
-        // 2. Draw border
         rectPath.lineWidth = 8
         UIColor(white: 1.0, alpha: 0.1).setStroke()
         rectPath.stroke()
         
-        // 3. Draw circle with shadows
         let circleRadius: CGFloat = 110
         let circleRect = CGRect(x: size.width/2 - circleRadius, y: size.height/2 - circleRadius, width: circleRadius*2, height: circleRadius*2)
         
@@ -112,7 +110,7 @@ fileprivate func createCardFrontTexture(name: String) -> UIImage {
         let imgHeight: CGFloat = 608
         let imgRect = CGRect(x: (size.width - imgWidth)/2, y: 24, width: imgWidth, height: imgHeight)
         
-        let img = UIImage(named: name)
+        let img = CardDatabase.localImage(for: name)
         
         if let imageToDraw = img {
             let imagePath = UIBezierPath(roundedRect: imgRect, cornerRadius: 36)

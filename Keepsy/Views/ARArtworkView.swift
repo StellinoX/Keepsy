@@ -246,8 +246,8 @@ struct ScannerCardView: View {
         
         VStack(spacing: 0) {
             Group {
-                if UIImage(named: name) != nil {
-                    Image(name)
+                if let localImg = CardDatabase.localImage(for: name) {
+                    Image(uiImage: localImg)
                         .resizable()
                 } else {
                     Image("CardBackLogo")

@@ -2,8 +2,24 @@ import SwiftUI
 import UIKit
 
 struct CardDatabase {
-    // Cache for artworks fetched from the cloud
-    static var remoteArtworks: [String: NetworkArtwork] = [:]
+    private static let cacheKey = "CachedRemoteArtworks"
+    
+    // Cache for artworks fetched from the cloud, immediately populated on app launch
+    static var remoteArtworks: [String: NetworkArtwork] = loadFromCache()
+    
+    private static func loadFromCache() -> [String: NetworkArtwork] {
+        guard let data = UserDefaults.standard.data(forKey: cacheKey),
+              let decoded = try? JSONDecoder().decode([String: NetworkArtwork].self, from: data) else {
+            return [:]
+        }
+        return decoded
+    }
+    
+    private static func saveToCache(_ dict: [String: NetworkArtwork]) {
+        if let encoded = try? JSONEncoder().encode(dict) {
+            UserDefaults.standard.set(encoded, forKey: cacheKey)
+        }
+    }
     
     static func syncWithCloud() async {
         do {
@@ -12,34 +28,75 @@ struct CardDatabase {
             for art in fetched {
                 dict[art.internalName] = art
             }
-            remoteArtworks = dict
+            
+            DispatchQueue.main.async {
+                remoteArtworks = dict
+                saveToCache(dict)
+                // Automatically prefetch images after updating the cache
+                prefetchImages(for: "Capodimonte")
+            }
+            
             print("Successfully synced \(fetched.count) artworks from cloud API")
         } catch {
             print("Failed to sync artworks: \(error)")
         }
     }
     
-    static let capodimonteArtworks = [
-        "A_Boy_Blowing_on_an_Ember_to_Light_a_Candle__Sopl_n_", "Alfonso_II_of_Aragon", 
-        "Asdrubale_Bitten_by_a_Crawfish", "Bishop_Bernardo_de__Rossi", "Bust_of_Pope_Paul_III", 
-        "Cardinal_Alessandro_Farnese", "Charles_III_at_St_Peter_s", "Dana_", "Flagellation", 
-        "Judith_Beheading_Holofernes", "Pope_Paul_III", "Portrait_of_a_Girl",
-        "Abduction_Scene", "Allegory_of_the_Night", "Altar_of_St_Louis_of_Toulouse", 
-        "Blessing_Christ", "Composite_Head", "Crucifixion", "Giulio_Clovio", 
-        "Madonna_Enthroned_with_Saints", "Madonna_and_Child_and_Two_Angels", 
-        "Madonna_del_Divino_Amore__Madonna_of_Divine_Love_", "Piet_",
-        "Absalom_s_Feast", "Annunciation_to_the_Shepherds", "Christ_Served_by_Angels", 
-        "Flowers", "Founding_of_Santa_Maria_Maggiore", "Pope_Clement_VII", 
-        "The_Misanthrope", "The_Parable_of_the_Blind_Leading_the_Blind", 
-        "View_of_Campo_Santi_Giovanni_e_Paolo", "Vision_of_St_Bruno", "St_Sebastian"
-    ]
+    // MARK: - Local Image Caching
+    
+    private static var artworksDirectoryURL: URL {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let docDir = paths[0].appendingPathComponent("Artworks", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: docDir.path) {
+            try? FileManager.default.createDirectory(at: docDir, withIntermediateDirectories: true)
+        }
+        return docDir
+    }
+
+    static func localImage(for name: String) -> UIImage? {
+        // 1. Fallback to bundle assets if available
+        if let img = UIImage(named: name) {
+            return img
+        }
+        
+        // 2. Check local pre-fetched directory
+        let fileURL = artworksDirectoryURL.appendingPathComponent("\(name).jpg")
+        if let data = try? Data(contentsOf: fileURL), let img = UIImage(data: data) {
+            return img
+        }
+        
+        return nil
+    }
+
+    static func prefetchImages(for location: String) {
+        // In this MVP, we just fetch all available artworks.
+        let artworks = Array(remoteArtworks.keys)
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                for name in artworks {
+                    group.addTask {
+                        if let urlString = remoteArtworks[name]?.imageUrl, let url = URL(string: urlString) {
+                            let fileURL = artworksDirectoryURL.appendingPathComponent("\(name).jpg")
+                            // Skip if already downloaded
+                            if FileManager.default.fileExists(atPath: fileURL.path) { return }
+                            
+                            if let (data, _) = try? await URLSession.shared.data(from: url) {
+                                try? data.write(to: fileURL)
+                                print("Prefetched image for \(name) to local disk")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     static func artworksFor(location: String) -> [String] {
-        return capodimonteArtworks
+        return Array(remoteArtworks.keys).sorted()
     }
     
     static var allArtworkNames: [String] {
-        return capodimonteArtworks
+        return Array(remoteArtworks.keys).sorted()
     }
     
     static let orangeGradient = LinearGradient(colors: [Color(hex: "DD8812"), Color(hex: "DE611B")], startPoint: .top, endPoint: .bottom)

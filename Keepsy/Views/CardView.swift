@@ -27,22 +27,7 @@ struct CardView: View {
             VStack(spacing: 0) {
                 // Immagine con AsyncImage (se URL presente) o fallback
                 Group {
-                    if let url = card.imageUrl {
-                        AsyncImage(url: url) { phase in
-                            if let image = phase.image {
-                                image
-                                    .resizable()
-                                    .blur(radius: 10) // Blur finché non viene ispezionata
-                            } else if phase.error != nil {
-                                Image("CardBackLogo").resizable()
-                            } else {
-                                ProgressView()
-                            }
-                        }
-                    } else {
-                        // Se non c'è URL dal cloud, mostra il retro della carta
-                        Image("CardBackLogo").resizable()
-                    }
+                    ArtImageView(cardName: card.name)
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 101, height: 125)

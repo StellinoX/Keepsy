@@ -51,21 +51,7 @@ struct CardInspectionView: View {
                     // FRONTE DELLA CARTA
                     VStack(spacing: 0) {
                         Group {
-                            if let url = card.imageUrl {
-                                AsyncImage(url: url) { phase in
-                                    if let image = phase.image {
-                                        image
-                                            .resizable()
-                                            .blur(radius: isRevealed ? 0 : 15)
-                                    } else if phase.error != nil {
-                                        Image("CardBackLogo").resizable()
-                                    } else {
-                                        ProgressView()
-                                    }
-                                }
-                            } else {
-                                Image("CardBackLogo").resizable()
-                            }
+                            ArtImageView(cardName: card.name)
                         }
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 280, height: 350)
