@@ -2,27 +2,27 @@ import Foundation
 import CloudKit
 
 class CloudKitSeeder {
-    /// Seeds the CloudKit public database with the Capodimonte artworks and high-res images directly from the local files.
-    /// Runs seamlessly in the Simulator since it can read from the host filesystem.
+    /// Seeds the CloudKit public database with the Capodimonte artworks and high-res images directly from the App Bundle.
+    /// Works perfectly on physical devices (like iPhone 16) since resources are packaged directly inside the app bundle.
     static func seedDatabase() async {
-        print("🚀 Starting CloudKit Seeding...")
+        print("🚀 Starting CloudKit Seeding from App Bundle...")
         
-        let csvPath = "/Users/alfi/Desktop/capodimonte_db/DB opere.csv"
-        let imagesDirectory = "/Users/alfi/Desktop/capodimonte_db/extracted_images/Immagini quadri capodimonte/"
-        
-        guard let csvContent = try? String(contentsOfFile: csvPath, encoding: .utf8) else {
-            print("❌ Error: Could not read CSV file at \(csvPath)")
+        guard let csvURL = Bundle.main.url(forResource: "DB opere", withExtension: "csv"),
+              let csvContent = try? String(contentsOf: csvURL, encoding: .utf8) else {
+            print("❌ Error: Could not find or read 'DB opere.csv' in the App Bundle.")
+            print("Please make sure you have dragged 'DB opere.csv' into Xcode and added it to the target.")
             return
         }
         
-        let publicDB = CKContainer.default().publicCloudDatabase
+        // Explicitly target the verified active iCloud container configured in Xcode
+        let publicDB = CKContainer(identifier: "iCloud.group.keepsy.app").publicCloudDatabase
         let rows = csvContent.components(separatedBy: "\n")
         
         print("Reading \(rows.count - 1) records from CSV...")
         
         // Skip header row
         for i in 1..<rows.count {
-            let row = rows[i].trimmingCharacters(in: .whitespacesAndNewlines)
+            let row = rows[i].trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             if row.isEmpty { continue }
             
             // Parse columns split by semicolon
@@ -32,10 +32,10 @@ class CloudKitSeeder {
                 continue
             }
             
-            let artist = columns[1].trimmingCharacters(in: .whitespaces)
-            let title = columns[2].trimmingCharacters(in: .whitespaces)
-            let description = columns[6].trimmingCharacters(in: .whitespaces)
-            let internalName = columns[7].trimmingCharacters(in: .whitespaces)
+            let artist = columns[1].trimmingCharacters(in: CharacterSet.whitespaces)
+            let title = columns[2].trimmingCharacters(in: CharacterSet.whitespaces)
+            let description = columns[6].trimmingCharacters(in: CharacterSet.whitespaces)
+            let internalName = columns[7].trimmingCharacters(in: CharacterSet.whitespaces)
             
             // Use internalName as the unique CloudKit record ID
             let recordID = CKRecord.ID(recordName: internalName)
@@ -48,15 +48,13 @@ class CloudKitSeeder {
             record["museumId"] = "capodimonte" as CKRecordValue
             record["imageUrl"] = "" as CKRecordValue
             
-            // Load and attach image asset
-            let imagePath = "\(imagesDirectory)\(internalName).jpg"
-            if FileManager.default.fileExists(atPath: imagePath) {
-                let fileURL = URL(fileURLWithPath: imagePath)
-                let asset = CKAsset(fileURL: fileURL)
+            // Load and attach image asset from Bundle.main
+            if let imageURL = Bundle.main.url(forResource: internalName, withExtension: "jpg") {
+                let asset = CKAsset(fileURL: imageURL)
                 record["imageFile"] = asset
                 print("📸 Attached image asset for: \(internalName)")
             } else {
-                print("⚠️ Warning: Image not found at \(imagePath)")
+                print("⚠️ Warning: Image '\(internalName).jpg' not found in App Bundle")
             }
             
             // Save to CloudKit

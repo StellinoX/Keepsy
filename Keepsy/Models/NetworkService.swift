@@ -14,7 +14,7 @@ struct NetworkArtwork: Codable {
 class NetworkService {
     static let shared = NetworkService()
     
-    private let publicDB = CKContainer.default().publicCloudDatabase
+    private let publicDB = CKContainer(identifier: "iCloud.group.keepsy.app").publicCloudDatabase
     
     /// Fetches all artwork records matching the specified museum ID from Apple's CloudKit Public Database.
     func fetchArtworks(for museumId: String) async throws -> [NetworkArtwork] {
