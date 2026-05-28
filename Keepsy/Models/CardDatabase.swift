@@ -154,12 +154,11 @@ struct CardDatabase {
     }
 
     static func downloadImages(for artworks: [String]) async {
-        BackgroundAssetService.shared.scheduleDownloads(for: artworks)
+        await syncWithCloud()
     }
 
     static func prefetchImages(for location: String) async {
-        let artworks = artworksByMuseum[location.lowercased()] ?? Array(remoteArtworks.keys)
-        BackgroundAssetService.shared.scheduleDownloads(for: artworks)
+        await syncWithCloud()
     }
     
     static func artworksFor(location: String) -> [String] {

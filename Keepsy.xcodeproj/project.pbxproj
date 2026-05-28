@@ -8,7 +8,7 @@
 
 /* Begin PBXFileReference section */
 		714CF5122FC88D5600E93EA6 /* KeepsyAdmin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KeepsyAdmin.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		8157FDAA2FB47BCD00D69127 /* Keepsy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = Keepsy.app; path = "/Users/alfi/Desktop/keepsy/build/Debug-iphoneos/Keepsy.app"; sourceTree = "<absolute>"; };
+		714CF5292FC890C400E93EA6 /* Keepsy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Keepsy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -54,6 +54,7 @@
 				714CF5072FC88C6C00E93EA6 /* KeepsyAdmin */,
 				714CF5122FC88D5600E93EA6 /* KeepsyAdmin.app */,
 				714CF5132FC88D5600E93EA6 /* KeepsyAdmin */,
+				714CF5292FC890C400E93EA6 /* Keepsy.app */,
 			);
 			sourceTree = "<group>";
 		};
@@ -101,7 +102,7 @@
 			packageProductDependencies = (
 			);
 			productName = Keepsy;
-			productReference = 8157FDAA2FB47BCD00D69127 /* Keepsy.app */;
+			productReference = 714CF5292FC890C400E93EA6 /* Keepsy.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
