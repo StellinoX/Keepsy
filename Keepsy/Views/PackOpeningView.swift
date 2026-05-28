@@ -119,9 +119,12 @@ struct PackOpeningView: View {
                             Spacer()
                             if cards.allSatisfy({ $0.isFlipped }) {
                                 Button(action: {
-                                    resetPack()
                                     withAnimation(.easeInOut(duration: 0.35)) {
                                         activeView = .arScanner
+                                    }
+                                    // Reset the pack selection state only after the transition completes
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                                        resetPack()
                                     }
                                 }) {
                                     Text("NEXT")
