@@ -154,110 +154,12 @@ struct CardDatabase {
     }
 
     static func downloadImages(for artworks: [String]) async {
-        await withTaskGroup(of: Void.self) { group in
-            for name in artworks {
-                group.addTask {
-                    if let urlString = remoteArtworks[name]?.imageUrl, let url = URL(string: urlString) {
-                        let fileURL = artworksDirectoryURL.appendingPathComponent("\(name).jpg")
-                        // Skip only if already downloaded AND valid size
-                        let existingSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
-                        if FileManager.default.fileExists(atPath: fileURL.path) && existingSize > 10000 { return }
-                        
-                        // Remove any corrupted partial file before re-downloading
-                        try? FileManager.default.removeItem(at: fileURL)
-                        
-                        if let (data, response) = try? await URLSession.shared.data(from: url),
-                           let httpResponse = response as? HTTPURLResponse,
-                           httpResponse.statusCode == 200,
-                           data.count > 10000 {
-                            try? data.write(to: fileURL)
-                            print("Downloaded image for \(name) (\(data.count) bytes)")
-                        } else {
-                            print("Failed to download image for \(name) - invalid response or size")
-                        }
-                    }
-                }
-            }
-        }
+        BackgroundAssetService.shared.scheduleDownloads(for: artworks)
     }
 
     static func prefetchImages(for location: String) async {
         let artworks = artworksByMuseum[location.lowercased()] ?? Array(remoteArtworks.keys)
-        
-        // Limit concurrency to avoid network timeouts and memory issues (3 at a time)
-        let maxConcurrentTasks = 3
-        
-        await withTaskGroup(of: Void.self) { group in
-            var index = 0
-            
-            // Start initial batch
-            while index < min(maxConcurrentTasks, artworks.count) {
-                let name = artworks[index]
-                if let urlString = remoteArtworks[name]?.imageUrl, let url = URL(string: urlString) {
-                    let fileURL = artworksDirectoryURL.appendingPathComponent("\(name).jpg")
-                    let existingSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
-                    if !FileManager.default.fileExists(atPath: fileURL.path) || existingSize <= 10000 {
-                        group.addTask {
-                            do {
-                                let (tempURL, response) = try await URLSession.shared.download(from: url)
-                                guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                                    print("Failed prefetch header for \(name)")
-                                    return
-                                }
-                                let size = (try? FileManager.default.attributesOfItem(atPath: tempURL.path)[.size] as? Int) ?? 0
-                                guard size > 10000 else {
-                                    print("Failed prefetch size for \(name)")
-                                    return
-                                }
-                                if FileManager.default.fileExists(atPath: fileURL.path) {
-                                    try? FileManager.default.removeItem(at: fileURL)
-                                }
-                                try FileManager.default.moveItem(at: tempURL, to: fileURL)
-                                print("Prefetched image to disk: \(name)")
-                            } catch {
-                                print("Failed to prefetch \(name): \(error.localizedDescription)")
-                            }
-                        }
-                    }
-                }
-                index += 1
-            }
-            
-            // Add a new task for each one that completes
-            while let _ = await group.next() {
-                if index < artworks.count {
-                    let name = artworks[index]
-                    if let urlString = remoteArtworks[name]?.imageUrl, let url = URL(string: urlString) {
-                        let fileURL = artworksDirectoryURL.appendingPathComponent("\(name).jpg")
-                        let existingSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
-                        if !FileManager.default.fileExists(atPath: fileURL.path) || existingSize <= 10000 {
-                            group.addTask {
-                                do {
-                                    let (tempURL, response) = try await URLSession.shared.download(from: url)
-                                    guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                                        print("Failed prefetch header for \(name)")
-                                        return
-                                    }
-                                    let size = (try? FileManager.default.attributesOfItem(atPath: tempURL.path)[.size] as? Int) ?? 0
-                                    guard size > 10000 else {
-                                        print("Failed prefetch size for \(name)")
-                                        return
-                                    }
-                                    if FileManager.default.fileExists(atPath: fileURL.path) {
-                                        try? FileManager.default.removeItem(at: fileURL)
-                                    }
-                                    try FileManager.default.moveItem(at: tempURL, to: fileURL)
-                                    print("Prefetched image to disk: \(name)")
-                                } catch {
-                                    print("Failed to prefetch \(name): \(error.localizedDescription)")
-                                }
-                            }
-                        }
-                    }
-                    index += 1
-                }
-            }
-        }
+        BackgroundAssetService.shared.scheduleDownloads(for: artworks)
     }
     
     static func artworksFor(location: String) -> [String] {

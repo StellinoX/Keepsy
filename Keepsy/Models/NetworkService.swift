@@ -1,4 +1,5 @@
 import Foundation
+import CloudKit
 
 struct NetworkArtwork: Codable {
     let id: String
@@ -7,30 +8,52 @@ struct NetworkArtwork: Codable {
     let artist: String?
     let imageUrl: String
     let createdAt: String
-    
-    // We can compute the original "name" identifier (with underscores) from the imageUrl
-    // since the server saves them as https://.../Vision_of_St_Bruno.jpg
-    var internalName: String {
-        guard let url = URL(string: imageUrl) else { return title }
-        let filename = url.lastPathComponent
-        return filename.replacingOccurrences(of: ".jpg", with: "").replacingOccurrences(of: ".png", with: "")
-    }
+    let internalName: String
 }
 
 class NetworkService {
     static let shared = NetworkService()
+    
+    private let publicDB = CKContainer.default().publicCloudDatabase
+    
+    /// Fetches all artwork records matching the specified museum ID from Apple's CloudKit Public Database.
     func fetchArtworks(for museumId: String) async throws -> [NetworkArtwork] {
-        guard let url = MuseumConfig.shared.url(for: museumId) else {
-            throw URLError(.badURL)
+        let predicate = NSPredicate(format: "museumId == %@", museumId.lowercased())
+        let query = CKQuery(recordType: "Artwork", predicate: predicate)
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            publicDB.fetch(withQuery: query, resultsLimit: 100) { result in
+                switch result {
+                case .success((let matchResults, _)):
+                    var artworks: [NetworkArtwork] = []
+                    
+                    for (_, recordResult) in matchResults {
+                        if case .success(let record) = recordResult {
+                            let id = record.recordID.recordName
+                            let title = record["title"] as? String ?? "Senza Titolo"
+                            let artist = record["artist"] as? String
+                            let description = record["description"] as? String
+                            let internalName = record["internalName"] as? String ?? ""
+                            let imageUrl = record["imageUrl"] as? String ?? ""
+                            
+                            let artwork = NetworkArtwork(
+                                id: id,
+                                title: title,
+                                description: description,
+                                artist: artist,
+                                imageUrl: imageUrl,
+                                createdAt: Date().description,
+                                internalName: internalName
+                            )
+                            artworks.append(artwork)
+                        }
+                    }
+                    continuation.resume(returning: artworks)
+                    
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
         }
-        
-        let (data, response) = try await URLSession.shared.data(from: url)
-        
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            throw URLError(.badServerResponse)
-        }
-        
-        let artworks = try JSONDecoder().decode([NetworkArtwork].self, from: data)
-        return artworks
     }
 }
