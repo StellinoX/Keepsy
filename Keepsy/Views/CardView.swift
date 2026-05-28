@@ -27,7 +27,7 @@ struct CardView: View {
             VStack(spacing: 0) {
                 // Immagine con AsyncImage (se URL presente) o fallback
                 Group {
-                    ArtImageView(cardName: card.name)
+                    ArtImageView(cardName: card.name, isRevealed: CardDatabase.getRevealedCards().contains(card.name))
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 101, height: 125)

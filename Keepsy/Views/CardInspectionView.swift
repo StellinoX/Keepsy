@@ -2,6 +2,10 @@ import SwiftUI
 
 struct CardInspectionView: View {
     let card: ArtworkCard
+    var namespace: Namespace.ID? = nil
+    var isZoomingFromAlbum: Bool = false
+    var externalScale: CGFloat = 1.0
+    var externalOpacity: Double = 1.0
     let onClose: () -> Void
     
     @State private var dragOffset: CGSize = .zero
@@ -16,11 +20,13 @@ struct CardInspectionView: View {
     
     var body: some View {
         ZStack {
-            // Sfondo scuro per focalizzare la carta. Un tap qui chiude l'ispezione.
-            Color.black
-                .opacity(animateContent ? 0.85 : 0.0)
-                .edgesIgnoringSafeArea(.all)
-                .onTapGesture { closeAction() }
+            if !isZoomingFromAlbum {
+                // Sfondo scuro per focalizzare la carta. Un tap qui chiude l'ispezione.
+                Color.black
+                    .opacity(animateContent ? 0.85 : 0.0)
+                    .edgesIgnoringSafeArea(.all)
+                    .onTapGesture { closeAction() }
+            }
             
             // Contenitore della carta fronte/retro con effetto olografico metallico
             SilverMetalCardView(
@@ -51,7 +57,7 @@ struct CardInspectionView: View {
                     // FRONTE DELLA CARTA
                     VStack(spacing: 0) {
                         Group {
-                            ArtImageView(cardName: card.name)
+                            ArtImageView(cardName: card.name, isRevealed: isRevealed)
                         }
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 280, height: 350)
@@ -102,8 +108,10 @@ struct CardInspectionView: View {
                     .opacity(abs(currentRotation.truncatingRemainder(dividingBy: 360)) > 90 && abs(currentRotation.truncatingRemainder(dividingBy: 360)) < 270 ? 0 : 1)
                 }
             }
-            .scaleEffect(animateContent ? 1.0 : 0.6)
-            .opacity(animateContent ? 1.0 : 0.0)
+            .matchedGeometryEffectOptional(id: "card_\(card.name)", in: namespace, isSource: false)
+            .offset(y: namespace == nil && !isZoomingFromAlbum ? (animateContent ? 0 : 380) : 0)
+            .scaleEffect(isZoomingFromAlbum ? externalScale : (namespace == nil ? (animateContent ? 1.0 : 0.75) : 1.0))
+            .opacity(isZoomingFromAlbum ? externalOpacity : (animateContent ? 1.0 : 0.0))
             .onTapGesture { closeAction() }
             .gesture(
                 DragGesture()
@@ -123,55 +131,66 @@ struct CardInspectionView: View {
                     }
             )
             
-            VStack {
-                HStack {
-                    Button(action: {
-                        closeAction()
-                    }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 14, weight: .bold))
-                            Text("Back")
-                                .font(.system(size: 14, weight: .bold))
-                        }
-                        .foregroundColor(.white)
-                        .frame(width: 85, height: 44)
-                        .background(
-                            Capsule().fill(
-                                LinearGradient(
-                                    colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+            if !isZoomingFromAlbum || animateContent {
+                VStack {
+                    HStack {
+                        Button(action: {
+                            closeAction()
+                        }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 14, weight: .bold))
+                                Text("Back")
+                                    .font(.system(size: 14, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .frame(width: 85, height: 44)
+                            .background(
+                                Capsule().fill(
+                                    LinearGradient(
+                                        colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
                                 )
                             )
-                        )
-                        .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
+                            .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
+                        }
+                        .padding(.top, 61)
+                        .padding(.leading, 30)
+                        .opacity(animateContent ? 1.0 : 0.0)
+                        
+                        Spacer()
                     }
-                    .padding(.top, 61)
-                    .padding(.leading, 30)
-                    .opacity(animateContent ? 1.0 : 0.0)
-                    
                     Spacer()
                 }
-                Spacer()
             }
         }
         .edgesIgnoringSafeArea(.all)
         .onAppear {
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) {
-                animateContent = true
+            if isZoomingFromAlbum {
+                // Se viene dall'album, mostriamo il tasto back dopo che la card si è ingrandita
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) {
+                    withAnimation(.easeIn(duration: 0.2)) {
+                        animateContent = true
+                    }
+                }
+            } else {
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) {
+                    animateContent = true
+                }
             }
         }
     }
     
     private func closeAction() {
         HapticManager.shared.triggerImpact(style: .light)
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.85)) {
-            animateContent = false
+        if isZoomingFromAlbum {
+            withAnimation(.easeOut(duration: 0.15)) {
+                animateContent = false
+            }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-            onClose()
-        }
+        onClose()
     }
     
     // Controlla se la faccia frontale della carta è rivolta verso l'utente
@@ -184,5 +203,16 @@ struct CardInspectionView: View {
     private var currentRotation: Double {
         let dragRotation = Double(dragOffset.width) / 4.0
         return accumulatedRotation + dragRotation
+    }
+}
+
+fileprivate extension View {
+    @ViewBuilder
+    func matchedGeometryEffectOptional<ID: Hashable>(id: ID, in namespace: Namespace.ID?, isSource: Bool = true) -> some View {
+        if let namespace = namespace {
+            self.matchedGeometryEffect(id: id, in: namespace, isSource: isSource)
+        } else {
+            self
+        }
     }
 }
