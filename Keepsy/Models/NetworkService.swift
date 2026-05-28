@@ -55,12 +55,32 @@ class NetworkService {
                                     try? FileManager.default.createDirectory(at: docDir, withIntermediateDirectories: true)
                                 }
                                 let destinationURL = docDir.appendingPathComponent("\(internalName).jpg")
-                                do {
-                                    let data = try Data(contentsOf: fileURL)
-                                    try data.write(to: destinationURL, options: .atomic)
-                                    print("✅ Immagine di \(title) copiata da CloudKit in locale!")
-                                } catch {
-                                    print("❌ Errore copia immagine per \(title): \(error.localizedDescription)")
+                                
+                                var shouldCopy = true
+                                if FileManager.default.fileExists(atPath: destinationURL.path) {
+                                    let size = (try? FileManager.default.attributesOfItem(atPath: destinationURL.path)[.size] as? Int) ?? 0
+                                    if size > 10000 {
+                                        shouldCopy = false
+                                    }
+                                }
+                                
+                                if shouldCopy {
+                                    do {
+                                        let data = try Data(contentsOf: fileURL)
+                                        try data.write(to: destinationURL, options: .atomic)
+                                        print("✅ Immagine di \(title) copiata da CloudKit in locale!")
+                                        
+                                        // Notify any listening views that this image is now available
+                                        NotificationCenter.default.post(
+                                            name: NSNotification.Name("ArtworkImageDownloaded"),
+                                            object: nil,
+                                            userInfo: ["internalName": internalName]
+                                        )
+                                    } catch {
+                                        print("❌ Errore copia immagine per \(title): \(error.localizedDescription)")
+                                    }
+                                } else {
+                                    print("ℹ️ Immagine di \(title) già presente in locale, salto la copia.")
                                 }
                             }
                             

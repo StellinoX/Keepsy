@@ -9,6 +9,7 @@ struct CardDatabase {
     static var artworksByMuseum: [String: [String]] = loadMuseumMapFromCache()
     
     private static let mapCacheKey = "CachedMuseumMap"
+    private static var lastSyncTime: Date? = nil
     
     private static func loadFromCache() -> [String: NetworkArtwork] {
         guard let data = UserDefaults.standard.data(forKey: cacheKey),
@@ -36,6 +37,11 @@ struct CardDatabase {
     }
     
     static func syncWithCloud() async {
+        if let lastSync = lastSyncTime, Date().timeIntervalSince(lastSync) < 30 {
+            print("ℹ️ syncWithCloud saltato: sincronizzato di recente (\(Int(Date().timeIntervalSince(lastSync))) secondi fa)")
+            return
+        }
+        
         do {
             var allArtworks: [String: NetworkArtwork] = [:]
             var museumMap: [String: [String]] = [:]
@@ -50,18 +56,13 @@ struct CardDatabase {
                 museumMap[museum.id] = ids.sorted()
             }
             
-            // Run image prefetching silently in the background
-            let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
-            Task.detached(priority: .background) {
-                await prefetchImages(for: activeCity.lowercased())
-            }
-            
             DispatchQueue.main.async {
                 remoteArtworks = allArtworks
                 artworksByMuseum = museumMap
                 saveToCache(allArtworks, map: museumMap)
             }
             
+            lastSyncTime = Date()
             print("Successfully synced all museums from cloud APIs")
         } catch {
             print("Failed to sync artworks: \(error)")
@@ -158,7 +159,7 @@ struct CardDatabase {
     }
 
     static func prefetchImages(for location: String) async {
-        await syncWithCloud()
+        // All artwork images are already downloaded and cached during syncWithCloud() at launch
     }
     
     static func artworksFor(location: String) -> [String] {

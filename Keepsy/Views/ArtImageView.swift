@@ -26,26 +26,21 @@ struct ArtImageView: View {
                     CardDatabase.gradientFor(name: cardName)
                         .opacity(0.8)
                 }
-                .task {
-                    await waitForImage()
-                }
-            }
-        }
-    }
-    
-    private func waitForImage() async {
-        // Poll every 0.5s until the image is found on disk
-        while !Task.isCancelled {
-            // Run heavy I/O on background thread to prevent UI freezing
-            if let img = await Task.detached(operation: { CardDatabase.localImage(for: cardName) }).value {
-                await MainActor.run {
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                .onAppear {
+                    if let img = CardDatabase.localImage(for: cardName) {
                         self.localImage = img
                     }
                 }
-                break
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ArtworkImageDownloaded"))) { notification in
+                    if let name = notification.userInfo?["internalName"] as? String, name == cardName {
+                        if let img = CardDatabase.localImage(for: cardName) {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                self.localImage = img
+                            }
+                        }
+                    }
+                }
             }
-            try? await Task.sleep(nanoseconds: 500_000_000)
         }
     }
 }
