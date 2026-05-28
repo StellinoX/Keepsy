@@ -18,6 +18,7 @@ struct ARArtworkView: View {
     @State private var unlockStep: UnlockAnimationStep = .none
     
     // Collection icon feedback states (top-left collection glow/ripple)
+    @State private var isCollectionIconVisible: Bool = false // Hidden by default, appears only when captured!
     @State private var collectionIconScale: CGFloat = 1.0
     @State private var isCollectionGlowActive: Bool = false
     @State private var collectionRippleScale: CGFloat = 1.0
@@ -25,8 +26,8 @@ struct ARArtworkView: View {
     
     enum UnlockAnimationStep {
         case none
-        case zoomToCenter
-        case flyToCollection
+        case zoomToCenter      // Large center caught view with green glow border
+        case flyToCollection   // Card flies and spins to the top-left collection icon
     }
     
     var revealedCards: Set<String> {
@@ -67,9 +68,9 @@ struct ARArtworkView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 
-                // ELEGANT TOP-LEFT WIDGETS BAR (Chevron Back & Glowing Collection Album Icon)
+                // TOP BAR: Translucent back button & Collection binder shortcut
                 HStack(spacing: 12) {
-                    // 1. Circle Back Button
+                    // 1. Chevron circular Back Button (permanently visible)
                     Button(action: {
                         HapticManager.shared.triggerImpact(style: .light)
                         withAnimation(.easeInOut(duration: 0.35)) {
@@ -84,7 +85,7 @@ struct ARArtworkView: View {
                             .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
                     }
                     
-                    // 2. Collection Album Indicator (Mockup 2)
+                    // 2. Collection Album Indicator (Fades in dynamically only during triumph matching!)
                     ZStack {
                         // Golden/Glow background ring
                         Circle()
@@ -110,17 +111,19 @@ struct ARArtworkView: View {
                             .scaleEffect(collectionRippleScale)
                             .opacity(collectionRippleOpacity)
                     }
+                    .opacity(isCollectionIconVisible ? 1.0 : 0.0) // Appears only when matched!
+                    .animation(.easeInOut(duration: 0.4), value: isCollectionIconVisible)
                 }
                 .padding(.top, 60)
                 .padding(.leading, 24)
                 .zIndex(100)
                 
-                // BOTTOM OVERLAY: Fanned Cards Deck (Mockup 1)
+                // BOTTOM OVERLAY: Redesigned Large Fanned Cards Deck (Mockup 1)
                 VStack(spacing: 12) {
                     Spacer()
                     
                     if CardDatabase.hasActivePack(), let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
-                        // Dynamic header title / scan tip
+                        // Dynamic scan title
                         Text(isAnimatingUnlock ? "✨ OPERA TROVATA! ✨" : "TROVA: \(cleanedArtworkName(selectedTargetCard ?? ""))")
                             .font(.system(size: 14, weight: .black))
                             .italic()
@@ -165,7 +168,7 @@ struct ARArtworkView: View {
                             }
                         }
                         
-                        // PREMIUM FANNED CARD LAYOUT (Mockup 1)
+                        // LARGE PREMIUM FANNED CARD DECK (Mockup 1)
                         // Shows only unrevealed cards in current session, fanned out elegantly
                         let remainingCards = activePack.filter { cardName in
                             return !revealedCards.contains(cardName) && cardName != foundCardName
@@ -178,16 +181,17 @@ struct ARArtworkView: View {
                                     let selectedIndex = remainingCards.firstIndex(of: selectedTargetCard ?? "") ?? 0
                                     let diff = CGFloat(index - selectedIndex)
                                     
-                                    // Hearthstone fanning arithmetic:
-                                    let cardRotation = diff * 12.0
-                                    let xOffset = diff * 68.0
-                                    let yOffset = abs(diff) * 12.0 + (isSelected ? -22.0 : 0.0)
-                                    let scale = isSelected ? 1.22 : 0.90
+                                    // Hearthstone fanning arithmetic (Larger cards to match Mockup 1)
+                                    let cardRotation = diff * 11.0
+                                    let xOffset = diff * 85.0      // Wider spacing to support larger size
+                                    let yOffset = abs(diff) * 15.0 + (isSelected ? -25.0 : 0.0)
+                                    let scale = isSelected ? 1.25 : 0.90
                                     
                                     VStack(spacing: 0) {
                                         ZStack(alignment: .topTrailing) {
-                                            let cardWidth: CGFloat = 100
-                                            let cardHeight: CGFloat = 151
+                                            // Redesigned: Large cards matching mockup!
+                                            let cardWidth: CGFloat = 130
+                                            let cardHeight: CGFloat = 196
                                             let cornerRadius = cardWidth * 12.0 / 111.0
                                             
                                             ScannerCardView(
@@ -215,9 +219,27 @@ struct ARArtworkView: View {
                                     }
                                 }
                             }
-                            .frame(height: 240)
+                            .frame(height: 260)
+                            .contentShape(Rectangle())
+                            // DRAG GESTURE: Enables smooth swiping left/right to scroll/navigate between cards in fanned hand!
+                            .gesture(
+                                DragGesture()
+                                    .onEnded { value in
+                                        guard !isAnimatingUnlock else { return }
+                                        let dragDistance = value.translation.width
+                                        if dragDistance > 45 {
+                                            // Swipe Right -> Select Previous Card
+                                            HapticManager.shared.triggerSelection()
+                                            selectPreviousCard(remainingCards: remainingCards)
+                                        } else if dragDistance < -45 {
+                                            // Swipe Left -> Select Next Card
+                                            HapticManager.shared.triggerSelection()
+                                            selectNextCard(remainingCards: remainingCards)
+                                        }
+                                    }
+                            )
                         } else {
-                            Spacer().frame(height: 240)
+                            Spacer().frame(height: 260)
                         }
                     } else {
                         // Diagnostic feedback if no active pack exists
@@ -243,7 +265,7 @@ struct ARArtworkView: View {
                 .frame(height: screenHeight - 83)
                 .position(x: screenWidth / 2, y: 83 + (screenHeight - 83) / 2)
                 
-                // TRIUMPH UNLOCK ANIMATION LAYER (Mockup 2)
+                // TRIUMPH CATCH ANIMATION LAYER (Mockup 2 with bright green caught highlight)
                 if isAnimatingUnlock, let name = foundCardName {
                     // Dark background overlay during Step 1 (isolating the card)
                     Color.black
@@ -251,15 +273,15 @@ struct ARArtworkView: View {
                         .ignoresSafeArea()
                         .transition(.opacity)
                     
-                    // Shiny rotating rays behind the fanned flying card
+                    // Shiny emerald green rotating rays behind the flying card (Step 1)
                     if unlockStep == .zoomToCenter {
-                        RadialRayBeamView()
+                        RadialRayBeamView(color: Color(hex: "4CD964")) // Beautiful green rays!
                             .transition(.opacity)
                             .blendMode(.screen)
                             .position(x: screenWidth / 2, y: screenHeight / 2)
                     }
                     
-                    // Card frame size (Mockup 2)
+                    // Large caught card (Mockup 2 size)
                     let cardWidth: CGFloat = 200
                     let cardHeight: CGFloat = 301
                     let cornerRadius = cardWidth * 12.0 / 111.0
@@ -272,20 +294,22 @@ struct ARArtworkView: View {
                                 height: cardHeight
                             )
                             .overlay(
+                                // Caught highlighted border: emerald green!
                                 RoundedRectangle(cornerRadius: cornerRadius)
-                                    .stroke(Color(hex: "F1B40A"), lineWidth: 3)
+                                    .stroke(Color(hex: "4CD964"), lineWidth: 4)
                             )
-                            .shadow(color: Color(hex: "F1B40A").opacity(0.8), radius: 25)
+                            // Bright emerald green glow!
+                            .shadow(color: Color(hex: "4CD964").opacity(0.9), radius: 25)
                         }
                     }
-                    .scaleEffect(unlockStep == .zoomToCenter ? 1.4 : 0.08)
+                    .scaleEffect(unlockStep == .zoomToCenter ? 1.45 : 0.08)
                     .rotationEffect(.degrees(unlockStep == .zoomToCenter ? 0 : -360))
-                    // Fly from the center of the screen to the Golden Album Icon in the top-left!
+                    // Fly from screen center into the golden Collection Icon (x: 46+44, y: 60+22) in top-left!
                     .position(
                         x: unlockStep == .zoomToCenter ? screenWidth / 2 : 46.0 + 44.0,
                         y: unlockStep == .zoomToCenter ? screenHeight / 2 : 60.0 + 22.0
                     )
-                    .animation(.spring(response: 0.82, dampingFraction: 0.78), value: unlockStep)
+                    .animation(.spring(response: 0.84, dampingFraction: 0.76), value: unlockStep)
                 }
             }
             .ignoresSafeArea()
@@ -347,79 +371,106 @@ struct ARArtworkView: View {
         }
     }
     
-    // Core game-like flying & glow animation sequence (Mockup 2)
+    // Scrolling left / right between fanned card hand
+    private func selectNextCard(remainingCards: [String]) {
+        guard let current = selectedTargetCard,
+              let currentIndex = remainingCards.firstIndex(of: current) else { return }
+        if currentIndex < remainingCards.count - 1 {
+            changeSelection(to: remainingCards[currentIndex + 1])
+        }
+    }
+    
+    private func selectPreviousCard(remainingCards: [String]) {
+        guard let current = selectedTargetCard,
+              let currentIndex = remainingCards.firstIndex(of: current) else { return }
+        if currentIndex > 0 {
+            changeSelection(to: remainingCards[currentIndex - 1])
+        }
+    }
+    
+    // Core game-like flying & green caught animation sequence (Mockup 2)
     private func startUnlockAnimation(for cardName: String) {
         // Step 1: Heavy spring bounce haptic
         HapticManager.shared.triggerImpact(style: .rigid)
         
         foundCardName = cardName
         isAnimatingUnlock = true
+        isCollectionIconVisible = false // Ensure hidden first
         
         withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
             unlockStep = .zoomToCenter
         }
         
-        // Wait 2.2 seconds Zoomed in the center
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
-            // Step 2: Fly to top-left collection Golden Icon
-            withAnimation(.spring(response: 0.76, dampingFraction: 0.8)) {
-                unlockStep = .flyToCollection
+        // Wait 1.4 seconds showing captured card with green border
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+            // Step 2: Dynamically fade in the golden collection binder shortcut in top-left!
+            withAnimation(.easeInOut(duration: 0.4)) {
+                isCollectionIconVisible = true
             }
             
-            // Wait 0.8 seconds (duration of flight)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                // Step 3: Hits the collection golden binder! Glow & spring bounce
-                HapticManager.shared.triggerImpact(style: .medium)
-                
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.45)) {
-                    collectionIconScale = 1.4
-                    isCollectionGlowActive = true
-                    collectionRippleScale = 1.0
-                    collectionRippleOpacity = 1.0
+            // Wait 0.6 seconds more (making it 2.0s total celebration in center)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                // Step 3: Card flies and spins to the Golden Album Icon in top-left
+                withAnimation(.spring(response: 0.76, dampingFraction: 0.8)) {
+                    unlockStep = .flyToCollection
                 }
                 
-                // Radial ring ripple expanding outward
-                withAnimation(.easeOut(duration: 0.55)) {
-                    collectionRippleScale = 2.4
-                    collectionRippleOpacity = 0.0
-                }
-                
-                // Permanently write to local CloudKit sync database
-                CardDatabase.addRevealedCard(cardName)
-                CardDatabase.clearActivePackIfNeeded()
-                
-                // Return golden icon to normal scale
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        collectionIconScale = 1.0
-                    }
-                }
-                
-                // Wait another 0.5s to let the user enjoy the victory feedback
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isCollectionGlowActive = false
+                // Wait 0.8 seconds (duration of flight)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    // Step 4: Hits the collection binder! Glow & spring bounce
+                    HapticManager.shared.triggerImpact(style: .medium)
+                    
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.45)) {
+                        collectionIconScale = 1.4
+                        isCollectionGlowActive = true
+                        collectionRippleScale = 1.0
+                        collectionRippleOpacity = 1.0
                     }
                     
-                    // Reset animation states
-                    isAnimatingUnlock = false
-                    foundCardName = nil
-                    unlockStep = .none
-                    triggerUnlockAnimation = nil
+                    // expanding circular ring ripple wave
+                    withAnimation(.easeOut(duration: 0.55)) {
+                        collectionRippleScale = 2.4
+                        collectionRippleOpacity = 0.0
+                    }
                     
-                    // Auto-select the next unrevealed card in the hand
-                    if let active = CardDatabase.getActivePack(), !active.isEmpty {
-                        let remaining = active.filter { !revealedCards.contains($0) }
-                        if let nextTarget = remaining.first {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                                selectedTargetCard = nextTarget
-                                isTargetUnlocked = false
-                                detectedArtwork = "Trova l'opera per sbloccarla!"
-                            }
-                        } else {
-                            // All fanned cards successfully found! Exit back to album pack view
-                            withAnimation(.easeInOut(duration: 0.35)) {
-                                activeView = .opening
+                    // Permanently save to revealed cards list
+                    CardDatabase.addRevealedCard(cardName)
+                    CardDatabase.clearActivePackIfNeeded()
+                    
+                    // Return golden collection icon size back to 1.0
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                            collectionIconScale = 1.0
+                        }
+                    }
+                    
+                    // Wait another 0.6 seconds to let the user enjoy the ripple hit
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isCollectionGlowActive = false
+                            isCollectionIconVisible = false // Fades out binder shortcut automatically!
+                        }
+                        
+                        // Reset all animation states
+                        isAnimatingUnlock = false
+                        foundCardName = nil
+                        unlockStep = .none
+                        triggerUnlockAnimation = nil
+                        
+                        // Auto-select the next unrevealed card in fanned hand
+                        if let active = CardDatabase.getActivePack(), !active.isEmpty {
+                            let remaining = active.filter { !revealedCards.contains($0) }
+                            if let nextTarget = remaining.first {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                                    selectedTargetCard = nextTarget
+                                    isTargetUnlocked = false
+                                    detectedArtwork = "Trova l'opera per sbloccarla!"
+                                }
+                            } else {
+                                // All fanned cards found! Go back to pack opening view
+                                withAnimation(.easeInOut(duration: 0.35)) {
+                                    activeView = .opening
+                                }
                             }
                         }
                     }
@@ -429,7 +480,7 @@ struct ARArtworkView: View {
     }
 }
 
-// MARK: - Mini Card View for Scanner Carousel (matching packet artwork card design)
+// MARK: - ScannerCardView: Mini Card View for Scanner Carousel (matching packet artwork card design)
 struct ScannerCardView: View {
     let name: String
     let width: CGFloat
@@ -459,16 +510,21 @@ struct ScannerCardView: View {
     }
 }
 
-// MARK: - RadialRayBeamView: Shiny golden rotating ray beams behind fanned cards
+// MARK: - RadialRayBeamView: Shiny gold/green rotating ray beams behind fanned cards
 struct RadialRayBeamView: View {
+    let color: Color
     @State private var rotation: Double = 0.0
+    
+    init(color: Color = Color(hex: "FFD700")) {
+        self.color = color
+    }
     
     var body: some View {
         ZStack {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color.white.opacity(0.6), Color(hex: "FFD700").opacity(0.2), Color.clear],
+                        colors: [Color.white.opacity(0.6), color.opacity(0.2), Color.clear],
                         center: .center,
                         startRadius: 0,
                         endRadius: 250
@@ -480,7 +536,7 @@ struct RadialRayBeamView: View {
                 Rectangle()
                     .fill(
                         LinearGradient(
-                            colors: [.clear, Color(hex: "FFD700").opacity(0.35), .clear],
+                            colors: [.clear, color.opacity(0.35), .clear],
                             startPoint: .top,
                             endPoint: .bottom
                         )

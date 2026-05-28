@@ -12,7 +12,7 @@ struct ArtImageView: View {
         if let cached = CardDatabase.imageCache.object(forKey: cardName as NSString) {
             self._localImage = State(initialValue: cached)
         } else {
-            self._localImage = State(initialValue: CardDatabase.localImage(for: cardName))
+            self._localImage = State(initialValue: nil)
         }
     }
     
@@ -27,17 +27,28 @@ struct ArtImageView: View {
                         .opacity(0.8)
                 }
                 .onAppear {
-                    if let img = CardDatabase.localImage(for: cardName) {
-                        self.localImage = img
-                    }
+                    loadAsynchronously()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ArtworkImageDownloaded"))) { notification in
                     if let name = notification.userInfo?["internalName"] as? String, name == cardName {
-                        if let img = CardDatabase.localImage(for: cardName) {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                self.localImage = img
-                            }
-                        }
+                        loadAsynchronously()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func loadAsynchronously() {
+        if let cached = CardDatabase.imageCache.object(forKey: cardName as NSString) {
+            self.localImage = cached
+            return
+        }
+        
+        Task.detached(priority: .userInitiated) {
+            if let img = CardDatabase.localImage(for: cardName) {
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        self.localImage = img
                     }
                 }
             }
