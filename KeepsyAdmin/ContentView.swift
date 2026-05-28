@@ -8,11 +8,16 @@
 import SwiftUI
 import CloudKit
 
+struct LogLine: Identifiable {
+    let id = UUID()
+    let text: String
+}
+
 struct ContentView: View {
     @State private var isSeeding = false
     @State private var statusText = "Pronto per il caricamento."
     @State private var progressText = ""
-    @State private var logLines: [String] = []
+    @State private var logLines: [LogLine] = []
     
     var body: some View {
         VStack(spacing: 20) {
@@ -49,10 +54,10 @@ struct ContentView: View {
                                 .foregroundColor(.secondary)
                                 .font(.system(.footnote, design: .monospaced))
                         } else {
-                            ForEach(logLines, id: \.self) { line in
-                                Text(line)
+                            ForEach(logLines) { line in
+                                Text(line.text)
                                     .font(.system(.footnote, design: .monospaced))
-                                    .foregroundColor(line.contains("❌") ? .red : (line.contains("✅") ? .green : .primary))
+                                    .foregroundColor(line.text.contains("❌") ? .red : (line.text.contains("✅") ? .green : .primary))
                             }
                         }
                     }
@@ -101,7 +106,7 @@ struct ContentView: View {
     
     private func addLog(_ message: String) {
         DispatchQueue.main.async {
-            logLines.append(message)
+            logLines.append(LogLine(text: message))
         }
     }
     
@@ -164,12 +169,24 @@ struct ContentView: View {
                 addLog("⚠️ Immagine non trovata per: \(title)")
             }
             
-            // Save to CloudKit
+            // Save or Update (Upsert) to CloudKit using CKModifyRecordsOperation to avoid already exists errors
+            let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
+            operation.savePolicy = .changedKeys
+            
             do {
-                try await publicDB.save(record)
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    operation.modifyRecordsCompletionBlock = { savedRecords, deletedRecordIDs, error in
+                        if let error = error {
+                            continuation.resume(throwing: error)
+                        } else {
+                            continuation.resume()
+                        }
+                    }
+                    publicDB.add(operation)
+                }
                 addLog("✅ Salvata opera: \(title)")
             } catch {
-                addLog("ℹ️ Già presente (o errore): \(title)")
+                addLog("❌ Errore \(title): \(error.localizedDescription)")
             }
         }
         
