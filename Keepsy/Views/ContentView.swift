@@ -27,7 +27,7 @@ struct ContentView: View {
             // Se desideri caricare automaticamente tutte le 52 opere e immagini in CloudKit,
             // scommenta la riga qui sotto, avvia l'app sul Simulatore e controlla la console di Xcode!
             // Una volta completato il caricamento, puoi ricommentare questa riga.
-            // await CloudKitSeeder.seedDatabase()
+            await CloudKitSeeder.seedDatabase()
         }
     }
 }
