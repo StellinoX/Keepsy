@@ -20,6 +20,7 @@ struct CollectionAlbumView: View {
     @State private var revealedCards: Set<String> = []
     @State private var hasSyncedWithCloud = false
     @State private var inspectedCard: ArtworkCard? = nil
+    @Namespace private var albumNamespace
     
     @State private var animatingCardName: String? = nil
     @State private var animationPhase: CardAnimationPhase = .idle
@@ -60,9 +61,9 @@ struct CollectionAlbumView: View {
     var destinationFrame: CGRect {
         let sw = UIScreen.main.bounds.width
         let sh = UIScreen.main.bounds.height
-        let w: CGFloat = 260
-        let h: CGFloat = w * (290.0 / 200.0)
-        return CGRect(x: (sw - w) / 2, y: (sh - h) / 2, width: w, height: h)
+        let w: CGFloat = 250
+        let h: CGFloat = 380
+        return CGRect(x: (sw - w) / 2, y: (sh - h) / 2 - 80, width: w, height: h)
     }
     var body: some View {
         // ZStack con coordinateSpace nominato — sia il GeometryReader che .position usano questo
@@ -188,7 +189,8 @@ struct CollectionAlbumView: View {
                     .onTapGesture { startCloseAnimation() }
 
                 // Flying card — posizionata con .position nello spazio "root"
-                if let name = animatingCardName {
+                // Viene nascosta quando la CardInspectionView interattiva è aperta (.open) per evitare doppioni
+                if let name = animatingCardName, animationPhase != .idle {
                     flyingCardView(for: name)
                 }
 
@@ -211,7 +213,8 @@ struct CollectionAlbumView: View {
                             gradient: CardDatabase.gradientFor(name: name),
                             isFlipped: true
                         ),
-                        namespace: Namespace().wrappedValue,
+                        namespace: albumNamespace,
+                        isZoomingFromAlbum: true,
                         onClose: { startCloseAnimation() }
                     )
                     .opacity(inspectionOpacity)
@@ -231,14 +234,25 @@ struct CollectionAlbumView: View {
         }
     }
 
+    private var dynamicPadding: CGFloat {
+        let minW: CGFloat = 58
+        let maxW: CGFloat = 250
+        let currentW = flyingFrame.width
+        if currentW <= minW { return 4 }
+        if currentW >= maxW { return 12 }
+        let t = (currentW - minW) / (maxW - minW)
+        return 4 + t * (12 - 4)
+    }
+
     @ViewBuilder
     func flyingCardView(for name: String) -> some View {
+        let pad = dynamicPadding
         VStack(spacing: 0) {
             ArtImageView(cardName: name, isRevealed: true)
                 .aspectRatio(contentMode: .fill)
-                .frame(width: flyingFrame.width - 8, height: flyingFrame.height - 8)
-                .cornerRadius(max(4, flyingCornerRadius - 4))
-                .padding(4)
+                .frame(width: flyingFrame.width - pad * 2, height: flyingFrame.height - pad * 2)
+                .cornerRadius(max(4, flyingCornerRadius - pad))
+                .padding(pad)
         }
         .frame(width: flyingFrame.width, height: flyingFrame.height)
         .background(CardDatabase.gradientFor(name: name))

@@ -292,7 +292,41 @@ public struct SceneKitPacketView: UIViewRepresentable {
         return view
     }
     
-    public func updateUIView(_ uiView: SCNView, context: Context) {}
+    public func updateUIView(_ uiView: SCNView, context: Context) {
+        // Applica i cambiamenti di isTorn e della maschera se la vista SwiftUI viene aggiornata senza essere ricreata
+        SCNTransaction.begin()
+        SCNTransaction.animationDuration = 0.2
+        if isTorn {
+            let tornMask = tearMaskImage ?? createTornMask()
+            context.coordinator.maskProp.contents = tornMask
+            
+            let uniforms = SCNVector4(0, 0, 0, 10.0) // fingerX far right
+            context.coordinator.bodyNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
+            context.coordinator.backBodyNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
+            
+            context.coordinator.topGroupNode.isHidden = true
+            context.coordinator.backFlapNode.isHidden = true
+            context.coordinator.topSealNode.isHidden = true
+            
+            context.coordinator.deckContainer.position = SCNVector3(0, 1.2, -0.05)
+            context.coordinator.tiltContainerNode.eulerAngles = SCNVector3(0, 0, 0)
+        } else {
+            context.coordinator.maskProp.contents = UIColor.black
+            let uniforms = SCNVector4(0, 0, 0, -10.0)
+            context.coordinator.bodyNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
+            context.coordinator.backBodyNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
+            context.coordinator.flapNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
+            context.coordinator.backFlapNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
+            
+            context.coordinator.topGroupNode.isHidden = false
+            context.coordinator.backFlapNode.isHidden = false
+            context.coordinator.topSealNode.isHidden = false
+            
+            context.coordinator.deckContainer.position = SCNVector3(0, 0, -0.12)
+            context.coordinator.tiltContainerNode.eulerAngles = SCNVector3(0, 0, -0.06)
+        }
+        SCNTransaction.commit()
+    }
     
     public func makeCoordinator() -> PacketCoordinator {
         return PacketCoordinator(isTorn: isTorn, firstCardName: firstCardName, isFirstCardRevealed: isFirstCardRevealed, tearMaskImage: tearMaskImage, onTearComplete: onTearComplete, onOpen: onOpen)
@@ -386,7 +420,7 @@ public class PacketCoordinator: NSObject {
         // Material (Dark Foil PBR)
         let mat = SCNMaterial()
         mat.lightingModel = .physicallyBased
-        if let userImg = UIImage(named: "Apri_pacchetto_Copy_14_3x") ?? UIImage(named: "packet") {
+        if let userImg = UIImage(named: "Apri_pacchetto_Copy_14_3x") ?? UIImage(named: "content") ?? UIImage(named: "packet") {
             mat.diffuse.contents = userImg
         } else {
             mat.diffuse.contents = UIColor(white: 0.12, alpha: 1.0)
@@ -900,7 +934,10 @@ public class PacketCoordinator: NSObject {
             let maskToSave = self.lastMaskImage
             DispatchQueue.global(qos: .utility).async {
                 if let lastMask = maskToSave, let pngData = lastMask.pngData() {
+                    print("DEBUG: Tear mask successfully saved to UserDefaults, size: \(pngData.count) bytes")
                     UserDefaults.standard.set(pngData, forKey: "activePackTearMask")
+                } else {
+                    print("DEBUG: Tear mask failed to convert to pngData or lastMask is nil")
                 }
             }
             

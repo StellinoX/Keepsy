@@ -20,10 +20,11 @@ struct PackOpeningView: View {
     @State private var showOpeningEffect = false
 
     // Animazione carte — una per carta
-    @State private var cardOffsetY: [CGFloat] = Array(repeating: -800, count: 5)
-    @State private var cardScale: [CGFloat] = Array(repeating: 0.6, count: 5)
+    @State private var cardOffsetX: [CGFloat] = [123, 0, -123, 61.5, -61.5]
+    @State private var cardOffsetY: [CGFloat] = [94, 94, 94, -94, -94]
+    @State private var cardScale: [CGFloat] = Array(repeating: 1.0, count: 5)
     @State private var cardOpacity: [Double] = Array(repeating: 0, count: 5)
-    @State private var cardBlur: [CGFloat] = Array(repeating: 12, count: 5)
+    @State private var cardRotation: [Double] = [-4, 2, -2, 3, 0]
 
     var body: some View {
         ZStack {
@@ -97,7 +98,8 @@ struct PackOpeningView: View {
                                                 inspectedCard = cards[index]
                                             }
                                         }
-                                        .offset(y: cardOffsetY[index])
+                                        .offset(x: cardOffsetX[index], y: cardOffsetY[index])
+                                        .rotationEffect(.degrees(cardRotation[index]))
                                         .scaleEffect(cardScale[index])
                                         .opacity(cardOpacity[index])
                                     }
@@ -110,7 +112,8 @@ struct PackOpeningView: View {
                                                 inspectedCard = cards[index]
                                             }
                                         }
-                                        .offset(y: cardOffsetY[index])
+                                        .offset(x: cardOffsetX[index], y: cardOffsetY[index])
+                                        .rotationEffect(.degrees(cardRotation[index]))
                                         .scaleEffect(cardScale[index])
                                         .opacity(cardOpacity[index])
                                     }
@@ -207,33 +210,25 @@ struct PackOpeningView: View {
     // MARK: - Animazione ingresso carte
 
     func animateCardsIn() {
-        // Ogni carta piomba dall'alto con delay sfalsato
-        // Le prime tre (riga 1) arrivano quasi insieme, poi le ultime due
+        // 1. Fai comparire le carte sovrapposte al centro (opacità = 1)
+        for index in 0..<5 {
+            cardOffsetX[index] = [123.0, 0.0, -123.0, 61.5, -61.5][index]
+            cardOffsetY[index] = [94.0, 94.0, 94.0, -94.0, -94.0][index]
+            cardScale[index] = 1.0
+            cardOpacity[index] = 1.0
+            cardRotation[index] = [-4.0, 2.0, -2.0, 3.0, 0.0][index]
+        }
+        
+        // 2. Dopo 0.2s, allarga e disponi le carte verso le loro posizioni nella griglia
         let delays: [Double] = [0.0, 0.08, 0.16, 0.10, 0.18]
-
-        for index in 0..<min(5, cards.count) {
-            // Stato iniziale: sopra lo schermo, sfocata, invisibile
-            cardOffsetY[index] = -700
-            cardScale[index] = 0.75
-            cardOpacity[index] = 0
-            cardBlur[index] = 16
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + delays[index]) {
-                // Appare e piomba giù veloce
-                withAnimation(.easeIn(duration: 0.18)) {
-                    cardOffsetY[index] = 18   // quasi arrivata, appena oltre
-                    cardOpacity[index] = 1.0
-                    cardBlur[index] = 0
-                    cardScale[index] = 1.04
-                }
-
-                // Impatto: haptic + rimbalzo spring
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                    HapticManager.shared.triggerImpact(style: .rigid)
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.5)) {
-                        cardOffsetY[index] = 0
-                        cardScale[index] = 1.0
-                    }
+        
+        for index in 0..<5 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2 + delays[index]) {
+                HapticManager.shared.triggerImpact(style: .medium)
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) {
+                    cardOffsetX[index] = 0
+                    cardOffsetY[index] = 0
+                    cardRotation[index] = 0
                 }
             }
         }
@@ -271,10 +266,11 @@ struct PackOpeningView: View {
             }
             // Carte già viste: mostrale subito senza animazione
             for i in 0..<5 {
+                cardOffsetX[i] = 0
                 cardOffsetY[i] = 0
                 cardScale[i] = 1.0
                 cardOpacity[i] = 1.0
-                cardBlur[i] = 0
+                cardRotation[i] = 0
             }
         } else {
             self.cards = []
@@ -296,12 +292,12 @@ struct PackOpeningView: View {
         inspectedCard = nil
         flashOpacity = 0.0
         showOpeningEffect = false
-        for i in 0..<5 {
-            cardOffsetY[i] = -800
-            cardScale[i] = 0.6
-            cardOpacity[i] = 0
-            cardBlur[i] = 12
-        }
+        
+        cardOffsetX = [123, 0, -123, 61.5, -61.5]
+        cardOffsetY = [94, 94, 94, -94, -94]
+        cardScale = Array(repeating: 1.0, count: 5)
+        cardOpacity = Array(repeating: 0, count: 5)
+        cardRotation = [-4, 2, -2, 3, 0]
     }
 }
 
@@ -319,8 +315,10 @@ struct SingleScrollPackView: View {
 
     func loadSavedTearMask() -> UIImage? {
         if let data = UserDefaults.standard.data(forKey: "activePackTearMask") {
+            print("DEBUG: Loaded saved tear mask from UserDefaults, size: \(data.count) bytes")
             return UIImage(data: data)
         }
+        print("DEBUG: No saved tear mask found in UserDefaults")
         return nil
     }
 
@@ -438,36 +436,69 @@ struct PackExpansionRow: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 0) {
+                // ZStack con le due bustine che sporgono (overflow)
                 ZStack {
-                    SceneKitPacketView(interactive: false).frame(width: 105, height: 155).rotationEffect(.degrees(-12)).offset(x: -8, y: 15)
-                    SceneKitPacketView(interactive: false).frame(width: 105, height: 155).rotationEffect(.degrees(10)).offset(x: 24, y: 0)
+                    SceneKitPacketView(interactive: false)
+                        .frame(width: 104, height: 154)
+                        .rotationEffect(.degrees(-11))
+                        .offset(x: -12, y: 0)
+                    
+                    SceneKitPacketView(interactive: false)
+                        .frame(width: 104, height: 154)
+                        .rotationEffect(.degrees(12))
+                        .offset(x: 18, y: 8)
                 }
-                .frame(width: 170, height: 170).clipped()
+                .frame(width: 140, height: 142) // Area sinistra senza clipping
+                
                 Spacer()
-                VStack(alignment: .trailing, spacing: 10) {
-                    Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold)).foregroundColor(.white.opacity(0.45))
+                
+                // Contenuto di destra
+                VStack(alignment: .trailing, spacing: 0) {
+                    // Chevron in alto a destra
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white.opacity(0.6))
+                        .padding(.top, 18)
+                        .padding(.trailing, 20)
+                    
                     Spacer()
-                    Text(percentText).font(.system(size: 34, design: .monospaced)).bold().italic().foregroundColor(.white)
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.22)).frame(height: 5)
-                        Capsule().fill(Color.white).frame(width: max(6, 140 * CGFloat(progress)), height: 5)
-                    }.frame(width: 140, height: 5)
+                    
+                    // Percentuale e barra di progresso in basso a destra
+                    VStack(alignment: .trailing, spacing: 6) {
+                        Text(percentText)
+                            .font(.system(size: 28, weight: .bold)).italic()
+                            .foregroundColor(.white)
+                        
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.white.opacity(0.18))
+                                .frame(height: 5)
+                            Capsule()
+                                .fill(Color.white)
+                                .frame(width: max(5, 110 * CGFloat(progress)), height: 5)
+                        }
+                        .frame(width: 110, height: 5)
+                    }
+                    .padding(.bottom, 22)
+                    .padding(.trailing, 20)
                 }
-                .padding(.vertical, 24).padding(.trailing, 24)
             }
-            .frame(width: 344, height: 194)
-            .background(Group {
-                if isComplete {
-                    LinearGradient(colors: [Color(hex: "F1B40A"), Color(hex: "E55812")], startPoint: .topLeading, endPoint: .bottomTrailing)
-                } else { Color(white: 0.12) }
-            })
-            .cornerRadius(16)
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(
-                isComplete ?
-                    LinearGradient(colors: [Color(hex: "F2CA03"), Color(hex: "C7A245")], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                    LinearGradient(colors: [Color(hex: "B1B1B1"), Color(hex: "B1B1B1").opacity(0.15)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                lineWidth: 2))
-            .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)
+            .frame(width: 350, height: 142)
+            // Sfondo arrotondato per non clippare le bustine che sporgono!
+            .background(
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color(hex: "1F1F21")) // Grigio scuro del design
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(
+                                isComplete ?
+                                    LinearGradient(colors: [Color(hex: "F2CA03"), Color(hex: "C7A245")], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                                    LinearGradient(colors: [Color.white.opacity(0.15), Color.white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                lineWidth: 1.5
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 6)
+            )
         }
         .buttonStyle(PlainButtonStyle())
     }
