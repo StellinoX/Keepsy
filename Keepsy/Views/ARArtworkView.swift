@@ -1,5 +1,6 @@
 import SwiftUI
 import ARKit
+
 struct ARArtworkView: View {
     @Binding var activeView: ContentView.ActiveView
     @State private var detectedArtwork: String = ""
@@ -9,6 +10,24 @@ struct ARArtworkView: View {
     @GestureState private var gestureDragOffset: CGFloat = 0.0
     @State private var imagesReady: Bool = false
     @State private var downloadProgress: String = "Scaricamento immagini..."
+    
+    // Triumph unlock animation states (Mockup 2)
+    @State private var triggerUnlockAnimation: String? = nil
+    @State private var foundCardName: String? = nil
+    @State private var isAnimatingUnlock: Bool = false
+    @State private var unlockStep: UnlockAnimationStep = .none
+    
+    // Collection icon feedback states (top-left collection glow/ripple)
+    @State private var collectionIconScale: CGFloat = 1.0
+    @State private var isCollectionGlowActive: Bool = false
+    @State private var collectionRippleScale: CGFloat = 1.0
+    @State private var collectionRippleOpacity: Double = 0.0
+    
+    enum UnlockAnimationStep {
+        case none
+        case zoomToCenter
+        case flyToCollection
+    }
     
     var revealedCards: Set<String> {
         return CardDatabase.getRevealedCards()
@@ -23,17 +42,18 @@ struct ARArtworkView: View {
                 Color.black.ignoresSafeArea()
                 
                 if imagesReady {
-                    // Camera feed showing AR tracking (fullscreen as before)
+                    // Camera feed showing AR tracking
                     ARViewContainer(
                         detectedArtwork: $detectedArtwork,
                         isTargetUnlocked: $isTargetUnlocked,
                         activeView: $activeView,
                         diagnosticMessage: $diagnosticMessage,
-                        targetName: selectedTargetCard ?? ""
+                        targetName: selectedTargetCard ?? "",
+                        triggerUnlockAnimation: $triggerUnlockAnimation
                     )
                     .ignoresSafeArea()
                 } else {
-                    // Loading screen while images are being downloaded
+                    // Loading screen while images are downloaded
                     VStack(spacing: 20) {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -47,51 +67,71 @@ struct ARArtworkView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 
-                // Elegant Back Button (top-left aligned with the specified coordinates)
-                Button(action: {
-                    HapticManager.shared.triggerImpact(style: .light)
-                    withAnimation(.easeInOut(duration: 0.35)) {
-                        activeView = .opening
-                    }
-                }) {
-                    HStack(spacing: 5) {
+                // ELEGANT TOP-LEFT WIDGETS BAR (Chevron Back & Glowing Collection Album Icon)
+                HStack(spacing: 12) {
+                    // 1. Circle Back Button
+                    Button(action: {
+                        HapticManager.shared.triggerImpact(style: .light)
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            activeView = .opening
+                        }
+                    }) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .bold))
-                        Text("Back")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color.black.opacity(0.6)))
+                            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
                     }
-                    .foregroundColor(.white)
-                    .frame(width: 85, height: 44)
-                    .background(
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                    
+                    // 2. Collection Album Indicator (Mockup 2)
+                    ZStack {
+                        // Golden/Glow background ring
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: isCollectionGlowActive ? [Color(hex: "FFD700"), Color(hex: "FFA500")] : [Color(white: 0.15), Color(white: 0.08)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
-                    )
-                    .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
+                            .frame(width: 44, height: 44)
+                            .shadow(color: isCollectionGlowActive ? Color(hex: "FFD700").opacity(0.85) : .clear, radius: 12)
+                            .scaleEffect(collectionIconScale)
+                        
+                        Image(systemName: "square.grid.3x3.fill")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(isCollectionGlowActive ? .black : .white)
+                        
+                        // Expanding ripple circle when card hits
+                        Circle()
+                            .stroke(Color(hex: "FFD700"), lineWidth: 2)
+                            .frame(width: 44, height: 44)
+                            .scaleEffect(collectionRippleScale)
+                            .opacity(collectionRippleOpacity)
+                    }
                 }
-                .position(x: 30 + 85/2, y: 83 + 44/2)
+                .padding(.top, 60)
+                .padding(.leading, 24)
+                .zIndex(100)
                 
-                // Bottom Overlay: Carousel of cards (if active pack exists)
+                // BOTTOM OVERLAY: Fanned Cards Deck (Mockup 1)
                 VStack(spacing: 12) {
                     Spacer()
                     
                     if CardDatabase.hasActivePack(), let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
-                        // Title/hint
-                        Text(isTargetUnlocked ? "✨ OPERA TROVATA! ✨" : "TROVA: \(cleanedArtworkName(selectedTargetCard ?? ""))")
+                        // Dynamic header title / scan tip
+                        Text(isAnimatingUnlock ? "✨ OPERA TROVATA! ✨" : "TROVA: \(cleanedArtworkName(selectedTargetCard ?? ""))")
                             .font(.system(size: 14, weight: .black))
                             .italic()
                             .foregroundColor(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 6)
-                            .background(Capsule().fill(isTargetUnlocked ? Color.green.opacity(0.8) : Color.black.opacity(0.6)))
+                            .background(Capsule().fill(isAnimatingUnlock ? Color.green.opacity(0.8) : Color.black.opacity(0.6)))
                             .padding(.bottom, 6)
                         
-                        // Real-time detection feedback when pointing at something
-                        if !detectedArtwork.isEmpty {
+                        // Point-to-scan diagnostic feedback
+                        if !detectedArtwork.isEmpty && !isAnimatingUnlock {
                             Text(detectedArtwork)
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(.yellow)
@@ -101,27 +141,15 @@ struct ARArtworkView: View {
                                 .padding(.bottom, 6)
                         }
                         
-                        // Check if the selected card's image is missing from server downloads
+                        // Manual unlock fallback (server errors / simulator testing)
                         let currentCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
                         let isImageAvailable = CardDatabase.downloadedArtworkNames(for: currentCity).contains(selectedTargetCard ?? "")
                         
-                        if !isTargetUnlocked && !isImageAvailable {
+                        if !isTargetUnlocked && !isImageAvailable && !isAnimatingUnlock {
                             Button(action: {
                                 HapticManager.shared.triggerImpact(style: .medium)
                                 if let target = selectedTargetCard {
-                                    CardDatabase.addRevealedCard(target)
-                                    CardDatabase.clearActivePackIfNeeded()
-                                    withAnimation {
-                                        isTargetUnlocked = true
-                                        detectedArtwork = "Sbloccata: \(cleanedArtworkName(target))!"
-                                        if !CardDatabase.hasActivePack() {
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                                                withAnimation(.easeInOut(duration: 0.35)) {
-                                                    activeView = .opening
-                                                }
-                                            }
-                                        }
-                                    }
+                                    triggerUnlockAnimation = target
                                 }
                             }) {
                                 HStack(spacing: 8) {
@@ -137,91 +165,62 @@ struct ARArtworkView: View {
                             }
                         }
                         
-                        // Carousel of 5 cards (with overlapping offset, keeping fixed order)
-                        let selectedIndex = activePack.firstIndex(of: selectedTargetCard ?? "") ?? 0
-                        let spacing: CGFloat = -5
-                        let cardWidth: CGFloat = 100
-                        let totalWidth = CGFloat(activePack.count) * cardWidth + CGFloat(activePack.count - 1) * spacing
-                        let cardCenter = CGFloat(selectedIndex) * (cardWidth + spacing) + (cardWidth / 2)
-                        let baseOffset = (screenWidth / 2) - cardCenter
+                        // PREMIUM FANNED CARD LAYOUT (Mockup 1)
+                        // Shows only unrevealed cards in current session, fanned out elegantly
+                        let remainingCards = activePack.filter { cardName in
+                            return !revealedCards.contains(cardName) && cardName != foundCardName
+                        }
                         
-                        HStack(alignment: .bottom, spacing: spacing) {
-                            ForEach(0..<activePack.count, id: \.self) { index in
-                                let cardName = activePack[index]
-                                let isSelected = cardName == selectedTargetCard
-                                let isRevealed = revealedCards.contains(cardName)
-                                
-                                // Calculate distance from the center of the screen
-                                let indexDiff = CGFloat(index - selectedIndex)
-                                let cardCenterDiff = cardWidth + spacing
-                                let distanceFromCenter = indexDiff * cardCenterDiff + gestureDragOffset
-                                
-                                // Calculate dynamic scale and zIndex
-                                let scale = scaleForDistance(distanceFromCenter)
-                                let zIndexVal = 10.0 - (min(abs(distanceFromCenter), 190.0) / 190.0)
-                                
-                                VStack(spacing: 0) {
-                                    ZStack(alignment: .topTrailing) {
-                                        let currentCornerRadius = cardWidth * 12.0 / 111.0
-                                        
-                                        ScannerCardView(
-                                            name: cardName,
-                                            width: cardWidth,
-                                            height: 151.0
-                                        )
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: currentCornerRadius)
-                                                .stroke(isSelected ? Color(hex: "F1B40A") : Color.white.opacity(0.2), lineWidth: isSelected ? 3 : 1)
-                                        )
-                                        .shadow(color: isSelected ? Color(hex: "F1B40A").opacity(0.4) : .black.opacity(0.3), radius: isSelected ? 15 : 5)
-                                        
-                                        if isRevealed {
-                                            // Checked overlay badge
-                                            ZStack {
-                                                Circle()
-                                                    .fill(Color.green)
-                                                    .frame(width: 28, height: 28)
-                                                Image(systemName: "checkmark")
-                                                    .font(.system(size: 14, weight: .bold))
-                                                    .foregroundColor(.white)
-                                            }
-                                            .padding(8)
+                        if !remainingCards.isEmpty {
+                            ZStack {
+                                ForEach(Array(remainingCards.enumerated()), id: \.element) { index, cardName in
+                                    let isSelected = cardName == selectedTargetCard
+                                    let selectedIndex = remainingCards.firstIndex(of: selectedTargetCard ?? "") ?? 0
+                                    let diff = CGFloat(index - selectedIndex)
+                                    
+                                    // Hearthstone fanning arithmetic:
+                                    let cardRotation = diff * 12.0
+                                    let xOffset = diff * 68.0
+                                    let yOffset = abs(diff) * 12.0 + (isSelected ? -22.0 : 0.0)
+                                    let scale = isSelected ? 1.22 : 0.90
+                                    
+                                    VStack(spacing: 0) {
+                                        ZStack(alignment: .topTrailing) {
+                                            let cardWidth: CGFloat = 100
+                                            let cardHeight: CGFloat = 151
+                                            let cornerRadius = cardWidth * 12.0 / 111.0
+                                            
+                                            ScannerCardView(
+                                                name: cardName,
+                                                width: cardWidth,
+                                                height: cardHeight
+                                            )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: cornerRadius)
+                                                    .stroke(isSelected ? Color(hex: "F1B40A") : Color.white.opacity(0.35), lineWidth: isSelected ? 3 : 1.5)
+                                            )
+                                            .shadow(color: isSelected ? Color(hex: "F1B40A").opacity(0.5) : .black.opacity(0.4), radius: isSelected ? 16 : 6)
+                                        }
+                                    }
+                                    .scaleEffect(scale)
+                                    .rotationEffect(.degrees(cardRotation))
+                                    .offset(x: xOffset, y: yOffset)
+                                    .zIndex(isSelected ? 10 : Double(5 - abs(Int(diff))))
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        if selectedTargetCard != cardName && !isAnimatingUnlock {
+                                            HapticManager.shared.triggerSelection()
+                                            changeSelection(to: cardName)
                                         }
                                     }
                                 }
-                                .scaleEffect(scale)
-                                .zIndex(zIndexVal)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    if selectedTargetCard != cardName {
-                                        HapticManager.shared.triggerSelection()
-                                        changeSelection(to: cardName)
-                                    }
-                                }
                             }
+                            .frame(height: 240)
+                        } else {
+                            Spacer().frame(height: 240)
                         }
-                        .frame(width: totalWidth)
-                        .offset(x: baseOffset + gestureDragOffset)
-                        .frame(height: 260)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture()
-                                .updating($gestureDragOffset) { value, state, _ in
-                                    state = value.translation.width
-                                }
-                                .onEnded { value in
-                                    let dragDistance = value.translation.width
-                                    let shift = Int(round(-dragDistance / 95.0))
-                                    let newIndex = max(0, min(activePack.count - 1, selectedIndex + shift))
-                                    
-                                    if newIndex != selectedIndex {
-                                        HapticManager.shared.triggerSelection()
-                                        changeSelection(to: activePack[newIndex])
-                                    }
-                                }
-                        )
                     } else {
-                        // Title/hint & Diagnostics
+                        // Diagnostic feedback if no active pack exists
                         VStack {
                             Text(detectedArtwork.isEmpty ? "Cerca il quadro al muro" : detectedArtwork)
                                 .font(.headline)
@@ -243,6 +242,51 @@ struct ARArtworkView: View {
                 .frame(width: screenWidth)
                 .frame(height: screenHeight - 83)
                 .position(x: screenWidth / 2, y: 83 + (screenHeight - 83) / 2)
+                
+                // TRIUMPH UNLOCK ANIMATION LAYER (Mockup 2)
+                if isAnimatingUnlock, let name = foundCardName {
+                    // Dark background overlay during Step 1 (isolating the card)
+                    Color.black
+                        .opacity(unlockStep == .zoomToCenter ? 0.75 : 0.0)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                    
+                    // Shiny rotating rays behind the fanned flying card
+                    if unlockStep == .zoomToCenter {
+                        RadialRayBeamView()
+                            .transition(.opacity)
+                            .blendMode(.screen)
+                            .position(x: screenWidth / 2, y: screenHeight / 2)
+                    }
+                    
+                    // Card frame size (Mockup 2)
+                    let cardWidth: CGFloat = 200
+                    let cardHeight: CGFloat = 301
+                    let cornerRadius = cardWidth * 12.0 / 111.0
+                    
+                    VStack(spacing: 0) {
+                        ZStack(alignment: .topTrailing) {
+                            ScannerCardView(
+                                name: name,
+                                width: cardWidth,
+                                height: cardHeight
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: cornerRadius)
+                                    .stroke(Color(hex: "F1B40A"), lineWidth: 3)
+                            )
+                            .shadow(color: Color(hex: "F1B40A").opacity(0.8), radius: 25)
+                        }
+                    }
+                    .scaleEffect(unlockStep == .zoomToCenter ? 1.4 : 0.08)
+                    .rotationEffect(.degrees(unlockStep == .zoomToCenter ? 0 : -360))
+                    // Fly from the center of the screen to the Golden Album Icon in the top-left!
+                    .position(
+                        x: unlockStep == .zoomToCenter ? screenWidth / 2 : 46.0 + 44.0,
+                        y: unlockStep == .zoomToCenter ? screenHeight / 2 : 60.0 + 22.0
+                    )
+                    .animation(.spring(response: 0.82, dampingFraction: 0.78), value: unlockStep)
+                }
             }
             .ignoresSafeArea()
         }
@@ -260,9 +304,6 @@ struct ARArtworkView: View {
         .task {
             // Ensure images are on disk before starting ARKit
             let city = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
-            
-            // Optimization: if we have an active pack, only wait for and download missing images of the active pack!
-            // This reduces the loading screen delay from ~20 seconds to less than 1 second!
             let targetList: [String]
             if CardDatabase.hasActivePack(), let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
                 targetList = activePack
@@ -287,35 +328,15 @@ struct ARArtworkView: View {
                 imagesReady = true
             }
         }
+        .onChange(of: triggerUnlockAnimation) { newValue in
+            if let cardName = newValue {
+                startUnlockAnimation(for: cardName)
+            }
+        }
     }
     
     func cleanedArtworkName(_ name: String) -> String {
         return CardDatabase.cleanedArtworkName(name)
-    }
-    
-    private func scaleForDistance(_ distance: CGFloat) -> CGFloat {
-        let maxDistance: CGFloat = 190.0
-        let absDistance = min(abs(distance), maxDistance)
-        // Interpolate scale from 1.6 (at 0) to 0.8 (at maxDistance)
-        return 1.6 - 0.8 * (absDistance / maxDistance)
-    }
-    
-    private func selectNextCard(activePack: [String]) {
-        guard let current = selectedTargetCard,
-              let currentIndex = activePack.firstIndex(of: current) else { return }
-        if currentIndex < activePack.count - 1 {
-            HapticManager.shared.triggerSelection()
-            changeSelection(to: activePack[currentIndex + 1])
-        }
-    }
-    
-    private func selectPreviousCard(activePack: [String]) {
-        guard let current = selectedTargetCard,
-              let currentIndex = activePack.firstIndex(of: current) else { return }
-        if currentIndex > 0 {
-            HapticManager.shared.triggerSelection()
-            changeSelection(to: activePack[currentIndex - 1])
-        }
     }
     
     private func changeSelection(to cardName: String) {
@@ -323,6 +344,87 @@ struct ARArtworkView: View {
             selectedTargetCard = cardName
             isTargetUnlocked = revealedCards.contains(cardName)
             detectedArtwork = isTargetUnlocked ? "Già sbloccata!" : "Trova l'opera per sbloccarla!"
+        }
+    }
+    
+    // Core game-like flying & glow animation sequence (Mockup 2)
+    private func startUnlockAnimation(for cardName: String) {
+        // Step 1: Heavy spring bounce haptic
+        HapticManager.shared.triggerImpact(style: .rigid)
+        
+        foundCardName = cardName
+        isAnimatingUnlock = true
+        
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
+            unlockStep = .zoomToCenter
+        }
+        
+        // Wait 2.2 seconds Zoomed in the center
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+            // Step 2: Fly to top-left collection Golden Icon
+            withAnimation(.spring(response: 0.76, dampingFraction: 0.8)) {
+                unlockStep = .flyToCollection
+            }
+            
+            // Wait 0.8 seconds (duration of flight)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                // Step 3: Hits the collection golden binder! Glow & spring bounce
+                HapticManager.shared.triggerImpact(style: .medium)
+                
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.45)) {
+                    collectionIconScale = 1.4
+                    isCollectionGlowActive = true
+                    collectionRippleScale = 1.0
+                    collectionRippleOpacity = 1.0
+                }
+                
+                // Radial ring ripple expanding outward
+                withAnimation(.easeOut(duration: 0.55)) {
+                    collectionRippleScale = 2.4
+                    collectionRippleOpacity = 0.0
+                }
+                
+                // Permanently write to local CloudKit sync database
+                CardDatabase.addRevealedCard(cardName)
+                CardDatabase.clearActivePackIfNeeded()
+                
+                // Return golden icon to normal scale
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        collectionIconScale = 1.0
+                    }
+                }
+                
+                // Wait another 0.5s to let the user enjoy the victory feedback
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isCollectionGlowActive = false
+                    }
+                    
+                    // Reset animation states
+                    isAnimatingUnlock = false
+                    foundCardName = nil
+                    unlockStep = .none
+                    triggerUnlockAnimation = nil
+                    
+                    // Auto-select the next unrevealed card in the hand
+                    if let active = CardDatabase.getActivePack(), !active.isEmpty {
+                        let remaining = active.filter { !revealedCards.contains($0) }
+                        if let nextTarget = remaining.first {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                                selectedTargetCard = nextTarget
+                                isTargetUnlocked = false
+                                detectedArtwork = "Trova l'opera per sbloccarla!"
+                            }
+                        } else {
+                            // All fanned cards successfully found! Exit back to album pack view
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                activeView = .opening
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -357,35 +459,68 @@ struct ScannerCardView: View {
     }
 }
 
+// MARK: - RadialRayBeamView: Shiny golden rotating ray beams behind fanned cards
+struct RadialRayBeamView: View {
+    @State private var rotation: Double = 0.0
+    
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.white.opacity(0.6), Color(hex: "FFD700").opacity(0.2), Color.clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 250
+                    )
+                )
+                .frame(width: 500, height: 500)
+            
+            ForEach(0..<12, id: \.self) { i in
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.clear, Color(hex: "FFD700").opacity(0.35), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: 8, height: 600)
+                    .rotationEffect(.degrees(Double(i) * 30.0 + rotation))
+            }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 8.0).repeatForever(autoreverses: false)) {
+                rotation = 360.0
+            }
+        }
+    }
+}
+
+// MARK: - ARViewContainer: Dynamic multi-image target scanner pipeline
 struct ARViewContainer: UIViewRepresentable {
     @Binding var detectedArtwork: String
     @Binding var isTargetUnlocked: Bool
     @Binding var activeView: ContentView.ActiveView
     @Binding var diagnosticMessage: String
     let targetName: String
+    @Binding var triggerUnlockAnimation: String?
     
     func makeUIView(context: Context) -> ARSCNView {
         let arView = ARSCNView(frame: .zero)
         arView.delegate = context.coordinator
         
         guard ARImageTrackingConfiguration.isSupported else {
-            // Prevent crash on iOS Simulator
             print("ARImageTrackingConfiguration is not supported on this device/simulator.")
             return arView
         }
         
         let configuration = ARImageTrackingConfiguration()
-        
-        // Dynamically load reference images from downloaded server artworks
         var dynamicImages = Set<ARReferenceImage>()
         let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
         let downloaded = CardDatabase.downloadedArtworkNames(for: activeCity)
         let totalKnown = CardDatabase.artworksFor(location: activeCity).count
         
-        // Optimize reference images:
-        // 1. If we have an active pack, ONLY track the cards in the active pack (max 5) that are downloaded!
-        // This is extremely efficient, saves memory, and matches exactly what the user needs to find.
-        // 2. If no active pack, limit to at most 20 downloaded images to prevent IOSurface/RAM starvation.
         var targetArtworks: [String] = []
         if CardDatabase.hasActivePack(), let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
             targetArtworks = activePack.filter { downloaded.contains($0) }
@@ -406,11 +541,9 @@ struct ARViewContainer: UIViewRepresentable {
         for name in targetArtworks {
             autoreleasepool {
                 if let cgImage = CardDatabase.rawCGImage(for: name) {
-                    // We use a fallback width of 0.2 meters (20cm - typical for screen testing).
                     let refImage = ARReferenceImage(cgImage, orientation: .up, physicalWidth: 0.2)
                     refImage.name = name
                     
-                    // Asynchronously validate the image to see if ARKit accepts it
                     refImage.validate { error in
                         if let error = error {
                             DispatchQueue.main.async {
@@ -419,7 +552,6 @@ struct ARViewContainer: UIViewRepresentable {
                             print("ARKit Validation Error for \(name): \(error)")
                         }
                     }
-                    
                     dynamicImages.insert(refImage)
                 }
             }
@@ -432,7 +564,6 @@ struct ARViewContainer: UIViewRepresentable {
                 diagnosticMessage = "✅ ARKit pronto: \(dynamicImages.count)/\(totalKnown) foto caricate."
             }
         } else if let fallbackImages = ARReferenceImage.referenceImages(inGroupNamed: "AR Resources", bundle: nil) {
-            // Fallback to Xcode Asset Catalog if no downloads exist yet
             configuration.trackingImages = fallbackImages
             configuration.maximumNumberOfTrackedImages = 1
             DispatchQueue.main.async {
@@ -462,14 +593,12 @@ struct ARViewContainer: UIViewRepresentable {
     
     class Coordinator: NSObject, ARSCNViewDelegate {
         var parent: ARViewContainer
-        // Dedicated serial queue: prevents "retaining N ARFrames" warning
         private let updateQueue = DispatchQueue(label: "ar.update.queue", qos: .userInitiated)
 
         init(parent: ARViewContainer) { self.parent = parent }
 
         func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
             guard let imageAnchor = anchor as? ARImageAnchor else { return }
-            // Capture the name immediately before leaving the render thread
             let rawName = imageAnchor.referenceImage.name ?? "Sconosciuta"
 
             updateQueue.async {
@@ -481,21 +610,18 @@ struct ARViewContainer: UIViewRepresentable {
                 DispatchQueue.main.async {
                     if targetName.isEmpty {
                         if foundCards.contains(dbName) {
-                            CardDatabase.addRevealedCard(dbName)
-                            self.parent.detectedArtwork = "Sbloccata: \(cleanedName)!"
-                            self.parent.isTargetUnlocked = true
+                            if self.parent.triggerUnlockAnimation == nil {
+                                self.parent.triggerUnlockAnimation = dbName
+                                self.parent.detectedArtwork = "Sbloccata: \(cleanedName)!"
+                                self.parent.isTargetUnlocked = true
+                            }
                         }
                     } else if dbName == targetName {
-                        CardDatabase.addRevealedCard(dbName)
-                        CardDatabase.clearActivePackIfNeeded()
-                        self.parent.detectedArtwork = "Sbloccata: \(cleanedName)!"
-                        self.parent.isTargetUnlocked = true
-                        if !CardDatabase.hasActivePack() {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                                withAnimation(.easeInOut(duration: 0.35)) {
-                                    self.parent.activeView = .opening
-                                }
-                            }
+                        // Pointed at target: trigger beautiful flight/unlock animation
+                        if self.parent.triggerUnlockAnimation == nil {
+                            self.parent.triggerUnlockAnimation = dbName
+                            self.parent.detectedArtwork = "Sbloccata: \(cleanedName)!"
+                            self.parent.isTargetUnlocked = true
                         }
                     } else {
                         let cleanedTargetName = CardDatabase.cleanedArtworkName(targetName)
