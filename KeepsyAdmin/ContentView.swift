@@ -131,8 +131,8 @@ struct ContentView: View {
             let row = rows[i].trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             if row.isEmpty { continue }
             
-            // Parse columns split by semicolon
-            let columns = row.components(separatedBy: ";")
+            // Parse columns split by semicolon, respecting double-quotes
+            let columns = parseCSVRow(row)
             guard columns.count >= 8 else {
                 addLog("⚠️ Riga saltata (malformata): \(row.prefix(30))...")
                 continue
@@ -176,6 +176,29 @@ struct ContentView: View {
         addLog("🎉 Seeding completato con successo!")
         statusText = "Caricamento completato!"
         isSeeding = false
+    }
+    
+    private func parseCSVRow(_ row: String) -> [String] {
+        var columns: [String] = []
+        var currentColumn = ""
+        var insideQuotes = false
+        
+        let characters = Array(row)
+        var i = 0
+        while i < characters.count {
+            let char = characters[i]
+            if char == "\"" {
+                insideQuotes.toggle()
+            } else if char == ";" && !insideQuotes {
+                columns.append(currentColumn.trimmingCharacters(in: CharacterSet(charactersIn: "\"")))
+                currentColumn = ""
+            } else {
+                currentColumn.append(char)
+            }
+            i += 1
+        }
+        columns.append(currentColumn.trimmingCharacters(in: CharacterSet(charactersIn: "\"")))
+        return columns
     }
 }
 
