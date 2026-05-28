@@ -47,7 +47,7 @@ class NetworkService {
                             let technique = record["technique"] as? String
                             let dimensions = record["dimensions"] as? String
                             
-                            // Copy the high-res image CKAsset directly to our local sandboxed directory (/Artworks)
+                            // Write the high-res image CKAsset directly and atomically to our local sandboxed directory (/Artworks)
                             if let asset = record["imageFile"] as? CKAsset, let fileURL = asset.fileURL {
                                 let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
                                 let docDir = paths[0].appendingPathComponent("Artworks", isDirectory: true)
@@ -56,10 +56,8 @@ class NetworkService {
                                 }
                                 let destinationURL = docDir.appendingPathComponent("\(internalName).jpg")
                                 do {
-                                    if FileManager.default.fileExists(atPath: destinationURL.path) {
-                                        try? FileManager.default.removeItem(at: destinationURL)
-                                    }
-                                    try FileManager.default.copyItem(at: fileURL, to: destinationURL)
+                                    let data = try Data(contentsOf: fileURL)
+                                    try data.write(to: destinationURL, options: .atomic)
                                     print("✅ Immagine di \(title) copiata da CloudKit in locale!")
                                 } catch {
                                     print("❌ Errore copia immagine per \(title): \(error.localizedDescription)")
