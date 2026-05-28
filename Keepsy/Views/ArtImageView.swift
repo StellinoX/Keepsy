@@ -7,7 +7,11 @@ struct ArtImageView: View {
     
     init(cardName: String) {
         self.cardName = cardName
-        self._localImage = State(initialValue: CardDatabase.localImage(for: cardName))
+        if let cached = CardDatabase.imageCache.object(forKey: cardName as NSString) {
+            self._localImage = State(initialValue: cached)
+        } else {
+            self._localImage = State(initialValue: nil)
+        }
     }
     
     var body: some View {
@@ -17,10 +21,8 @@ struct ArtImageView: View {
                     .resizable()
             } else {
                 ZStack {
-                    Color.black.opacity(0.2) // Dark background to make ProgressView visible
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(1.5)
+                    CardDatabase.gradientFor(name: cardName)
+                        .opacity(0.8)
                 }
                 .task {
                     await waitForImage()
@@ -32,7 +34,8 @@ struct ArtImageView: View {
     private func waitForImage() async {
         // Poll every 0.5s until the image is found on disk
         while !Task.isCancelled {
-            if let img = CardDatabase.localImage(for: cardName) {
+            // Run heavy I/O on background thread to prevent UI freezing
+            if let img = await Task.detached(operation: { CardDatabase.localImage(for: cardName) }).value {
                 await MainActor.run {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         self.localImage = img

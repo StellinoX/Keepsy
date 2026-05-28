@@ -20,10 +20,16 @@ struct CollectionAlbumView: View {
     @State private var inspectedCard: ArtworkCard? = nil
     
     var headerTitle: String {
-        return "CAPODIMONTE"
+        if let loc = museumLocation, let museum = MuseumConfig.shared.museums.first(where: { $0.id == loc.lowercased() }) {
+            return museum.name.uppercased()
+        }
+        return "GLOBAL COLLECTION"
     }
     
     var filteredArtworks: [String] {
+        if let loc = museumLocation {
+            return CardDatabase.artworksFor(location: loc)
+        }
         return CardDatabase.allArtworkNames
     }
     

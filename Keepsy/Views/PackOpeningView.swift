@@ -138,33 +138,39 @@ struct PackOpeningView: View {
             }
 
             if packState == .opened && inspectedCard == nil {
-                ZStack(alignment: .topLeading) {
-                    Button(action: {
-                        HapticManager.shared.triggerImpact(style: .light)
-                        withAnimation(.easeInOut(duration: 0.35)) {
-                            resetPack()
-                        }
-                    }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 14, weight: .bold))
-                            Text("Back")
-                                .font(.system(size: 14, weight: .bold))
-                        }
-                        .foregroundColor(.white)
-                        .frame(width: 85, height: 44)
-                        .background(
-                            Capsule().fill(
-                                LinearGradient(
-                                    colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                VStack {
+                    HStack {
+                        Button(action: {
+                            HapticManager.shared.triggerImpact(style: .light)
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                resetPack()
+                            }
+                        }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 14, weight: .bold))
+                                Text("Back")
+                                    .font(.system(size: 14, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .frame(width: 85, height: 44)
+                            .background(
+                                Capsule().fill(
+                                    LinearGradient(
+                                        colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
                                 )
                             )
-                        )
-                        .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
+                            .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
+                        }
+                        .padding(.top, 61)
+                        .padding(.leading, 30)
+                        
+                        Spacer()
                     }
-                    .position(x: 30 + 85/2, y: 83 + 44/2)
+                    Spacer()
                 }
                 .ignoresSafeArea()
                 .zIndex(150)
@@ -176,6 +182,7 @@ struct PackOpeningView: View {
                         self.inspectedCard = nil
                     }
                 }
+                .id(card.name)
                 .transition(.opacity)
                 .zIndex(100)
             }
@@ -198,6 +205,7 @@ struct PackOpeningView: View {
     func completeOpening() {
         let artworks = CardDatabase.artworksFor(location: locationManager.currentCity).shuffled()
         let selectedArtworks = Array(artworks.prefix(5))
+        
         self.cards = selectedArtworks.map {
             return ArtworkCard(
                 name: $0, 
@@ -209,9 +217,9 @@ struct PackOpeningView: View {
         CardDatabase.addFoundCards(selectedArtworks)
         UserDefaults.standard.set(selectedArtworks, forKey: "activePackCards")
         
-        packState = .opened
+        self.packState = .opened
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            showCards = true
+            self.showCards = true
         }
     }
 

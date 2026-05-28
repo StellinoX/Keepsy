@@ -19,10 +19,8 @@ struct NetworkArtwork: Codable {
 
 class NetworkService {
     static let shared = NetworkService()
-    private let baseURL = "https://keepsy-api.onrender.com/api/artworks"
-    
-    func fetchArtworks() async throws -> [NetworkArtwork] {
-        guard let url = URL(string: baseURL) else {
+    func fetchArtworks(for museumId: String) async throws -> [NetworkArtwork] {
+        guard let url = MuseumConfig.shared.url(for: museumId) else {
             throw URLError(.badURL)
         }
         

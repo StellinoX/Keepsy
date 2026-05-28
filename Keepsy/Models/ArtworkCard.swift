@@ -16,6 +16,10 @@ struct ArtworkCard: Identifiable, Equatable {
         return CardDatabase.remoteArtworks[name]?.description
     }
     
+    var title: String {
+        return CardDatabase.cleanedArtworkName(name)
+    }
+    
     let gradient: LinearGradient
     var isFlipped: Bool = false
     static func == (lhs: ArtworkCard, rhs: ArtworkCard) -> Bool {

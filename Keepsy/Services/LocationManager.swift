@@ -56,7 +56,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
                             }
                         }
                     } catch {
-                        print("Reverse geocoding failed: \(error.localizedDescription)")
+                        // Suppress timeout errors on poor network/simulator
+                        // print("Reverse geocoding failed: \(error.localizedDescription)")
                     }
                 }
             }

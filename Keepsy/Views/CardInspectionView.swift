@@ -68,7 +68,7 @@ struct CardInspectionView: View {
                                 
                             if isRevealed {
                                 VStack(spacing: 4) {
-                                    Text(card.name.replacingOccurrences(of: "_", with: " "))
+                                    Text(card.title)
                                         .font(.system(size: 16, weight: .bold))
                                         .foregroundColor(.white)
                                         .multilineTextAlignment(.center)
@@ -84,9 +84,14 @@ struct CardInspectionView: View {
                                 }
                                 .padding(.horizontal, 10)
                             } else {
-                                Text("UNKNOWN ARTWORK")
-                                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.white.opacity(0.5))
+                                VStack(spacing: 4) {
+                                    Text(card.title)
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(2)
+                                }
+                                .padding(.horizontal, 10)
                             }
                         }
                     }
@@ -118,31 +123,38 @@ struct CardInspectionView: View {
                     }
             )
             
-            // Elegant Back Button (top-left aligned with same Figma specifications)
-            Button(action: {
-                closeAction()
-            }) {
-                HStack(spacing: 5) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .bold))
-                    Text("Back")
-                        .font(.system(size: 14, weight: .bold))
-                }
-                .foregroundColor(.white)
-                .frame(width: 85, height: 44)
-                .background(
-                    Capsule().fill(
-                        LinearGradient(
-                            colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+            VStack {
+                HStack {
+                    Button(action: {
+                        closeAction()
+                    }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("Back")
+                                .font(.system(size: 14, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 85, height: 44)
+                        .background(
+                            Capsule().fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
                         )
-                    )
-                )
-                .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
+                        .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
+                    }
+                    .padding(.top, 61)
+                    .padding(.leading, 30)
+                    .opacity(animateContent ? 1.0 : 0.0)
+                    
+                    Spacer()
+                }
+                Spacer()
             }
-            .position(x: 30 + 85/2, y: 83 + 44/2)
-            .opacity(animateContent ? 1.0 : 0.0)
         }
         .edgesIgnoringSafeArea(.all)
         .onAppear {
