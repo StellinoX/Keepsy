@@ -100,7 +100,6 @@ struct PackOpeningView: View {
                                         .offset(y: cardOffsetY[index])
                                         .scaleEffect(cardScale[index])
                                         .opacity(cardOpacity[index])
-                                        .blur(radius: cardBlur[index])
                                     }
                                 }
                                 // Riga 2: carte 3,4
@@ -114,7 +113,6 @@ struct PackOpeningView: View {
                                         .offset(y: cardOffsetY[index])
                                         .scaleEffect(cardScale[index])
                                         .opacity(cardOpacity[index])
-                                        .blur(radius: cardBlur[index])
                                     }
                                 }
                             }
@@ -259,7 +257,6 @@ struct PackOpeningView: View {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             animateCardsIn()
-        }
         }
     }
 
@@ -602,17 +599,19 @@ struct PackOpeningFlashView: View {
                 .blur(radius: 3)
                 .blendMode(.screen)
 
-            // 5. Scintille — 12 punti luminosi che esplodono
             ZStack {
                 ForEach(0..<12, id: \.self) { i in
+                    let size = CGFloat(6 + (i % 3) * 3)
+                    let angle = Double(i) * .pi / 6.0
+                    let offsetX = CGFloat(cos(angle) * 140.0 * Double(sparkScale))
+                    let offsetY = CGFloat(sin(angle) * 140.0 * Double(sparkScale))
+                    let color = rayColors[i % rayColors.count]
+                    
                     Circle()
-                        .fill(rayColors[i % rayColors.count])
-                        .frame(width: 6 + CGFloat(i % 3) * 3, height: 6 + CGFloat(i % 3) * 3)
+                        .fill(color)
+                        .frame(width: size, height: size)
                         .blur(radius: 2)
-                        .offset(
-                            x: cos(Double(i) * .pi / 6) * 140 * Double(sparkScale),
-                            y: sin(Double(i) * .pi / 6) * 140 * Double(sparkScale)
-                        )
+                        .offset(x: offsetX, y: offsetY)
                         .opacity(sparkOpacity)
                 }
             }

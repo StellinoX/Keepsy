@@ -19,19 +19,8 @@ struct ArtImageView: View {
     var body: some View {
         Group {
             if let img = localImage {
-                if isRevealed {
-                    Image(uiImage: img)
-                        .resizable()
-                } else {
-                    if let pixelatedImg = img.resizeToPixelated(size: CGSize(width: 16, height: 20)) {
-                        Image(uiImage: pixelatedImg)
-                            .resizable()
-                            .interpolation(.none)
-                    } else {
-                        Image(uiImage: img)
-                            .resizable()
-                    }
-                }
+                Image(uiImage: img)
+                    .resizable()
             } else {
                 ZStack {
                     CardDatabase.gradientFor(name: cardName)
@@ -61,12 +50,3 @@ struct ArtImageView: View {
     }
 }
 
-fileprivate extension UIImage {
-    func resizeToPixelated(size: CGSize) -> UIImage? {
-        UIGraphicsBeginImageContextWithOptions(size, false, 1.0)
-        self.draw(in: CGRect(origin: .zero, size: size))
-        let newImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        return newImage
-    }
-}
