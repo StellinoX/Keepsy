@@ -9,6 +9,12 @@ struct NetworkArtwork: Codable {
     let imageUrl: String
     let createdAt: String
     let internalName: String
+    
+    // Original database split fields
+    let inventoryNumber: String?
+    let date: String?
+    let technique: String?
+    let dimensions: String?
 }
 
 class NetworkService {
@@ -36,6 +42,11 @@ class NetworkService {
                             let internalName = record["internalName"] as? String ?? ""
                             let imageUrl = record["imageUrl"] as? String ?? ""
                             
+                            let inventoryNumber = record["inventoryNumber"] as? String
+                            let date = record["date"] as? String
+                            let technique = record["technique"] as? String
+                            let dimensions = record["dimensions"] as? String
+                            
                             let artwork = NetworkArtwork(
                                 id: id,
                                 title: title,
@@ -43,7 +54,11 @@ class NetworkService {
                                 artist: artist,
                                 imageUrl: imageUrl,
                                 createdAt: Date().description,
-                                internalName: internalName
+                                internalName: internalName,
+                                inventoryNumber: inventoryNumber,
+                                date: date,
+                                technique: technique,
+                                dimensions: dimensions
                             )
                             artworks.append(artwork)
                         }

@@ -40,15 +40,102 @@ struct CardInspectionView: View {
             ) {
                 ZStack {
                     // RETRO DELLA CARTA
+                    // RETRO DELLA CARTA (MUSEUM ARCHIVES DETAILS SHEET)
                     ZStack {
                         RoundedRectangle(cornerRadius: 24)
-                            .fill(LinearGradient(colors: [Color(white: 0.15), Color(white: 0.02)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .fill(LinearGradient(colors: [Color(white: 0.12), Color(white: 0.03)], startPoint: .topLeading, endPoint: .bottomTrailing))
                         
-                        Circle()
-                            .fill(Color(white: 0.01))
-                            .frame(width: 90)
-                            .shadow(color: .white.opacity(0.08), radius: 4, x: 2, y: 2)
-                            .shadow(color: .black, radius: 4, x: -2, y: -2)
+                        if isRevealed, let details = CardDatabase.remoteArtworks[card.name] {
+                            VStack(alignment: .leading, spacing: 10) {
+                                // Title & Inventory
+                                HStack(alignment: .top) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(details.title)
+                                            .font(.system(size: 15, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .lineLimit(2)
+                                            .multilineTextAlignment(.leading)
+                                        Text(details.artist ?? "Artista Ignoto")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(.orange)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer()
+                                    if let inv = details.inventoryNumber, !inv.isEmpty {
+                                        Text(inv)
+                                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(Color.white.opacity(0.1))
+                                            .cornerRadius(4)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                
+                                Divider().background(Color.white.opacity(0.2))
+                                
+                                // Technical Details Grid
+                                VStack(alignment: .leading, spacing: 5) {
+                                    if let date = details.date, !date.isEmpty {
+                                        HStack(alignment: .top) {
+                                            Text("Data:")
+                                                .font(.system(size: 11, weight: .bold))
+                                                .foregroundColor(.secondary)
+                                                .frame(width: 75, alignment: .leading)
+                                            Text(date)
+                                                .font(.system(size: 11))
+                                                .foregroundColor(.white)
+                                        }
+                                    }
+                                    if let tech = details.technique, !tech.isEmpty {
+                                        HStack(alignment: .top) {
+                                            Text("Tecnica:")
+                                                .font(.system(size: 11, weight: .bold))
+                                                .foregroundColor(.secondary)
+                                                .frame(width: 75, alignment: .leading)
+                                            Text(tech)
+                                                .font(.system(size: 11))
+                                                .foregroundColor(.white)
+                                                .lineLimit(2)
+                                                .multilineTextAlignment(.leading)
+                                        }
+                                    }
+                                    if let dim = details.dimensions, !dim.isEmpty {
+                                        HStack(alignment: .top) {
+                                            Text("Dimensioni:")
+                                                .font(.system(size: 11, weight: .bold))
+                                                .foregroundColor(.secondary)
+                                                .frame(width: 75, alignment: .leading)
+                                            Text(dim)
+                                                .font(.system(size: 11))
+                                                .foregroundColor(.white)
+                                                .lineLimit(2)
+                                                .multilineTextAlignment(.leading)
+                                        }
+                                    }
+                                }
+                                
+                                Divider().background(Color.white.opacity(0.2))
+                                
+                                // Scrollable Description
+                                ScrollView {
+                                    Text(details.description ?? "Nessuna descrizione disponibile per quest'opera.")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.white.opacity(0.8))
+                                        .multilineTextAlignment(.leading)
+                                        .lineSpacing(2)
+                                }
+                            }
+                            .padding(16)
+                            // Reverse the horizontal mirroring so text reads properly when flipped
+                            .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                        } else {
+                            Circle()
+                                .fill(Color(white: 0.01))
+                                .frame(width: 90)
+                                .shadow(color: .white.opacity(0.08), radius: 4, x: 2, y: 2)
+                                .shadow(color: .black, radius: 4, x: -2, y: -2)
+                        }
                     }
                     .frame(width: 310, height: 470)
                     .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.1), lineWidth: 1))

@@ -143,16 +143,39 @@ struct ContentView: View {
                 continue
             }
             
+            let inventoryNumber = columns[0].trimmingCharacters(in: CharacterSet.whitespaces)
             let artist = columns[1].trimmingCharacters(in: CharacterSet.whitespaces)
             let title = columns[2].trimmingCharacters(in: CharacterSet.whitespaces)
+            let date = columns[3].trimmingCharacters(in: CharacterSet.whitespaces)
+            let technique = columns[4].trimmingCharacters(in: CharacterSet.whitespaces)
+            let dimensions = columns[5].trimmingCharacters(in: CharacterSet.whitespaces)
             let description = columns[6].trimmingCharacters(in: CharacterSet.whitespaces)
             let internalName = columns[7].trimmingCharacters(in: CharacterSet.whitespaces)
             
             let recordID = CKRecord.ID(recordName: internalName)
-            let record = CKRecord(recordType: "Artwork", recordID: recordID)
+            var record: CKRecord
             
+            // Fetch first to get existing record with valid recordChangeTag for seamless update
+            do {
+                record = try await publicDB.record(for: recordID)
+                addLog("ℹ️ Opera esistente trovata: \(title). Aggiornamento in corso...")
+            } catch {
+                let nsError = error as NSError
+                if (error as? CKError)?.code == .unknownItem || nsError.code == 11 {
+                    record = CKRecord(recordType: "Artwork", recordID: recordID)
+                    addLog("🆕 Creazione nuova opera per: \(title)")
+                } else {
+                    addLog("❌ Errore nel recupero di \(title): \(error.localizedDescription) (Codice: \(nsError.code))")
+                    continue
+                }
+            }
+            
+            record["inventoryNumber"] = inventoryNumber as CKRecordValue
             record["title"] = title as CKRecordValue
             record["artist"] = artist as CKRecordValue
+            record["date"] = date as CKRecordValue
+            record["technique"] = technique as CKRecordValue
+            record["dimensions"] = dimensions as CKRecordValue
             record["description"] = description as CKRecordValue
             record["internalName"] = internalName as CKRecordValue
             record["museumId"] = "capodimonte" as CKRecordValue
@@ -169,24 +192,18 @@ struct ContentView: View {
                 addLog("⚠️ Immagine non trovata per: \(title)")
             }
             
-            // Save or Update (Upsert) to CloudKit using CKModifyRecordsOperation to avoid already exists errors
-            let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
-            operation.savePolicy = .changedKeys
-            
+            // Save/Upsert to CloudKit using the modern async save method
             do {
-                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                    operation.modifyRecordsCompletionBlock = { savedRecords, deletedRecordIDs, error in
-                        if let error = error {
-                            continuation.resume(throwing: error)
-                        } else {
-                            continuation.resume()
-                        }
-                    }
-                    publicDB.add(operation)
-                }
+                try await publicDB.save(record)
                 addLog("✅ Salvata opera: \(title)")
             } catch {
-                addLog("❌ Errore \(title): \(error.localizedDescription)")
+                let nsError = error as NSError
+                addLog("❌ Errore \(title): \(nsError.localizedDescription) (Codice: \(nsError.code), Dominio: \(nsError.domain))")
+                if let partialErrors = nsError.userInfo[CKPartialErrorsByItemIDKey] as? [CKRecord.ID: Error] {
+                    for (failID, partialError) in partialErrors {
+                        addLog("   - Dettaglio per \(failID.recordName): \(partialError.localizedDescription)")
+                    }
+                }
             }
         }
         
