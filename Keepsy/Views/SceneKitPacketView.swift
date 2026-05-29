@@ -1,14 +1,17 @@
 import SwiftUI
 import SceneKit
 
+fileprivate var cachedCardBackTexture: UIImage?
+
 @available(iOS 14.0, *)
 fileprivate func createCardBackTexture() -> UIImage {
+    if let cached = cachedCardBackTexture { return cached }
     let size = CGSize(width: 540, height: 780)
     let format = UIGraphicsImageRendererFormat()
     format.scale = 2.0
     let renderer = UIGraphicsImageRenderer(size: size, format: format)
     
-    return renderer.image { ctx in
+    let result = renderer.image { ctx in
         let context = ctx.cgContext
         
     
@@ -43,14 +46,19 @@ fileprivate func createCardBackTexture() -> UIImage {
         context.fillEllipse(in: circleRect)
         context.restoreGState()
     }
+    cachedCardBackTexture = result
+    return result
 }
+
+fileprivate var cachedTornMask: UIImage?
 
 @available(iOS 14.0, *)
 fileprivate func createTornMask() -> UIImage {
+    if let cached = cachedTornMask { return cached }
     let texSize = CGSize(width: 256, height: 256)
     let renderer = UIGraphicsImageRenderer(size: texSize)
     
-    return renderer.image { ctx in
+    let result = renderer.image { ctx in
         // Background is Black (Body)
         UIColor.black.setFill()
         ctx.fill(CGRect(origin: .zero, size: texSize))
@@ -76,6 +84,8 @@ fileprivate func createTornMask() -> UIImage {
         UIColor.red.setFill()
         path.fill()
     }
+    cachedTornMask = result
+    return result
 }
 
 @available(iOS 14.0, *)
@@ -131,12 +141,15 @@ fileprivate func createCardFrontTexture(name: String) -> UIImage {
     }
 }
 
+fileprivate var cachedHorizontalFlareTexture: UIImage?
+
 @available(iOS 14.0, *)
 fileprivate func createHorizontalFlareTexture() -> UIImage {
+    if let cached = cachedHorizontalFlareTexture { return cached }
     let size = CGSize(width: 512, height: 128)
     let renderer = UIGraphicsImageRenderer(size: size)
     
-    return renderer.image { ctx in
+    let result = renderer.image { ctx in
         let context = ctx.cgContext
         context.clear(CGRect(origin: .zero, size: size))
         
@@ -170,6 +183,8 @@ fileprivate func createHorizontalFlareTexture() -> UIImage {
         context.drawLinearGradient(coreGradient, start: CGPoint(x: 0, y: coreRect.minY), end: CGPoint(x: 0, y: coreRect.maxY), options: [])
         context.restoreGState()
     }
+    cachedHorizontalFlareTexture = result
+    return result
 }
 
 @available(iOS 14.0, *)

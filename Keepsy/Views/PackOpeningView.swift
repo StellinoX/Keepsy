@@ -105,17 +105,19 @@ struct PackOpeningView: View {
                                     }
                                 }
                                 // Riga 2: carte 3,4
-                                HStack(spacing: 12) {
-                                    ForEach(3..<min(5, cards.count), id: \.self) { index in
-                                        CardView(card: $cards[index]) {
-                                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                                inspectedCard = cards[index]
+                                if cards.count > 3 {
+                                    HStack(spacing: 12) {
+                                        ForEach(3..<min(5, cards.count), id: \.self) { index in
+                                            CardView(card: $cards[index]) {
+                                                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                                    inspectedCard = cards[index]
+                                                }
                                             }
+                                            .offset(x: cardOffsetX[index], y: cardOffsetY[index])
+                                            .rotationEffect(.degrees(cardRotation[index]))
+                                            .scaleEffect(cardScale[index])
+                                            .opacity(cardOpacity[index])
                                         }
-                                        .offset(x: cardOffsetX[index], y: cardOffsetY[index])
-                                        .rotationEffect(.degrees(cardRotation[index]))
-                                        .scaleEffect(cardScale[index])
-                                        .opacity(cardOpacity[index])
                                     }
                                 }
                             }
@@ -199,7 +201,7 @@ struct PackOpeningView: View {
             await CardDatabase.syncWithCloud()
             hasSyncedWithCloud = true
         }
-        .onChange(of: hasSyncedWithCloud) { synced in
+        .onChange(of: hasSyncedWithCloud) { _, synced in
             if synced && packState == .opened { loadActivePack() }
         }
         .onAppear {
@@ -250,11 +252,18 @@ struct PackOpeningView: View {
         }
         CardDatabase.addFoundCards(selectedArtworks)
         UserDefaults.standard.set(selectedArtworks, forKey: "activePackCards")
+        
+        // Traccia le doppie e salva la lista nel pacchetto attivo
+        let duplicates = CardDatabase.trackDuplicates(in: selectedArtworks)
+        if !duplicates.isEmpty {
+            UserDefaults.standard.set(duplicates, forKey: "activePackDuplicates")
+        }
+        
         self.packState = .opened
         self.showCards = true
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            animateCardsIn()
+            self.animateCardsIn()
         }
     }
 
@@ -313,14 +322,7 @@ struct SingleScrollPackView: View {
     @State private var revealedCards: Set<String> = []
     @State private var activeLocation: LocationContainer? = nil
 
-    func loadSavedTearMask() -> UIImage? {
-        if let data = UserDefaults.standard.data(forKey: "activePackTearMask") {
-            print("DEBUG: Loaded saved tear mask from UserDefaults, size: \(data.count) bytes")
-            return UIImage(data: data)
-        }
-        print("DEBUG: No saved tear mask found in UserDefaults")
-        return nil
-    }
+    @State private var savedTearMask: UIImage?
 
     let expansions: [(location: String, title: String)] = [
         ("FULL_COLLECTION", "Capodimonte")
@@ -358,7 +360,7 @@ struct SingleScrollPackView: View {
                         let isFirstCardRevealed = revealedCards.contains(firstCardName)
 
                         ZStack(alignment: .center) {
-                            SceneKitPacketView(interactive: false, isTorn: true, firstCardName: firstCardName, isFirstCardRevealed: isFirstCardRevealed, tearMaskImage: loadSavedTearMask())
+                            SceneKitPacketView(interactive: false, isTorn: true, firstCardName: firstCardName, isFirstCardRevealed: isFirstCardRevealed, tearMaskImage: savedTearMask)
                                 .frame(width: 310, height: 457)
                                 .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
                         }
@@ -414,6 +416,9 @@ struct SingleScrollPackView: View {
         .onAppear {
             foundCards = CardDatabase.getFoundCards()
             revealedCards = CardDatabase.getRevealedCards()
+            if let data = UserDefaults.standard.data(forKey: "activePackTearMask") {
+                savedTearMask = UIImage(data: data)
+            }
         }
         .fullScreenCover(item: $activeLocation) { container in
             CollectionAlbumView(museumLocation: container.name, showCloseButton: true) { activeLocation = nil }

@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import ARKit
 
 struct CardDatabase {
     private static let cacheKey = "CachedRemoteArtworks"
@@ -38,7 +39,7 @@ struct CardDatabase {
     
     static func syncWithCloud() async {
         if let lastSync = lastSyncTime, Date().timeIntervalSince(lastSync) < 30 {
-            print("ℹ️ syncWithCloud saltato: sincronizzato di recente (\(Int(Date().timeIntervalSince(lastSync))) secondi fa)")
+            // print("ℹ️ syncWithCloud saltato: sincronizzato di recente (\(Int(Date().timeIntervalSince(lastSync))) secondi fa)")
             return
         }
         
@@ -63,7 +64,7 @@ struct CardDatabase {
             }
             
             lastSyncTime = Date()
-            print("Successfully synced all museums from cloud APIs")
+            // print("Successfully synced all museums from cloud APIs")
         } catch {
             print("Failed to sync artworks: \(error)")
         }
@@ -83,21 +84,16 @@ struct CardDatabase {
     // Cache in memory for images to prevent lag during animations
     static let imageCache = NSCache<NSString, UIImage>()
 
-    static func localImage(for name: String) -> UIImage? {
-        // 0. Check memory cache first
-        if let cached = imageCache.object(forKey: name as NSString) {
-            return cached
+    // Nonisolated helper for heavy disk I/O and JPEG decoding
+    nonisolated static func loadLocalImageFromDisk(for name: String) -> UIImage? {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let docDir = paths[0].appendingPathComponent("Artworks", isDirectory: true)
+        let fileURL = docDir.appendingPathComponent("\(name).jpg")
+        
+        if !FileManager.default.fileExists(atPath: fileURL.path) {
+            return nil
         }
         
-        // 1. Fallback to bundle assets if available
-        if let img = UIImage(named: name) {
-            return img
-        }
-        
-        // 2. Check local pre-fetched directory
-        let fileURL = artworksDirectoryURL.appendingPathComponent("\(name).jpg")
-        
-        // Efficiently downsample image to prevent OOM memory crashes when loading 9MB files
         let options = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, options) else { return nil }
         
@@ -109,18 +105,52 @@ struct CardDatabase {
         ] as CFDictionary
         
         guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, downsampleOptions) else { return nil }
-        let finalImage = UIImage(cgImage: cgImage)
+        return UIImage(cgImage: cgImage)
+    }
+
+    static func localImage(for name: String) -> UIImage? {
+        // 0. Check memory cache first
+        if let cached = imageCache.object(forKey: name as NSString) {
+            return cached
+        }
         
-        // Save to memory cache
-        imageCache.setObject(finalImage, forKey: name as NSString)
+        // 1. Fallback to bundle assets if available
+        if let img = UIImage(named: name) {
+            return img
+        }
         
-        return finalImage
+        // 2. Check local pre-fetched directory (blocks current thread)
+        if let finalImage = loadLocalImageFromDisk(for: name) {
+            imageCache.setObject(finalImage, forKey: name as NSString)
+            return finalImage
+        }
+        
+        return nil
+    }
+    
+    static func localImageAsync(for name: String) async -> UIImage? {
+        if let cached = imageCache.object(forKey: name as NSString) {
+            return cached
+        }
+        
+        let bundleImg = await MainActor.run { UIImage(named: name) }
+        if let img = bundleImg {
+            return img
+        }
+        
+        if let finalImage = loadLocalImageFromDisk(for: name) {
+            imageCache.setObject(finalImage, forKey: name as NSString)
+            return finalImage
+        }
+        
+        return nil
     }
     
     // Returns CGImage properly formatted for ARKit (bakes EXIF rotation and scales to a safe 512px)
-    static func rawCGImage(for name: String) -> CGImage? {
+    static func rawCGImage(for name: String) async -> CGImage? {
         // 1. Fallback to bundle assets if available
-        if let img = UIImage(named: name), let cgImage = img.cgImage {
+        let bundleImage = await MainActor.run { UIImage(named: name)?.cgImage }
+        if let cgImage = bundleImage {
             return cgImage
         }
         
@@ -160,6 +190,23 @@ struct CardDatabase {
 
     static func prefetchImages(for location: String) async {
         // All artwork images are already downloaded and cached during syncWithCloud() at launch
+    }
+    
+    // Cache per le immagini ARKit, così ARArtworkView si carica all'istante dopo la prima volta
+    static let arImageCache = NSCache<NSString, ARReferenceImage>()
+    
+    static func arReferenceImage(for name: String) async -> ARReferenceImage? {
+        if let cached = arImageCache.object(forKey: name as NSString) {
+            return cached
+        }
+        
+        guard let cgImage = await rawCGImage(for: name) else { return nil }
+        
+        let refImage = ARReferenceImage(cgImage, orientation: .up, physicalWidth: 0.2)
+        refImage.name = name
+        
+        arImageCache.setObject(refImage, forKey: name as NSString)
+        return refImage
     }
     
     static func artworksFor(location: String) -> [String] {
@@ -244,8 +291,7 @@ struct CardDatabase {
         guard let active = getActivePack(), !active.isEmpty else {
             return false
         }
-        let revealed = getRevealedCards()
-        return !active.allSatisfy { revealed.contains($0) }
+        return true  // Le doppie restano nel pacchetto, non filtrarle
     }
     
     static func clearActivePackIfNeeded() {
@@ -254,8 +300,60 @@ struct CardDatabase {
             if active.allSatisfy({ revealed.contains($0) }) {
                 UserDefaults.standard.removeObject(forKey: "activePackCards")
                 UserDefaults.standard.removeObject(forKey: "activePackTearMask")
+                UserDefaults.standard.removeObject(forKey: "activePackDuplicates")
             }
         }
+    }
+    
+    // MARK: - Duplicate Card Tracking
+    
+    /// Incrementa il contatore doppie per le carte già possedute quando viene aperto un pacchetto.
+    /// Restituisce l'array delle carte che erano doppie.
+    @discardableResult
+    static func trackDuplicates(in packCards: [String]) -> [String] {
+        let revealed = getRevealedCards()
+        let found = getFoundCards()
+        let alreadyOwned = packCards.filter { revealed.contains($0) || found.contains($0) }
+        
+        if !alreadyOwned.isEmpty {
+            var counts = getDuplicateCounts()
+            for name in alreadyOwned {
+                counts[name, default: 0] += 1
+            }
+            saveDuplicateCounts(counts)
+        }
+        
+        return alreadyOwned
+    }
+    
+    /// Restituisce il dizionario [nomeCard: numeroDoppie]
+    static func getDuplicateCounts() -> [String: Int] {
+        guard let data = UserDefaults.standard.data(forKey: "DuplicateCardCounts"),
+              let decoded = try? JSONDecoder().decode([String: Int].self, from: data) else {
+            return [:]
+        }
+        return decoded
+    }
+    
+    private static func saveDuplicateCounts(_ counts: [String: Int]) {
+        if let encoded = try? JSONEncoder().encode(counts) {
+            UserDefaults.standard.set(encoded, forKey: "DuplicateCardCounts")
+        }
+    }
+    
+    /// Restituisce le carte del pacchetto attivo che sono doppie (già trovate/rivelate)
+    static func getDuplicatesInActivePack() -> Set<String> {
+        guard let pack = getActivePack() else { return [] }
+        let revealed = getRevealedCards()
+        let found = getFoundCards()
+        return Set(pack.filter { revealed.contains($0) || found.contains($0) })
+    }
+    
+    /// True se TUTTE le carte del pacchetto attivo sono già state rivelate (tutte doppie)
+    static func isActivePackAllDuplicates() -> Bool {
+        guard let pack = getActivePack(), !pack.isEmpty else { return false }
+        let revealed = getRevealedCards()
+        return pack.allSatisfy { revealed.contains($0) }
     }
     
     // Gestione salvataggio carte trovate nei pacchetti (pixelate)

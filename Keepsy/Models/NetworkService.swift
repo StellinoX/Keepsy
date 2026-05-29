@@ -80,7 +80,7 @@ class NetworkService {
                                         print("❌ Errore copia immagine per \(title): \(error.localizedDescription)")
                                     }
                                 } else {
-                                    print("ℹ️ Immagine di \(title) già presente in locale, salto la copia.")
+                                    // print("ℹ️ Immagine di \(title) già presente in locale, salto la copia.")
                                 }
                             }
                             

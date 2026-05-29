@@ -7,7 +7,7 @@ struct ARArtworkView: View {
     @State private var isTargetUnlocked: Bool = false
     @State private var diagnosticMessage: String = "Avvio ARKit..."
     @State private var selectedTargetCard: String? = nil
-    @GestureState private var gestureDragOffset: CGFloat = 0.0
+
     @State private var imagesReady: Bool = false
     @State private var downloadProgress: String = "Scaricamento immagini..."
     
@@ -32,6 +32,10 @@ struct ARArtworkView: View {
     
     var revealedCards: Set<String> {
         return CardDatabase.getRevealedCards()
+    }
+    
+    var duplicatesInPack: Set<String> {
+        return CardDatabase.getDuplicatesInActivePack()
     }
     
     var body: some View {
@@ -168,78 +172,119 @@ struct ARArtworkView: View {
                             }
                         }
                         
-                        // LARGE PREMIUM FANNED CARD DECK (Mockup 1)
-                        // Shows only unrevealed cards in current session, fanned out elegantly
-                        let remainingCards = activePack.filter { cardName in
-                            return !revealedCards.contains(cardName) && cardName != foundCardName
-                        }
+                        // CARD DECK — matching designer mockup layout
+                        let displayCards = activePack.filter { $0 != foundCardName }
                         
-                        if !remainingCards.isEmpty {
+                        if !displayCards.isEmpty {
                             ZStack {
-                                ForEach(Array(remainingCards.enumerated()), id: \.element) { index, cardName in
+                                ForEach(Array(displayCards.enumerated()), id: \.element) { index, cardName in
                                     let isSelected = cardName == selectedTargetCard
-                                    let selectedIndex = remainingCards.firstIndex(of: selectedTargetCard ?? "") ?? 0
+                                    let selectedIndex = displayCards.firstIndex(of: selectedTargetCard ?? "") ?? 0
                                     let diff = CGFloat(index - selectedIndex)
                                     
-                                    // Hearthstone fanning arithmetic (Larger cards to match Mockup 1)
-                                    let cardRotation = diff * 11.0
-                                    let xOffset = diff * 85.0      // Wider spacing to support larger size
-                                    let yOffset = abs(diff) * 15.0 + (isSelected ? -25.0 : 0.0)
-                                    let scale = isSelected ? 1.25 : 0.90
+                                    // Designer layout: tight overlap, center card raised
+                                    let xOffset = diff * 65.0
+                                    let yOffset: CGFloat = isSelected ? 0.0 : 30.0
+                                    let scale: CGFloat = isSelected ? 1.0 : 0.88
                                     
-                                    VStack(spacing: 0) {
-                                        ZStack(alignment: .topTrailing) {
-                                            // Redesigned: Large cards matching mockup!
-                                            let cardWidth: CGFloat = 130
-                                            let cardHeight: CGFloat = 196
-                                            let cornerRadius = cardWidth * 12.0 / 111.0
-                                            
-                                            ScannerCardView(
-                                                name: cardName,
-                                                width: cardWidth,
-                                                height: cardHeight
-                                            )
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: cornerRadius)
-                                                    .stroke(isSelected ? Color(hex: "F1B40A") : Color.white.opacity(0.35), lineWidth: isSelected ? 3 : 1.5)
-                                            )
-                                            .shadow(color: isSelected ? Color(hex: "F1B40A").opacity(0.5) : .black.opacity(0.4), radius: isSelected ? 16 : 6)
+                                    let cardWidth: CGFloat = 160
+                                    let cardHeight: CGFloat = 240
+                                    let cornerRadius = cardWidth * 12.0 / 111.0
+                                    
+                                    ScannerCardView(
+                                        name: cardName,
+                                        width: cardWidth,
+                                        height: cardHeight
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: cornerRadius)
+                                            .stroke(Color(hex: "F1B40A").opacity(isSelected ? 1.0 : 0.55), lineWidth: isSelected ? 3.5 : 1.5)
+                                    )
+                                    // Overlay "doppia" — bollino verde con checkmark
+                                    .overlay(alignment: .topTrailing) {
+                                        if duplicatesInPack.contains(cardName) {
+                                            ZStack {
+                                                Circle()
+                                                    .fill(Color(hex: "4CD964"))
+                                                    .frame(width: 28, height: 28)
+                                                    .shadow(color: Color(hex: "4CD964").opacity(0.6), radius: 4)
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 13, weight: .bold))
+                                                    .foregroundColor(.white)
+                                            }
+                                            .offset(x: 6, y: -6)
                                         }
                                     }
+                                    .shadow(color: isSelected ? Color(hex: "F1B40A").opacity(0.65) : .black.opacity(0.4), radius: isSelected ? 18 : 6)
                                     .scaleEffect(scale)
-                                    .rotationEffect(.degrees(cardRotation))
                                     .offset(x: xOffset, y: yOffset)
                                     .zIndex(isSelected ? 10 : Double(5 - abs(Int(diff))))
-                                    .contentShape(Rectangle())
+                                    .animation(.spring(response: 0.4, dampingFraction: 0.75), value: selectedTargetCard)
                                     .onTapGesture {
-                                        if selectedTargetCard != cardName && !isAnimatingUnlock {
+                                        if !isAnimatingUnlock && !duplicatesInPack.contains(cardName) {
                                             HapticManager.shared.triggerSelection()
                                             changeSelection(to: cardName)
                                         }
                                     }
                                 }
                             }
-                            .frame(height: 260)
+                            .frame(width: screenWidth, height: 300)
+                            .clipped()
                             .contentShape(Rectangle())
-                            // DRAG GESTURE: Enables smooth swiping left/right to scroll/navigate between cards in fanned hand!
-                            .gesture(
-                                DragGesture()
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 30)
                                     .onEnded { value in
                                         guard !isAnimatingUnlock else { return }
                                         let dragDistance = value.translation.width
-                                        if dragDistance > 45 {
-                                            // Swipe Right -> Select Previous Card
+                                        let swipeableCards = displayCards.filter { !duplicatesInPack.contains($0) }
+                                        guard !swipeableCards.isEmpty else { return }
+                                        if dragDistance > 40 {
                                             HapticManager.shared.triggerSelection()
-                                            selectPreviousCard(remainingCards: remainingCards)
-                                        } else if dragDistance < -45 {
-                                            // Swipe Left -> Select Next Card
+                                            selectPreviousCard(remainingCards: swipeableCards)
+                                        } else if dragDistance < -40 {
                                             HapticManager.shared.triggerSelection()
-                                            selectNextCard(remainingCards: remainingCards)
+                                            selectNextCard(remainingCards: swipeableCards)
                                         }
                                     }
                             )
                         } else {
-                            Spacer().frame(height: 260)
+                            Spacer().frame(height: 320)
+                        }
+                        
+                        // Se TUTTE le carte sono doppie, mostra pulsante per saltare AR
+                        if CardDatabase.isActivePackAllDuplicates() {
+                            Button(action: {
+                                HapticManager.shared.triggerImpact(style: .medium)
+                                // Pulisci il pacchetto e torna alla collezione
+                                UserDefaults.standard.removeObject(forKey: "activePackCards")
+                                UserDefaults.standard.removeObject(forKey: "activePackTearMask")
+                                UserDefaults.standard.removeObject(forKey: "activePackDuplicates")
+                                let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+                                withAnimation(.easeInOut(duration: 0.35)) {
+                                    activeView = .collection(activeCity)
+                                }
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "arrow.uturn.backward")
+                                    Text("TORNA ALLA COLLEZIONE")
+                                        .font(.system(size: 14, weight: .black))
+                                        .italic()
+                                }
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 12)
+                                .background(
+                                    Capsule().fill(
+                                        LinearGradient(
+                                            colors: [Color(hex: "FFD700"), Color(hex: "FFA500")],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                )
+                                .shadow(color: Color(hex: "FFD700").opacity(0.4), radius: 12)
+                            }
+                            .padding(.bottom, 20)
                         }
                     } else {
                         // Diagnostic feedback if no active pack exists
@@ -316,13 +361,15 @@ struct ARArtworkView: View {
         }
         .onAppear {
             if let active = CardDatabase.getActivePack(), !active.isEmpty {
-                // Find the first card that is not yet revealed
-                if let target = active.first(where: { !revealedCards.contains($0) }) {
+                // Seleziona la prima carta non-doppia come target iniziale
+                let dupes = CardDatabase.getDuplicatesInActivePack()
+                if let target = active.first(where: { !dupes.contains($0) }) {
                     selectedTargetCard = target
                 } else {
+                    // Tutte doppie — seleziona la prima comunque per il display
                     selectedTargetCard = active.first
                 }
-                isTargetUnlocked = revealedCards.contains(selectedTargetCard ?? "")
+                isTargetUnlocked = dupes.contains(selectedTargetCard ?? "")
             }
         }
         .task {
@@ -352,7 +399,7 @@ struct ARArtworkView: View {
                 imagesReady = true
             }
         }
-        .onChange(of: triggerUnlockAnimation) { newValue in
+        .onChange(of: triggerUnlockAnimation) { _, newValue in
             if let cardName = newValue {
                 startUnlockAnimation(for: cardName)
             }
@@ -388,7 +435,6 @@ struct ARArtworkView: View {
         }
     }
     
-    // Core game-like flying & green caught animation sequence (Mockup 2)
     private func startUnlockAnimation(for cardName: String) {
         // Step 1: Heavy spring bounce haptic
         HapticManager.shared.triggerImpact(style: .rigid)
@@ -396,6 +442,19 @@ struct ARArtworkView: View {
         foundCardName = cardName
         isAnimatingUnlock = true
         isCollectionIconVisible = false // Ensure hidden first
+        
+        // 1. Pre-calculate active pack state at start to prevent clearing race conditions!
+        let activePackAtStart = CardDatabase.getActivePack() ?? []
+        let dupes = CardDatabase.getDuplicatesInActivePack()
+        let newCards = activePackAtStart.filter { !dupes.contains($0) }
+        let isLastNewCard = newCards.filter { $0 != cardName }.allSatisfy { revealedCards.contains($0) }
+        
+        if isLastNewCard && !newCards.isEmpty {
+            // Solo carte nuove nel completedPack — le doppie non fanno sticker intro!
+            let newlyRevealed = newCards.filter { !revealedCards.contains($0) || $0 == cardName }
+            UserDefaults.standard.set(newlyRevealed, forKey: "recentlyCompletedPackCards")
+            print("🎉 Pack completed! Saved recentlyCompletedPackCards (no dupes): \(newlyRevealed)")
+        }
         
         withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
             unlockStep = .zoomToCenter
@@ -458,19 +517,22 @@ struct ARArtworkView: View {
                         triggerUnlockAnimation = nil
                         
                         // Auto-select the next unrevealed card in fanned hand
-                        if let active = CardDatabase.getActivePack(), !active.isEmpty {
-                            let remaining = active.filter { !revealedCards.contains($0) }
-                            if let nextTarget = remaining.first {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                                    selectedTargetCard = nextTarget
-                                    isTargetUnlocked = false
-                                    detectedArtwork = "Trova l'opera per sbloccarla!"
+                        if !isLastNewCard {
+                            if let active = CardDatabase.getActivePack(), !active.isEmpty {
+                                let remaining = active.filter { !revealedCards.contains($0) && !dupes.contains($0) }
+                                if let nextTarget = remaining.first {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                                        selectedTargetCard = nextTarget
+                                        isTargetUnlocked = false
+                                        detectedArtwork = "Trova l'opera per sbloccarla!"
+                                    }
                                 }
-                            } else {
-                                // All fanned cards found! Go back to pack opening view
-                                withAnimation(.easeInOut(duration: 0.35)) {
-                                    activeView = .opening
-                                }
+                            }
+                        } else {
+                            // All fanned cards found! Go directly to collection view to see the stickers insert
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+                                activeView = .collection(activeCity)
                             }
                         }
                     }
@@ -565,6 +627,22 @@ struct ARViewContainer: UIViewRepresentable {
     func makeUIView(context: Context) -> ARSCNView {
         let arView = ARSCNView(frame: .zero)
         arView.delegate = context.coordinator
+        context.coordinator.arView = arView
+        
+        // Pause session when resigning active to prevent background GPU access errors
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.handleWillResignActive),
+            name: UIApplication.willResignActiveNotification,
+            object: nil
+        )
+        // Resume session when becoming active
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.handleDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
         
         guard ARImageTrackingConfiguration.isSupported else {
             print("ARImageTrackingConfiguration is not supported on this device/simulator.")
@@ -572,7 +650,6 @@ struct ARViewContainer: UIViewRepresentable {
         }
         
         let configuration = ARImageTrackingConfiguration()
-        var dynamicImages = Set<ARReferenceImage>()
         let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
         let downloaded = CardDatabase.downloadedArtworkNames(for: activeCity)
         let totalKnown = CardDatabase.artworksFor(location: activeCity).count
@@ -580,10 +657,10 @@ struct ARViewContainer: UIViewRepresentable {
         var targetArtworks: [String] = []
         if CardDatabase.hasActivePack(), let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
             targetArtworks = activePack.filter { downloaded.contains($0) }
-            print("ARKit tracking active pack cards: \(targetArtworks)")
+            // print("ARKit tracking active pack cards: \(targetArtworks)")
         } else {
             targetArtworks = Array(downloaded.prefix(20))
-            print("ARKit tracking first 20 downloaded cards: \(targetArtworks)")
+            // print("ARKit tracking first 20 downloaded cards: \(targetArtworks)")
         }
         
         guard !targetArtworks.isEmpty else {
@@ -594,12 +671,15 @@ struct ARViewContainer: UIViewRepresentable {
             return arView
         }
         
-        for name in targetArtworks {
-            autoreleasepool {
-                if let cgImage = CardDatabase.rawCGImage(for: name) {
-                    let refImage = ARReferenceImage(cgImage, orientation: .up, physicalWidth: 0.2)
-                    refImage.name = name
-                    
+        // Avvia la sessione vuota per non far laggare la UI all'apertura
+        arView.session.run(configuration)
+        
+        // Carica in background e poi aggiorna la configurazione
+        Task.detached(priority: .userInitiated) {
+            var dynamicImages = Set<ARReferenceImage>()
+            
+            for name in targetArtworks {
+                if let refImage = await CardDatabase.arReferenceImage(for: name) {
                     refImage.validate { error in
                         if let error = error {
                             DispatchQueue.main.async {
@@ -611,27 +691,29 @@ struct ARViewContainer: UIViewRepresentable {
                     dynamicImages.insert(refImage)
                 }
             }
+            
+            if !dynamicImages.isEmpty {
+                configuration.trackingImages = dynamicImages
+                configuration.maximumNumberOfTrackedImages = 1
+                let loadedCount = dynamicImages.count
+                await MainActor.run {
+                    diagnosticMessage = "✅ ARKit pronto: \(loadedCount)/\(totalKnown) foto caricate."
+                    arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
+                }
+            } else if let fallbackImages = ARReferenceImage.referenceImages(inGroupNamed: "AR Resources", bundle: nil) {
+                configuration.trackingImages = fallbackImages
+                configuration.maximumNumberOfTrackedImages = 1
+                await MainActor.run {
+                    diagnosticMessage = "Uso \(fallbackImages.count) foto base da Xcode."
+                    arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
+                }
+            } else {
+                await MainActor.run {
+                    diagnosticMessage = "❌ Nessuna foto trovata nel telefono!"
+                }
+            }
         }
         
-        if !dynamicImages.isEmpty {
-            configuration.trackingImages = dynamicImages
-            configuration.maximumNumberOfTrackedImages = 1
-            DispatchQueue.main.async {
-                diagnosticMessage = "✅ ARKit pronto: \(dynamicImages.count)/\(totalKnown) foto caricate."
-            }
-        } else if let fallbackImages = ARReferenceImage.referenceImages(inGroupNamed: "AR Resources", bundle: nil) {
-            configuration.trackingImages = fallbackImages
-            configuration.maximumNumberOfTrackedImages = 1
-            DispatchQueue.main.async {
-                diagnosticMessage = "Uso \(fallbackImages.count) foto base da Xcode."
-            }
-        } else {
-            DispatchQueue.main.async {
-                diagnosticMessage = "❌ Nessuna foto trovata nel telefono!"
-            }
-        }
-        
-        arView.session.run(configuration)
         return arView
     }
     
@@ -649,9 +731,24 @@ struct ARViewContainer: UIViewRepresentable {
     
     class Coordinator: NSObject, ARSCNViewDelegate {
         var parent: ARViewContainer
+        weak var arView: ARSCNView?
         private let updateQueue = DispatchQueue(label: "ar.update.queue", qos: .userInitiated)
 
         init(parent: ARViewContainer) { self.parent = parent }
+        
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
+        
+        @objc func handleWillResignActive() {
+            arView?.session.pause()
+        }
+        
+        @objc func handleDidBecomeActive() {
+            if let configuration = arView?.session.configuration {
+                arView?.session.run(configuration)
+            }
+        }
 
         func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
             guard let imageAnchor = anchor as? ARImageAnchor else { return }

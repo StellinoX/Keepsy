@@ -56,12 +56,13 @@ struct CardInspectionView: View {
     }
     
     var body: some View {
-        let screenHeight = UIScreen.main.bounds.height
+        GeometryReader { geometry in
+        let screenHeight = geometry.size.height
         
         // Calcolo delle dimensioni e offset in base alla sorgente (Album vs Bustina)
         let cardWidth: CGFloat = isZoomingFromAlbum ? 250 : 310
         let cardHeight: CGFloat = isZoomingFromAlbum ? 380 : 470
-        let cardCircleWidth: CGFloat = isZoomingFromAlbum ? 70 : 90
+        let _ = isZoomingFromAlbum ? 70 : 90
         
         // Offset Y della modale in base allo stato
         let modalHeight: CGFloat = 480
@@ -69,7 +70,7 @@ struct CardInspectionView: View {
         let expandedOffset = modalHeight - 440
         let currentModalOffset = (sheetState == .collapsed ? collapsedOffset : expandedOffset) + sheetDragOffset
         
-        return ZStack {
+        ZStack {
             if !isZoomingFromAlbum {
                 // Sfondo scuro per focalizzare la carta. Un tap qui chiude l'ispezione.
                 Color.black
@@ -415,7 +416,7 @@ struct CardInspectionView: View {
                     
                     Spacer()
                 }
-                .frame(width: UIScreen.main.bounds.width - 24, height: modalHeight)
+                .frame(width: geometry.size.width - 24, height: modalHeight)
                 .background(
                     RoundedRectangle(cornerRadius: 33)
                         .fill(Color(hex: "1C1C1E").opacity(0.96))
@@ -510,6 +511,8 @@ struct CardInspectionView: View {
                 }
             }
         }
+        } // GeometryReader
+        .ignoresSafeArea()
     }
     
     private func closeAction() {

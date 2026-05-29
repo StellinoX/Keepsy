@@ -4,6 +4,11 @@ enum CardAnimationPhase {
     case idle, pulling, zooming, open, closing
 }
 
+class FrameTracker {
+    var cellFrames: [String: CGRect] = [:]
+    var floatingCardFrames: [String: CGRect] = [:]
+}
+
 struct CollectionAlbumView: View {
     var museumLocation: String? = nil
     var showCloseButton: Bool = false
@@ -21,6 +26,15 @@ struct CollectionAlbumView: View {
     @State private var hasSyncedWithCloud = false
     @State private var inspectedCard: ArtworkCard? = nil
     @Namespace private var albumNamespace
+    
+    // Sticker placement sequence states
+    @State private var recentlyCompletedPack: [String] = []
+    @State private var animatedCompletedCards: Set<String> = []
+    @State private var currentlyAnimatingSticker: String? = nil
+    @State private var frameTracker = FrameTracker()
+    @State private var frameRefreshToken: Int = 0
+    
+    @State private var stickerIntroActive: Bool = false
     
     @State private var animatingCardName: String? = nil
     @State private var animationPhase: CardAnimationPhase = .idle
@@ -42,6 +56,9 @@ struct CollectionAlbumView: View {
     @State private var pocketFrame: CGRect = .zero
     @State private var pocketOverlayOpacity: Double = 0
 
+    // Screen size captured from GeometryReader — available to animation functions
+    @State private var screenSize: CGSize = .zero
+
     let pullDistance: CGFloat = 120
 
     var headerTitle: String {
@@ -59,13 +76,15 @@ struct CollectionAlbumView: View {
     }
 
     var destinationFrame: CGRect {
-        let sw = UIScreen.main.bounds.width
-        let sh = UIScreen.main.bounds.height
+        let sw = screenSize.width
+        let sh = screenSize.height
         let w: CGFloat = 250
         let h: CGFloat = 380
         return CGRect(x: (sw - w) / 2, y: (sh - h) / 2 - 80, width: w, height: h)
     }
     var body: some View {
+        // GeometryReader cattura le dimensioni schermo — usate da tutte le animazioni
+        GeometryReader { rootGeo in
         // ZStack con coordinateSpace nominato — sia il GeometryReader che .position usano questo
         ZStack(alignment: .topLeading) {
             Color(red: 0.05, green: 0.05, blue: 0.1).ignoresSafeArea()
@@ -99,52 +118,45 @@ struct CollectionAlbumView: View {
                         ))
                         .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
 
-                    ScrollView(showsIndicators: false) {
-                        LazyVGrid(columns: columns, spacing: 18) {
-                            ForEach(Array(filteredArtworks.enumerated()), id: \.offset) { index, name in
-                                GeometryReader { geo in
-                                    AlbumCardCell(
-                                        name: name,
-                                        index: index,
-                                        isFound: foundCards.contains(name),
-                                        isRevealed: revealedCards.contains(name),
-                                        hasSynced: hasSyncedWithCloud,
-                                        cardOpacity: (animatingCardName == name) ? cellCardOpacity : 1.0
-                                    )
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        guard foundCards.contains(name),
-                                              animationPhase == .idle else { return }
-                                        // Legge il frame nel coordinateSpace "root" — stesso spazio di .position
-                                        let f = geo.frame(in: .named("root"))
-                                        let figFrame = CGRect(
-                                            x: f.minX + 7,
-                                            y: f.minY + 5,
-                                            width: 58,
-                                            height: 84
-                                        )
-                                        sourceFrame = figFrame
-                                        // pocket_outline: 72×94 centrato nella cella 72×103, offset top 5
-                                        pocketFrame = CGRect(
-                                            x: f.minX,
-                                            y: f.minY + 5,
-                                            width: 72,
-                                            height: 94
-                                        )
-                                        pulledSourceFrame = CGRect(
-                                            x: figFrame.minX,
-                                            y: figFrame.minY - pullDistance,
-                                            width: figFrame.width,
-                                            height: figFrame.height
-                                        )
-                                        startPullAnimation(for: name)
-                                    }
-                                }
-                                .frame(width: 72, height: 103)
+                    ScrollViewReader { proxy in
+                        ScrollView(showsIndicators: false) {
+                            StickerGridView(
+                                artworks: filteredArtworks,
+                                foundCards: foundCards,
+                                revealedCards: revealedCards,
+                                recentlyCompletedPack: recentlyCompletedPack,
+                                animatedCompletedCards: animatedCompletedCards,
+                                hasSyncedWithCloud: hasSyncedWithCloud,
+                                animatingCardName: animatingCardName,
+                                cellCardOpacity: cellCardOpacity,
+                                animationPhase: animationPhase,
+                                frameTracker: frameTracker,
+                                frameRefreshToken: frameRefreshToken,
+                                columns: columns
+                            ) { name, f in
+                                let figFrame = CGRect(x: f.minX + 7, y: f.minY + 5, width: 58, height: 84)
+                                sourceFrame = figFrame
+                                pocketFrame = CGRect(x: f.minX, y: f.minY + 5, width: 72, height: 94)
+                                pulledSourceFrame = CGRect(x: figFrame.minX, y: figFrame.minY - pullDistance, width: figFrame.width, height: figFrame.height)
+                                startPullAnimation(for: name)
+                            }
+                            .equatable()
+                            .padding(.vertical, 24)
+                            .padding(.horizontal, 16)
+                        }
+                        .onAppear {
+                            // Run the sticker intro after a short delay to allow views to render and frames to compile
+                            if !recentlyCompletedPack.isEmpty {
+                                runCompletedPackStickerIntro(proxy: proxy)
                             }
                         }
-                        .padding(.vertical, 24)
-                        .padding(.horizontal, 16)
+                        .onChange(of: stickerIntroActive) { _, newValue in
+                            // Trigger sticker intro when data is loaded from outer onAppear
+                            // (fixes race condition: inner onAppear fires before outer onAppear loads data)
+                            if newValue && !recentlyCompletedPack.isEmpty {
+                                runCompletedPackStickerIntro(proxy: proxy)
+                            }
+                        }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 33))
                 }
@@ -179,6 +191,68 @@ struct CollectionAlbumView: View {
                 .position(x: 30 + 85/2, y: 83 + 44/2)
             }
 
+            // FLOATING CARDS BAR — album-sized cards floating at top during sticker intro
+            if stickerIntroActive && !recentlyCompletedPack.isEmpty {
+                VStack(spacing: 8) {
+                    Text("NUOVE OPERE RIVELATE!")
+                        .font(.system(size: 13, weight: .black, design: .monospaced))
+                        .italic()
+                        .foregroundColor(Color(hex: "FFD700"))
+                        .shadow(color: .black, radius: 2)
+                    
+                    HStack(spacing: 12) {
+                        ForEach(recentlyCompletedPack, id: \.self) { name in
+                            let isCurrent = name == currentlyAnimatingSticker
+                            let isAnimated = animatedCompletedCards.contains(name)
+                            
+                            GeometryReader { cardGeo in
+                                VStack(spacing: 0) {
+                                    ArtImageView(cardName: name, isRevealed: true)
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 50, height: 76)
+                                        .cornerRadius(5)
+                                        .padding(4)
+                                }
+                                .frame(width: 58, height: 84)
+                                .background(CardDatabase.gradientFor(name: name))
+                                .cornerRadius(8)
+                                .overlay(
+                                    Group {
+                                        if isCurrent {
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(Color(hex: "4CD964"), lineWidth: 2)
+                                        } else {
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(CardDatabase.borderGradientFor(name: name), lineWidth: 1)
+                                        }
+                                    }
+                                )
+                                .shadow(color: isCurrent ? Color(hex: "4CD964").opacity(0.6) : Color.black.opacity(0.3), radius: isCurrent ? 8 : 4)
+                                .opacity(isAnimated ? 0.25 : (isCurrent ? 0.0 : 1.0))
+                                .scaleEffect(isCurrent ? 0.8 : 1.0)
+                                .onAppear {
+                                    let frame = cardGeo.frame(in: .named("root"))
+                                    frameTracker.floatingCardFrames[name] = frame
+                                }
+
+                            }
+                            .frame(width: 58, height: 84)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.black.opacity(0.6))
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.15), lineWidth: 1))
+                    )
+                }
+                .padding(.horizontal, 20)
+                .position(x: screenSize.width / 2, y: screenSize.height - 120)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            
             // Flying card e overlay dentro lo stesso ZStack "root"
             // così .position usa le stesse coordinate del GeometryReader
             if animationPhase != .idle {
@@ -192,6 +266,7 @@ struct CollectionAlbumView: View {
                 // Viene nascosta quando la CardInspectionView interattiva è aperta (.open) per evitare doppioni
                 if let name = animatingCardName, animationPhase != .idle {
                     flyingCardView(for: name)
+                        .id(name)
                 }
 
                 // Copertina bustina sovrapposta alla flying card durante pull/drop
@@ -217,6 +292,7 @@ struct CollectionAlbumView: View {
                         isZoomingFromAlbum: true,
                         onClose: { startCloseAnimation() }
                     )
+                    .id(name)
                     .opacity(inspectionOpacity)
                 }
             }
@@ -225,13 +301,24 @@ struct CollectionAlbumView: View {
         .coordinateSpace(name: "root")
         .ignoresSafeArea()
         .onAppear {
+            screenSize = rootGeo.size
             foundCards = CardDatabase.getFoundCards()
             revealedCards = CardDatabase.getRevealedCards()
+            
+            if let completed = UserDefaults.standard.stringArray(forKey: "recentlyCompletedPackCards"), !completed.isEmpty {
+                recentlyCompletedPack = completed
+                stickerIntroActive = true
+            }
+        }
+        .onChange(of: rootGeo.size) { _, newSize in
+            screenSize = newSize
         }
         .task {
             await CardDatabase.syncWithCloud()
             hasSyncedWithCloud = true
         }
+        } // GeometryReader
+        .ignoresSafeArea()
     }
 
     private var dynamicPadding: CGFloat {
@@ -344,15 +431,10 @@ struct CollectionAlbumView: View {
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.40) {
                 // Fase B: scende nella bustina
-                // La copertina riappare mentre la carta rientra sotto la plastica
+                // La plastica sovrapposta viene attivata istantaneamente al 100% prima della discesa!
+                pocketOverlayOpacity = 1.0
                 withAnimation(.easeIn(duration: 0.28)) {
                     flyingFrame = sourceFrame
-                }
-                // Bustina riappare nella seconda metà della discesa
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
-                    withAnimation(.easeIn(duration: 0.14)) {
-                        pocketOverlayOpacity = 1.0
-                    }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
                     flyingOpacity = 0
@@ -366,6 +448,139 @@ struct CollectionAlbumView: View {
             }
         }
     }
+    
+    // MARK: - Sticker Insertion Intro Sequence
+    
+    func runCompletedPackStickerIntro(proxy: ScrollViewProxy) {
+        guard !recentlyCompletedPack.isEmpty else { return }
+        
+        // Sort completed pack so stickers are placed in sequential album grid order
+        recentlyCompletedPack = recentlyCompletedPack.sorted { a, b in
+            let all = filteredArtworks
+            return (all.firstIndex(of: a) ?? Int.max) < (all.firstIndex(of: b) ?? Int.max)
+        }
+        
+        // Wait 1.0 second for the view to render before starting the premium reverse-zoom animation sequence!
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            animateNextSticker(index: 0, proxy: proxy)
+        }
+    }
+    
+    func animateNextSticker(index: Int, proxy: ScrollViewProxy) {
+        guard index < recentlyCompletedPack.count else {
+            // Finished animating all stickers! Clear local pack completed references
+            withAnimation(.easeInOut(duration: 0.5)) {
+                recentlyCompletedPack = []
+                currentlyAnimatingSticker = nil
+                animatingCardName = nil
+                animationPhase = .idle
+                flyingOpacity = 0.0
+                pocketOverlayOpacity = 0.0
+                cellCardOpacity = 1.0
+                stickerIntroActive = false
+            }
+            UserDefaults.standard.removeObject(forKey: "recentlyCompletedPackCards")
+            
+            // Re-sync standard discovered cards state
+            foundCards = CardDatabase.getFoundCards()
+            revealedCards = CardDatabase.getRevealedCards()
+            return
+        }
+        
+        let cardName = recentlyCompletedPack[index]
+        
+        // 1. Scroll dynamically to center the target album cell in the ScrollView!
+        HapticManager.shared.triggerSelection()
+        withAnimation(.spring(response: 0.85, dampingFraction: 0.82)) {
+            proxy.scrollTo(cardName, anchor: .center)
+        }
+        
+        // 2. Wait 0.7 seconds for scroll, then force-refresh all visible cell frames
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            frameRefreshToken += 1
+        }
+        
+        // 3. Wait 0.9 seconds total for scroll + frame refresh to complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            let f = frameTracker.cellFrames[cardName] ?? CGRect(
+                x: screenSize.width / 2 - 36,
+                y: screenSize.height / 2 - 51,
+                width: 72,
+                height: 103
+            )
+            
+            // Calculate corresponding frames matching Figma details tap mapping
+            let finalSourceFrame = CGRect(x: f.minX + 7, y: f.minY + 5, width: 58, height: 84)
+            let finalPocketFrame = CGRect(x: f.minX, y: f.minY + 5, width: 72, height: 94)
+            let finalPulledSourceFrame = CGRect(x: finalSourceFrame.minX, y: finalSourceFrame.minY - 90, width: 58, height: 84) // Shifted up by 90pt so it starts completely outside/above the pocket slot!
+            
+            // Measured source position in the bottom bar
+            let sourcePos = frameTracker.floatingCardFrames[cardName] ?? CGRect(
+                x: screenSize.width / 2 - 29,
+                y: screenSize.height - 120 + 20,
+                width: 58,
+                height: 84
+            )
+            
+            // Synchronized activation: hide from top bar & show in flyingCardView at the exact same frame!
+            currentlyAnimatingSticker = cardName
+            animatingCardName = cardName
+            animationPhase = .pulling
+            cellCardOpacity = 0.0
+            overlayOpacity = 0.0
+            flyingFrame = sourcePos
+            flyingCornerRadius = 8
+            flyingOpacity = 1.0
+            
+            // Set the pocket overlay frame and make it static/visible instantly!
+            pocketFrame = finalPocketFrame
+            pocketOverlayOpacity = 1.0
+            
+            HapticManager.shared.triggerImpact(style: .medium)
+            
+            // Phase 2: Fly from top bar down to just above its grid cell slot
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
+                flyingFrame = finalPulledSourceFrame
+            }
+            
+            // Wait 0.55 seconds for this flight to finish
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                // Phase 3: Slide down inside the plastic pocket sleeve texture!
+                // The pocket overlay is already perfectly static and visible on the cell slot, so the card slides behind it!
+                withAnimation(.easeOut(duration: 0.35)) {
+                    flyingFrame = finalSourceFrame // Card slides down into cell behind the static outline
+                }
+                
+                // Wait 0.35 seconds for card to completely slide inside
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    HapticManager.shared.triggerImpact(style: .light)
+                    
+                    // Add to animated set so the grid cell blinks and reveals
+                    _ = withAnimation(.easeIn(duration: 0.15)) {
+                        animatedCompletedCards.insert(cardName)
+                    }
+                    
+                    // Hide flying overlays and reveal cell card
+                    flyingOpacity = 0.0
+                    pocketOverlayOpacity = 0.0
+                    cellCardOpacity = 1.0
+                    
+                    // Reset animation states immediately for the current sticker!
+                    // This completely destroys the flying view overlay, preventing it from holding onto the previous card's image state during the next scroll!
+                    currentlyAnimatingSticker = nil
+                    animatingCardName = nil
+                    animationPhase = .idle
+                    
+                    // Short pause, then repeat for the next sticker in the queue!
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        animateNextSticker(index: index + 1, proxy: proxy)
+                    }
+                }
+            }
+        }
+    }
+    
+    // placeNextStickerFromTop REMOVED - WE NOW USE THE HIGH-FIDELITY ANIMATENEXTSTICKER ZOOM INTRO NATIVELY!
 }
 
 // MARK: - AlbumCardCell
@@ -435,3 +650,85 @@ struct AlbumCardCell: View {
         }
     }
 }
+
+// MARK: - Cell Frame Preference Key (replacement for per-cell GeometryReader)
+
+struct CellFramePreference: Equatable {
+    let name: String
+    let frame: CGRect
+}
+
+struct CellFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [CellFramePreference] = []
+    static func reduce(value: inout [CellFramePreference], nextValue: () -> [CellFramePreference]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+struct StickerGridView: View, Equatable {
+    let artworks: [String]
+    let foundCards: Set<String>
+    let revealedCards: Set<String>
+    let recentlyCompletedPack: [String]
+    let animatedCompletedCards: Set<String>
+    let hasSyncedWithCloud: Bool
+    let animatingCardName: String?
+    let cellCardOpacity: Double
+    let animationPhase: CardAnimationPhase
+    let frameTracker: FrameTracker
+    let frameRefreshToken: Int
+    let columns: [GridItem]
+    let onTapCard: (String, CGRect) -> Void
+
+    static func == (lhs: StickerGridView, rhs: StickerGridView) -> Bool {
+        lhs.artworks == rhs.artworks &&
+        lhs.foundCards == rhs.foundCards &&
+        lhs.revealedCards == rhs.revealedCards &&
+        lhs.recentlyCompletedPack == rhs.recentlyCompletedPack &&
+        lhs.animatedCompletedCards == rhs.animatedCompletedCards &&
+        lhs.hasSyncedWithCloud == rhs.hasSyncedWithCloud &&
+        lhs.animatingCardName == rhs.animatingCardName &&
+        lhs.cellCardOpacity == rhs.cellCardOpacity &&
+        lhs.animationPhase == rhs.animationPhase &&
+        lhs.frameRefreshToken == rhs.frameRefreshToken
+    }
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 18) {
+            ForEach(Array(artworks.enumerated()), id: \.offset) { index, name in
+                AlbumCardCell(
+                    name: name,
+                    index: index,
+                    isFound: foundCards.contains(name) || recentlyCompletedPack.contains(name),
+                    isRevealed: revealedCards.contains(name) && !recentlyCompletedPack.contains(name) ? true : animatedCompletedCards.contains(name),
+                    hasSynced: hasSyncedWithCloud,
+                    cardOpacity: (animatingCardName == name) ? cellCardOpacity : (recentlyCompletedPack.contains(name) && !animatedCompletedCards.contains(name) ? 0.0 : 1.0)
+                )
+                .contentShape(Rectangle())
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: CellFramePreferenceKey.self,
+                            value: [CellFramePreference(name: name, frame: geo.frame(in: .named("root")))]
+                        )
+                    }
+                )
+                .onTapGesture {
+                    guard recentlyCompletedPack.isEmpty else { return }
+                    guard foundCards.contains(name), animationPhase == .idle else { return }
+                    if let f = frameTracker.cellFrames[name] {
+                        onTapCard(name, f)
+                    }
+                }
+                .frame(width: 72, height: 103)
+                .id(name)
+            }
+        }
+        .onPreferenceChange(CellFramePreferenceKey.self) { preferences in
+            for pref in preferences {
+                frameTracker.cellFrames[pref.name] = pref.frame
+            }
+        }
+    }
+}
+

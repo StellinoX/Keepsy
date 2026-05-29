@@ -12,7 +12,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-
 		714CF5132FC88D5600E93EA6 /* KeepsyAdmin */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = KeepsyAdmin;
@@ -47,7 +46,6 @@
 			isa = PBXGroup;
 			children = (
 				8157FDAC2FB47BCD00D69127 /* Keepsy */,
-
 				714CF5122FC88D5600E93EA6 /* KeepsyAdmin.app */,
 				714CF5132FC88D5600E93EA6 /* KeepsyAdmin */,
 				714CF5292FC890C400E93EA6 /* Keepsy.app */,
@@ -373,7 +371,7 @@
 				CODE_SIGN_ENTITLEMENTS = Keepsy/Keepsy.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 82XQ6P528Q;
+				DEVELOPMENT_TEAM = 22SPWA3XU9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Uso la fotocamera per riconoscere le opere d'arte del museo.";
@@ -408,7 +406,7 @@
 				CODE_SIGN_ENTITLEMENTS = Keepsy/Keepsy.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 82XQ6P528Q;
+				DEVELOPMENT_TEAM = 22SPWA3XU9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Uso la fotocamera per riconoscere le opere d'arte del museo.";
