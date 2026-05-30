@@ -199,14 +199,34 @@ struct CardDatabase {
         if let cached = arImageCache.object(forKey: name as NSString) {
             return cached
         }
-        
+
         guard let cgImage = await rawCGImage(for: name) else { return nil }
-        
-        let refImage = ARReferenceImage(cgImage, orientation: .up, physicalWidth: 0.2)
+
+        let physicalWidth = physicalWidthMeters(for: name)
+        let refImage = ARReferenceImage(cgImage, orientation: .up, physicalWidth: physicalWidth)
         refImage.name = name
-        
+
         arImageCache.setObject(refImage, forKey: name as NSString)
         return refImage
+    }
+
+    // Parses "Misure senza cornice: 83x65x5,5 cm" → 0.83m.
+    // Falls back to 0.5m (reasonable average for museum paintings) if unparseable.
+    private static func physicalWidthMeters(for name: String) -> CGFloat {
+        guard let dimensions = remoteArtworks[name]?.dimensions, !dimensions.isEmpty else {
+            return 0.5
+        }
+        // Find first integer/decimal number in the string
+        let pattern = #"(\d+(?:[.,]\d+)?)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: dimensions, range: NSRange(dimensions.startIndex..., in: dimensions)),
+              let range = Range(match.range(at: 1), in: dimensions) else {
+            return 0.5
+        }
+        let valueStr = dimensions[range].replacingOccurrences(of: ",", with: ".")
+        guard let cm = Double(valueStr), cm > 5 else { return 0.5 }
+        // Convert cm to meters, clamp to sensible museum painting range (0.1–3.0m)
+        return CGFloat(min(max(cm / 100.0, 0.1), 3.0))
     }
     
     static func artworksFor(location: String) -> [String] {
@@ -297,7 +317,8 @@ struct CardDatabase {
     static func clearActivePackIfNeeded() {
         if let active = getActivePack(), !active.isEmpty {
             let revealed = getRevealedCards()
-            if active.allSatisfy({ revealed.contains($0) }) {
+            let dupes = Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
+            if active.allSatisfy({ revealed.contains($0) || dupes.contains($0) }) {
                 UserDefaults.standard.removeObject(forKey: "activePackCards")
                 UserDefaults.standard.removeObject(forKey: "activePackTearMask")
                 UserDefaults.standard.removeObject(forKey: "activePackDuplicates")
@@ -341,19 +362,20 @@ struct CardDatabase {
         }
     }
     
-    /// Restituisce le carte del pacchetto attivo che sono doppie (già trovate/rivelate)
+    /// Restituisce le carte del pacchetto attivo che erano doppie all'apertura.
+    /// Legge la lista salvata UNA volta in trackDuplicates (prima di addFoundCards),
+    /// NON ricalcola live — altrimenti tutte risultano doppie (addFoundCards aggiunge tutto il pack).
     static func getDuplicatesInActivePack() -> Set<String> {
-        guard let pack = getActivePack() else { return [] }
-        let revealed = getRevealedCards()
-        let found = getFoundCards()
-        return Set(pack.filter { revealed.contains($0) || found.contains($0) })
+        guard getActivePack() != nil else { return [] }
+        return Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
     }
     
     /// True se TUTTE le carte del pacchetto attivo sono già state rivelate (tutte doppie)
     static func isActivePackAllDuplicates() -> Bool {
         guard let pack = getActivePack(), !pack.isEmpty else { return false }
         let revealed = getRevealedCards()
-        return pack.allSatisfy { revealed.contains($0) }
+        let dupes = Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
+        return pack.allSatisfy { revealed.contains($0) || dupes.contains($0) }
     }
     
     // Gestione salvataggio carte trovate nei pacchetti (pixelate)

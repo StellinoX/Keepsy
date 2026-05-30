@@ -250,14 +250,13 @@ struct PackOpeningView: View {
                 isFlipped: false
             )
         }
+        // Traccia doppie PRIMA di aggiungere a foundCards, altrimenti tutte risultano doppie.
+        // Scrivi SEMPRE (anche vuoto) per non ereditare doppie stale dal pack precedente.
+        let duplicates = CardDatabase.trackDuplicates(in: selectedArtworks)
+        UserDefaults.standard.set(duplicates, forKey: "activePackDuplicates")
+
         CardDatabase.addFoundCards(selectedArtworks)
         UserDefaults.standard.set(selectedArtworks, forKey: "activePackCards")
-        
-        // Traccia le doppie e salva la lista nel pacchetto attivo
-        let duplicates = CardDatabase.trackDuplicates(in: selectedArtworks)
-        if !duplicates.isEmpty {
-            UserDefaults.standard.set(duplicates, forKey: "activePackDuplicates")
-        }
         
         self.packState = .opened
         self.showCards = true

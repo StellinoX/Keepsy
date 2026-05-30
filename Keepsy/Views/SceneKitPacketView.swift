@@ -297,6 +297,9 @@ public struct SceneKitPacketView: UIViewRepresentable {
         view.autoenablesDefaultLighting = false
         view.backgroundColor = UIColor.clear // Make background clear to show gradient underneath
         view.isUserInteractionEnabled = interactive
+        view.rendersContinuously = false
+        view.antialiasingMode = .multisampling2X
+        view.preferredFramesPerSecond = 60
         
         if interactive {
             let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(PacketCoordinator.handlePan(_:)))

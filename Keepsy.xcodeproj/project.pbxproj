@@ -6,17 +6,16 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		713F009A2FCB597900F85055 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 713F00992FCB597900F85055 /* FirebaseFirestore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
-		714CF5122FC88D5600E93EA6 /* KeepsyAdmin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KeepsyAdmin.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		714CF5292FC890C400E93EA6 /* Keepsy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Keepsy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		714CF5122FC88D5600E93EA6 /* KeepsyAdmin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = KeepsyAdmin.app; path = /Users/alfi/Desktop/keepsy/build/Debug/KeepsyAdmin.app; sourceTree = "<absolute>"; };
+		714CF5292FC890C400E93EA6 /* Keepsy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = Keepsy.app; path = "/Users/alfi/Desktop/keepsy/build/Debug-iphoneos/Keepsy.app"; sourceTree = "<absolute>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		714CF5132FC88D5600E93EA6 /* KeepsyAdmin */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = KeepsyAdmin;
-			sourceTree = "<group>";
-		};
 		8157FDAC2FB47BCD00D69127 /* Keepsy */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Keepsy;
@@ -36,6 +35,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				713F009A2FCB597900F85055 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -46,9 +46,6 @@
 			isa = PBXGroup;
 			children = (
 				8157FDAC2FB47BCD00D69127 /* Keepsy */,
-				714CF5122FC88D5600E93EA6 /* KeepsyAdmin.app */,
-				714CF5132FC88D5600E93EA6 /* KeepsyAdmin */,
-				714CF5292FC890C400E93EA6 /* Keepsy.app */,
 			);
 			sourceTree = "<group>";
 		};
@@ -66,9 +63,6 @@
 			buildRules = (
 			);
 			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				714CF5132FC88D5600E93EA6 /* KeepsyAdmin */,
 			);
 			name = KeepsyAdmin;
 			packageProductDependencies = (
@@ -94,6 +88,7 @@
 			);
 			name = Keepsy;
 			packageProductDependencies = (
+				713F00992FCB597900F85055 /* FirebaseFirestore */,
 			);
 			productName = Keepsy;
 			productReference = 714CF5292FC890C400E93EA6 /* Keepsy.app */;
@@ -126,6 +121,9 @@
 			);
 			mainGroup = 8157FDA12FB47BCD00D69127;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				713F00982FCB597900F85055 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8157FDA12FB47BCD00D69127;
 			projectDirPath = "";
@@ -464,6 +462,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		713F00982FCB597900F85055 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.14.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		713F00992FCB597900F85055 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 713F00982FCB597900F85055 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8157FDA22FB47BCD00D69127 /* Project object */;
 }

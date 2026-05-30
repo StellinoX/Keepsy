@@ -1,5 +1,5 @@
 import Foundation
-import CloudKit
+import FirebaseFirestore
 
 struct NetworkArtwork: Codable {
     let id: String
@@ -9,7 +9,7 @@ struct NetworkArtwork: Codable {
     let imageUrl: String
     let createdAt: String
     let internalName: String
-    
+
     // Original database split fields
     let inventoryNumber: String?
     let date: String?
@@ -19,93 +19,84 @@ struct NetworkArtwork: Codable {
 
 class NetworkService {
     static let shared = NetworkService()
-    
-    private let publicDB = CKContainer(identifier: "iCloud.group.keepsy.app").publicCloudDatabase
-    
-    /// Fetches all artwork records matching the specified museum ID from Apple's CloudKit Public Database.
+
+    private let db = Firestore.firestore()
+
+    private var artworksDirectory: URL {
+        let docDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Artworks", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: docDir.path) {
+            try? FileManager.default.createDirectory(at: docDir, withIntermediateDirectories: true)
+        }
+        return docDir
+    }
+
     func fetchArtworks(for museumId: String) async throws -> [NetworkArtwork] {
-        let predicate = NSPredicate(format: "museumId == %@", museumId.lowercased())
-        let query = CKQuery(recordType: "Artwork", predicate: predicate)
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            publicDB.fetch(withQuery: query, resultsLimit: 100) { result in
-                switch result {
-                case .success((let matchResults, _)):
-                    var artworks: [NetworkArtwork] = []
-                    
-                    for (_, recordResult) in matchResults {
-                        if case .success(let record) = recordResult {
-                            let id = record.recordID.recordName
-                            let title = record["title"] as? String ?? "Senza Titolo"
-                            let artist = record["artist"] as? String
-                            let description = record["description"] as? String
-                            let internalName = record["internalName"] as? String ?? ""
-                            let imageUrl = record["imageUrl"] as? String ?? ""
-                            
-                            let inventoryNumber = record["inventoryNumber"] as? String
-                            let date = record["date"] as? String
-                            let technique = record["technique"] as? String
-                            let dimensions = record["dimensions"] as? String
-                            
-                            // Write the high-res image CKAsset directly and atomically to our local sandboxed directory (/Artworks)
-                            if let asset = record["imageFile"] as? CKAsset, let fileURL = asset.fileURL {
-                                let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-                                let docDir = paths[0].appendingPathComponent("Artworks", isDirectory: true)
-                                if !FileManager.default.fileExists(atPath: docDir.path) {
-                                    try? FileManager.default.createDirectory(at: docDir, withIntermediateDirectories: true)
-                                }
-                                let destinationURL = docDir.appendingPathComponent("\(internalName).jpg")
-                                
-                                var shouldCopy = true
-                                if FileManager.default.fileExists(atPath: destinationURL.path) {
-                                    let size = (try? FileManager.default.attributesOfItem(atPath: destinationURL.path)[.size] as? Int) ?? 0
-                                    if size > 10000 {
-                                        shouldCopy = false
-                                    }
-                                }
-                                
-                                if shouldCopy {
-                                    do {
-                                        let data = try Data(contentsOf: fileURL)
-                                        try data.write(to: destinationURL, options: .atomic)
-                                        print("✅ Immagine di \(title) copiata da CloudKit in locale!")
-                                        
-                                        // Notify any listening views that this image is now available
-                                        NotificationCenter.default.post(
-                                            name: NSNotification.Name("ArtworkImageDownloaded"),
-                                            object: nil,
-                                            userInfo: ["internalName": internalName]
-                                        )
-                                    } catch {
-                                        print("❌ Errore copia immagine per \(title): \(error.localizedDescription)")
-                                    }
-                                } else {
-                                    // print("ℹ️ Immagine di \(title) già presente in locale, salto la copia.")
-                                }
-                            }
-                            
-                            let artwork = NetworkArtwork(
-                                id: id,
-                                title: title,
-                                description: description,
-                                artist: artist,
-                                imageUrl: imageUrl,
-                                createdAt: Date().description,
-                                internalName: internalName,
-                                inventoryNumber: inventoryNumber,
-                                date: date,
-                                technique: technique,
-                                dimensions: dimensions
-                            )
-                            artworks.append(artwork)
-                        }
-                    }
-                    continuation.resume(returning: artworks)
-                    
-                case .failure(let error):
-                    continuation.resume(throwing: error)
+        let snapshot = try await db.collection("artworks").getDocuments()
+
+        var artworks: [NetworkArtwork] = []
+        var pendingDownloads: [(url: String, name: String)] = []
+
+        for doc in snapshot.documents {
+            let data = doc.data()
+
+            let imageFilename = data["imageFilename"] as? String ?? ""
+            let internalName = imageFilename.hasSuffix(".jpg")
+                ? String(imageFilename.dropLast(4))
+                : imageFilename
+            let imageUrl = data["imageUrl"] as? String ?? ""
+
+            artworks.append(NetworkArtwork(
+                id: doc.documentID,
+                title: data["title"] as? String ?? "Senza Titolo",
+                description: data["description"] as? String,
+                artist: data["artist"] as? String,
+                imageUrl: imageUrl,
+                createdAt: (data["createdAt"] as? Timestamp)?.dateValue().description ?? Date().description,
+                internalName: internalName,
+                inventoryNumber: data["inventoryNumber"] as? String,
+                date: data["date"] as? String,
+                technique: data["technique"] as? String,
+                dimensions: data["dimensions"] as? String
+            ))
+
+            if !imageUrl.isEmpty && !internalName.isEmpty {
+                pendingDownloads.append((url: imageUrl, name: internalName))
+            }
+        }
+
+        // Return artworks immediately, download images concurrently in background
+        Task(priority: .background) {
+            await withTaskGroup(of: Void.self) { group in
+                for item in pendingDownloads {
+                    group.addTask { await self.downloadImageIfNeeded(from: item.url, name: item.name) }
                 }
             }
+        }
+
+        return artworks
+    }
+
+    private func downloadImageIfNeeded(from urlString: String, name: String) async {
+        let destinationURL = artworksDirectory.appendingPathComponent("\(name).jpg")
+
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            let size = (try? FileManager.default.attributesOfItem(atPath: destinationURL.path)[.size] as? Int) ?? 0
+            if size > 10000 { return }
+        }
+
+        guard let url = URL(string: urlString) else { return }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            try data.write(to: destinationURL, options: .atomic)
+            NotificationCenter.default.post(
+                name: NSNotification.Name("ArtworkImageDownloaded"),
+                object: nil,
+                userInfo: ["internalName": name]
+            )
+        } catch {
+            print("❌ Download failed for \(name): \(error.localizedDescription)")
         }
     }
 }

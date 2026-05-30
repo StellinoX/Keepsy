@@ -11,23 +11,15 @@ struct ARArtworkView: View {
     @State private var imagesReady: Bool = false
     @State private var downloadProgress: String = "Scaricamento immagini..."
     
-    // Triumph unlock animation states (Mockup 2)
+    // Triumph unlock animation states
     @State private var triggerUnlockAnimation: String? = nil
     @State private var foundCardName: String? = nil
     @State private var isAnimatingUnlock: Bool = false
     @State private var unlockStep: UnlockAnimationStep = .none
-    
-    // Collection icon feedback states (top-left collection glow/ripple)
-    @State private var isCollectionIconVisible: Bool = false // Hidden by default, appears only when captured!
-    @State private var collectionIconScale: CGFloat = 1.0
-    @State private var isCollectionGlowActive: Bool = false
-    @State private var collectionRippleScale: CGFloat = 1.0
-    @State private var collectionRippleOpacity: Double = 0.0
-    
+
     enum UnlockAnimationStep {
         case none
-        case zoomToCenter      // Large center caught view with green glow border
-        case flyToCollection   // Card flies and spins to the top-left collection icon
+        case zoomToCenter
     }
     
     var revealedCards: Set<String> {
@@ -89,34 +81,6 @@ struct ARArtworkView: View {
                             .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
                     }
                     
-                    // 2. Collection Album Indicator (Fades in dynamically only during triumph matching!)
-                    ZStack {
-                        // Golden/Glow background ring
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: isCollectionGlowActive ? [Color(hex: "FFD700"), Color(hex: "FFA500")] : [Color(white: 0.15), Color(white: 0.08)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 44, height: 44)
-                            .shadow(color: isCollectionGlowActive ? Color(hex: "FFD700").opacity(0.85) : .clear, radius: 12)
-                            .scaleEffect(collectionIconScale)
-                        
-                        Image(systemName: "square.grid.3x3.fill")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(isCollectionGlowActive ? .black : .white)
-                        
-                        // Expanding ripple circle when card hits
-                        Circle()
-                            .stroke(Color(hex: "FFD700"), lineWidth: 2)
-                            .frame(width: 44, height: 44)
-                            .scaleEffect(collectionRippleScale)
-                            .opacity(collectionRippleOpacity)
-                    }
-                    .opacity(isCollectionIconVisible ? 1.0 : 0.0) // Appears only when matched!
-                    .animation(.easeInOut(duration: 0.4), value: isCollectionIconVisible)
                 }
                 .padding(.top, 60)
                 .padding(.leading, 24)
@@ -181,16 +145,15 @@ struct ARArtworkView: View {
                                     let isSelected = cardName == selectedTargetCard
                                     let selectedIndex = displayCards.firstIndex(of: selectedTargetCard ?? "") ?? 0
                                     let diff = CGFloat(index - selectedIndex)
-                                    
-                                    // Designer layout: tight overlap, center card raised
+
                                     let xOffset = diff * 65.0
                                     let yOffset: CGFloat = isSelected ? 0.0 : 30.0
                                     let scale: CGFloat = isSelected ? 1.0 : 0.88
-                                    
+
                                     let cardWidth: CGFloat = 160
                                     let cardHeight: CGFloat = 240
                                     let cornerRadius = cardWidth * 12.0 / 111.0
-                                    
+
                                     ScannerCardView(
                                         name: cardName,
                                         width: cardWidth,
@@ -200,9 +163,8 @@ struct ARArtworkView: View {
                                         RoundedRectangle(cornerRadius: cornerRadius)
                                             .stroke(Color(hex: "F1B40A").opacity(isSelected ? 1.0 : 0.55), lineWidth: isSelected ? 3.5 : 1.5)
                                     )
-                                    // Overlay "doppia" — bollino verde con checkmark
                                     .overlay(alignment: .topTrailing) {
-                                        if duplicatesInPack.contains(cardName) {
+                                        if duplicatesInPack.contains(cardName) || revealedCards.contains(cardName) {
                                             ZStack {
                                                 Circle()
                                                     .fill(Color(hex: "4CD964"))
@@ -221,29 +183,25 @@ struct ARArtworkView: View {
                                     .zIndex(isSelected ? 10 : Double(5 - abs(Int(diff))))
                                     .animation(.spring(response: 0.4, dampingFraction: 0.75), value: selectedTargetCard)
                                     .onTapGesture {
-                                        if !isAnimatingUnlock && !duplicatesInPack.contains(cardName) {
-                                            HapticManager.shared.triggerSelection()
-                                            changeSelection(to: cardName)
-                                        }
+                                        guard !isAnimatingUnlock else { return }
+                                        HapticManager.shared.triggerSelection()
+                                        changeSelection(to: cardName)
                                     }
                                 }
                             }
                             .frame(width: screenWidth, height: 300)
-                            .clipped()
+                            .background(Color.black.opacity(0.001))
                             .contentShape(Rectangle())
-                            .simultaneousGesture(
-                                DragGesture(minimumDistance: 30)
+                            .gesture(
+                                DragGesture(minimumDistance: 20, coordinateSpace: .local)
                                     .onEnded { value in
                                         guard !isAnimatingUnlock else { return }
-                                        let dragDistance = value.translation.width
-                                        let swipeableCards = displayCards.filter { !duplicatesInPack.contains($0) }
-                                        guard !swipeableCards.isEmpty else { return }
-                                        if dragDistance > 40 {
+                                        if value.translation.width > 40 {
                                             HapticManager.shared.triggerSelection()
-                                            selectPreviousCard(remainingCards: swipeableCards)
-                                        } else if dragDistance < -40 {
+                                            selectPreviousCard(remainingCards: displayCards)
+                                        } else if value.translation.width < -40 {
                                             HapticManager.shared.triggerSelection()
-                                            selectNextCard(remainingCards: swipeableCards)
+                                            selectNextCard(remainingCards: displayCards)
                                         }
                                     }
                             )
@@ -251,40 +209,13 @@ struct ARArtworkView: View {
                             Spacer().frame(height: 320)
                         }
                         
-                        // Se TUTTE le carte sono doppie, mostra pulsante per saltare AR
+                        // Se TUTTE le carte sono già doppie, niente da inquadrare:
+                        // auto-navigazione gestita in .onAppear (navigateToCollection).
                         if CardDatabase.isActivePackAllDuplicates() {
-                            Button(action: {
-                                HapticManager.shared.triggerImpact(style: .medium)
-                                // Pulisci il pacchetto e torna alla collezione
-                                UserDefaults.standard.removeObject(forKey: "activePackCards")
-                                UserDefaults.standard.removeObject(forKey: "activePackTearMask")
-                                UserDefaults.standard.removeObject(forKey: "activePackDuplicates")
-                                let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
-                                withAnimation(.easeInOut(duration: 0.35)) {
-                                    activeView = .collection(activeCity)
-                                }
-                            }) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "arrow.uturn.backward")
-                                    Text("TORNA ALLA COLLEZIONE")
-                                        .font(.system(size: 14, weight: .black))
-                                        .italic()
-                                }
-                                .foregroundColor(.black)
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 12)
-                                .background(
-                                    Capsule().fill(
-                                        LinearGradient(
-                                            colors: [Color(hex: "FFD700"), Color(hex: "FFA500")],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                )
-                                .shadow(color: Color(hex: "FFD700").opacity(0.4), radius: 12)
-                            }
-                            .padding(.bottom, 20)
+                            Text("Tutte già nella collezione")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(.bottom, 20)
                         }
                     } else {
                         // Diagnostic feedback if no active pack exists
@@ -310,51 +241,67 @@ struct ARArtworkView: View {
                 .frame(height: screenHeight - 83)
                 .position(x: screenWidth / 2, y: 83 + (screenHeight - 83) / 2)
                 
-                // TRIUMPH CATCH ANIMATION LAYER (Mockup 2 with bright green caught highlight)
+                // UNLOCK REVEAL LAYER
                 if isAnimatingUnlock, let name = foundCardName {
-                    // Dark background overlay during Step 1 (isolating the card)
-                    Color.black
-                        .opacity(unlockStep == .zoomToCenter ? 0.75 : 0.0)
+                    if unlockStep == .zoomToCenter {
+                        // Blurred background: show other pack cards faded behind
+                        let bgCards = (CardDatabase.getActivePack() ?? []).filter { $0 != name }
+                        ZStack {
+                            Color.black.opacity(0.6).ignoresSafeArea()
+
+                            // Blurred side cards in background
+                            HStack(spacing: -40) {
+                                ForEach(bgCards.prefix(4), id: \.self) { bgCard in
+                                    ScannerCardView(name: bgCard, width: 130, height: 195)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 130 * 12.0 / 111.0)
+                                                .stroke(Color(hex: "F1B40A").opacity(0.4), lineWidth: 1.5)
+                                        )
+                                        .blur(radius: 8)
+                                        .opacity(0.5)
+                                }
+                            }
+                            .frame(width: screenWidth)
+                        }
                         .ignoresSafeArea()
                         .transition(.opacity)
-                    
-                    // Shiny emerald green rotating rays behind the flying card (Step 1)
-                    if unlockStep == .zoomToCenter {
-                        RadialRayBeamView(color: Color(hex: "4CD964")) // Beautiful green rays!
-                            .transition(.opacity)
-                            .blendMode(.screen)
-                            .position(x: screenWidth / 2, y: screenHeight / 2)
                     }
-                    
-                    // Large caught card (Mockup 2 size)
-                    let cardWidth: CGFloat = 200
-                    let cardHeight: CGFloat = 301
+
+                    // Main focused card — appare al centro, poi si dissolve da sola
+                    let cardWidth: CGFloat = screenWidth * 0.58
+                    let cardHeight: CGFloat = cardWidth * 1.5
                     let cornerRadius = cardWidth * 12.0 / 111.0
-                    
-                    VStack(spacing: 0) {
-                        ZStack(alignment: .topTrailing) {
-                            ScannerCardView(
-                                name: name,
-                                width: cardWidth,
-                                height: cardHeight
-                            )
+
+                    VStack(spacing: 20) {
+                        ScannerCardView(name: name, width: cardWidth, height: cardHeight)
                             .overlay(
-                                // Caught highlighted border: emerald green!
                                 RoundedRectangle(cornerRadius: cornerRadius)
                                     .stroke(Color(hex: "4CD964"), lineWidth: 4)
                             )
-                            // Bright emerald green glow!
-                            .shadow(color: Color(hex: "4CD964").opacity(0.9), radius: 25)
-                        }
+                            .overlay(alignment: .topTrailing) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color(hex: "4CD964"))
+                                        .frame(width: 44, height: 44)
+                                        .shadow(color: Color(hex: "4CD964").opacity(0.7), radius: 8)
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                .offset(x: 10, y: -10)
+                            }
+                            .shadow(color: Color(hex: "4CD964").opacity(0.7), radius: 28)
+
+                        Text("CATTURATA!")
+                            .font(.system(size: 20, weight: .black))
+                            .italic()
+                            .foregroundColor(.white)
+                            .shadow(color: Color(hex: "4CD964").opacity(0.8), radius: 6)
                     }
-                    .scaleEffect(unlockStep == .zoomToCenter ? 1.45 : 0.08)
-                    .rotationEffect(.degrees(unlockStep == .zoomToCenter ? 0 : -360))
-                    // Fly from screen center into the golden Collection Icon (x: 46+44, y: 60+22) in top-left!
-                    .position(
-                        x: unlockStep == .zoomToCenter ? screenWidth / 2 : 46.0 + 44.0,
-                        y: unlockStep == .zoomToCenter ? screenHeight / 2 : 60.0 + 22.0
-                    )
-                    .animation(.spring(response: 0.84, dampingFraction: 0.76), value: unlockStep)
+                    .scaleEffect(unlockStep == .zoomToCenter ? 1.0 : 0.6)
+                    .opacity(unlockStep == .zoomToCenter ? 1.0 : 0.0)
+                    .position(x: screenWidth / 2, y: screenHeight / 2 - 20)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.7), value: unlockStep)
                 }
             }
             .ignoresSafeArea()
@@ -370,6 +317,14 @@ struct ARArtworkView: View {
                     selectedTargetCard = active.first
                 }
                 isTargetUnlocked = dupes.contains(selectedTargetCard ?? "")
+
+                // Se TUTTE le carte sono già doppie: niente da inquadrare,
+                // vai in automatico alla collezione dopo un breve momento.
+                if CardDatabase.isActivePackAllDuplicates() {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                        navigateToCollection()
+                    }
+                }
             }
         }
         .task {
@@ -409,12 +364,26 @@ struct ARArtworkView: View {
     func cleanedArtworkName(_ name: String) -> String {
         return CardDatabase.cleanedArtworkName(name)
     }
+
+    /// Pulisce il pacchetto attivo e naviga alla collezione.
+    /// L'animazione "sticker che si inseriscono" parte da CollectionAlbumView
+    /// leggendo recentlyCompletedPackCards (settato in startUnlockAnimation).
+    private func navigateToCollection() {
+        UserDefaults.standard.removeObject(forKey: "activePackCards")
+        UserDefaults.standard.removeObject(forKey: "activePackTearMask")
+        UserDefaults.standard.removeObject(forKey: "activePackDuplicates")
+        let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        withAnimation(.easeInOut(duration: 0.35)) {
+            activeView = .collection(activeCity)
+        }
+    }
     
     private func changeSelection(to cardName: String) {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
             selectedTargetCard = cardName
-            isTargetUnlocked = revealedCards.contains(cardName)
-            detectedArtwork = isTargetUnlocked ? "Già sbloccata!" : "Trova l'opera per sbloccarla!"
+            isTargetUnlocked = revealedCards.contains(cardName) || duplicatesInPack.contains(cardName)
+            // Niente testo "già sbloccata": lo stato è comunicato dalla spunta verde sulla carta.
+            detectedArtwork = isTargetUnlocked ? "" : "Trova l'opera per sbloccarla!"
         }
     }
     
@@ -436,110 +405,55 @@ struct ARArtworkView: View {
     }
     
     private func startUnlockAnimation(for cardName: String) {
-        // Step 1: Heavy spring bounce haptic
         HapticManager.shared.triggerImpact(style: .rigid)
-        
+
         foundCardName = cardName
         isAnimatingUnlock = true
-        isCollectionIconVisible = false // Ensure hidden first
-        
-        // 1. Pre-calculate active pack state at start to prevent clearing race conditions!
+
         let activePackAtStart = CardDatabase.getActivePack() ?? []
         let dupes = CardDatabase.getDuplicatesInActivePack()
         let newCards = activePackAtStart.filter { !dupes.contains($0) }
         let isLastNewCard = newCards.filter { $0 != cardName }.allSatisfy { revealedCards.contains($0) }
-        
+
         if isLastNewCard && !newCards.isEmpty {
-            // Solo carte nuove nel completedPack — le doppie non fanno sticker intro!
-            let newlyRevealed = newCards.filter { !revealedCards.contains($0) || $0 == cardName }
-            UserDefaults.standard.set(newlyRevealed, forKey: "recentlyCompletedPackCards")
-            print("🎉 Pack completed! Saved recentlyCompletedPackCards (no dupes): \(newlyRevealed)")
+            UserDefaults.standard.set(newCards, forKey: "recentlyCompletedPackCards")
         }
-        
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) {
+
+        CardDatabase.addRevealedCard(cardName)
+        CardDatabase.clearActivePackIfNeeded()
+
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
             unlockStep = .zoomToCenter
         }
-        
-        // Wait 1.4 seconds showing captured card with green border
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-            // Step 2: Dynamically fade in the golden collection binder shortcut in top-left!
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
             withAnimation(.easeInOut(duration: 0.4)) {
-                isCollectionIconVisible = true
+                unlockStep = .none
             }
-            
-            // Wait 0.6 seconds more (making it 2.0s total celebration in center)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                // Step 3: Card flies and spins to the Golden Album Icon in top-left
-                withAnimation(.spring(response: 0.76, dampingFraction: 0.8)) {
-                    unlockStep = .flyToCollection
-                }
-                
-                // Wait 0.8 seconds (duration of flight)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                    // Step 4: Hits the collection binder! Glow & spring bounce
-                    HapticManager.shared.triggerImpact(style: .medium)
-                    
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.45)) {
-                        collectionIconScale = 1.4
-                        isCollectionGlowActive = true
-                        collectionRippleScale = 1.0
-                        collectionRippleOpacity = 1.0
-                    }
-                    
-                    // expanding circular ring ripple wave
-                    withAnimation(.easeOut(duration: 0.55)) {
-                        collectionRippleScale = 2.4
-                        collectionRippleOpacity = 0.0
-                    }
-                    
-                    // Permanently save to revealed cards list
-                    CardDatabase.addRevealedCard(cardName)
-                    CardDatabase.clearActivePackIfNeeded()
-                    
-                    // Return golden collection icon size back to 1.0
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                            collectionIconScale = 1.0
-                        }
-                    }
-                    
-                    // Wait another 0.6 seconds to let the user enjoy the ripple hit
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            isCollectionGlowActive = false
-                            isCollectionIconVisible = false // Fades out binder shortcut automatically!
-                        }
-                        
-                        // Reset all animation states
-                        isAnimatingUnlock = false
-                        foundCardName = nil
-                        unlockStep = .none
-                        triggerUnlockAnimation = nil
-                        
-                        // Auto-select the next unrevealed card in fanned hand
-                        if !isLastNewCard {
-                            if let active = CardDatabase.getActivePack(), !active.isEmpty {
-                                let remaining = active.filter { !revealedCards.contains($0) && !dupes.contains($0) }
-                                if let nextTarget = remaining.first {
-                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
-                                        selectedTargetCard = nextTarget
-                                        isTargetUnlocked = false
-                                        detectedArtwork = "Trova l'opera per sbloccarla!"
-                                    }
-                                }
-                            }
-                        } else {
-                            // All fanned cards found! Go directly to collection view to see the stickers insert
-                            withAnimation(.easeInOut(duration: 0.35)) {
-                                let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
-                                activeView = .collection(activeCity)
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                isAnimatingUnlock = false
+                foundCardName = nil
+                triggerUnlockAnimation = nil
+
+                if !isLastNewCard {
+                    if let active = CardDatabase.getActivePack(), !active.isEmpty {
+                        let remaining = active.filter { !revealedCards.contains($0) && !dupes.contains($0) }
+                        if let nextTarget = remaining.first {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                                selectedTargetCard = nextTarget
+                                isTargetUnlocked = false
+                                detectedArtwork = "Trova l'opera per sbloccarla!"
                             }
                         }
                     }
+                } else {
+                    navigateToCollection()
                 }
             }
         }
     }
+
 }
 
 // MARK: - ScannerCardView: Mini Card View for Scanner Carousel (matching packet artwork card design)
