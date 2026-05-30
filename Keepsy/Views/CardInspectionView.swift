@@ -52,7 +52,7 @@ struct CardInspectionView: View {
     }
     
     private var descriptionText: String {
-        artwork?.description ?? "Nessuna descrizione disponibile per questa opera d'arte."
+        artwork?.description ?? "Nessuna descrizione disponibile per questa opera d'arte"
     }
     
     var body: some View {
