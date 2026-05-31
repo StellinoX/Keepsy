@@ -5,9 +5,22 @@ import ARKit
 struct CardDatabase {
     private static let cacheKey = "CachedRemoteArtworks"
     
-    // Cache for artworks fetched from the cloud, immediately populated on app launch
-    static var remoteArtworks: [String: NetworkArtwork] = loadFromCache()
-    static var artworksByMuseum: [String: [String]] = loadMuseumMapFromCache()
+    // Cache for artworks fetched from the cloud, immediately populated on app launch.
+    // Backing storage is guarded by `dictLock` because it is read from background threads
+    // (AR delegate, image loaders) while syncWithCloud writes it. Unprotected concurrent
+    // access to a Swift Dictionary traps with EXC_BREAKPOINT (exclusivity violation).
+    private static let dictLock = NSLock()
+    private static var _remoteArtworks: [String: NetworkArtwork] = loadFromCache()
+    private static var _artworksByMuseum: [String: [String]] = loadMuseumMapFromCache()
+
+    static var remoteArtworks: [String: NetworkArtwork] {
+        get { dictLock.lock(); defer { dictLock.unlock() }; return _remoteArtworks }
+        set { dictLock.lock(); _remoteArtworks = newValue; dictLock.unlock() }
+    }
+    static var artworksByMuseum: [String: [String]] {
+        get { dictLock.lock(); defer { dictLock.unlock() }; return _artworksByMuseum }
+        set { dictLock.lock(); _artworksByMuseum = newValue; dictLock.unlock() }
+    }
     
     private static let mapCacheKey = "CachedMuseumMap"
     private static var lastSyncTime: Date? = nil
@@ -202,12 +215,23 @@ struct CardDatabase {
 
         guard let cgImage = await rawCGImage(for: name) else { return nil }
 
+        // physicalWidthMeters reads remoteArtworks, now guarded by dictLock — safe from any thread.
         let physicalWidth = physicalWidthMeters(for: name)
         let refImage = ARReferenceImage(cgImage, orientation: .up, physicalWidth: physicalWidth)
         refImage.name = name
 
         arImageCache.setObject(refImage, forKey: name as NSString)
         return refImage
+    }
+    
+    /// Safely performs ARReferenceImage validation in a nonisolated context,
+    /// preventing compiler-inserted `@MainActor` queue assertions on background callbacks.
+    nonisolated static func validateARImage(_ refImage: ARReferenceImage, name: String) {
+        refImage.validate { error in
+            if let error = error {
+                print("⚠️ ARKit Validation Error for \(name): \(error.localizedDescription)")
+            }
+        }
     }
 
     // Parses "Misure senza cornice: 83x65x5,5 cm" → 0.83m.

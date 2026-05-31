@@ -90,11 +90,14 @@ class NetworkService {
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             try data.write(to: destinationURL, options: .atomic)
-            NotificationCenter.default.post(
-                name: NSNotification.Name("ArtworkImageDownloaded"),
-                object: nil,
-                userInfo: ["internalName": name]
-            )
+            // SwiftUI's .onReceive asserts main queue — post on main thread.
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("ArtworkImageDownloaded"),
+                    object: nil,
+                    userInfo: ["internalName": name]
+                )
+            }
         } catch {
             print("❌ Download failed for \(name): \(error.localizedDescription)")
         }

@@ -11,8 +11,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		714CF5122FC88D5600E93EA6 /* KeepsyAdmin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = KeepsyAdmin.app; path = /Users/alfi/Desktop/keepsy/build/Debug/KeepsyAdmin.app; sourceTree = "<absolute>"; };
-		714CF5292FC890C400E93EA6 /* Keepsy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = Keepsy.app; path = "/Users/alfi/Desktop/keepsy/build/Debug-iphoneos/Keepsy.app"; sourceTree = "<absolute>"; };
+		71DC06552FCB82C800E4881F /* Keepsy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Keepsy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		71DC06562FCB82C800E4881F /* KeepsyAdmin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KeepsyAdmin.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -46,6 +46,8 @@
 			isa = PBXGroup;
 			children = (
 				8157FDAC2FB47BCD00D69127 /* Keepsy */,
+				71DC06552FCB82C800E4881F /* Keepsy.app */,
+				71DC06562FCB82C800E4881F /* KeepsyAdmin.app */,
 			);
 			sourceTree = "<group>";
 		};
@@ -68,7 +70,7 @@
 			packageProductDependencies = (
 			);
 			productName = KeepsyAdmin;
-			productReference = 714CF5122FC88D5600E93EA6 /* KeepsyAdmin.app */;
+			productReference = 71DC06562FCB82C800E4881F /* KeepsyAdmin.app */;
 			productType = "com.apple.product-type.application";
 		};
 		8157FDA92FB47BCD00D69127 /* Keepsy */ = {
@@ -91,7 +93,7 @@
 				713F00992FCB597900F85055 /* FirebaseFirestore */,
 			);
 			productName = Keepsy;
-			productReference = 714CF5292FC890C400E93EA6 /* Keepsy.app */;
+			productReference = 71DC06552FCB82C800E4881F /* Keepsy.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -391,7 +393,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -426,7 +428,7 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
