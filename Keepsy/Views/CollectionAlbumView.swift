@@ -598,77 +598,91 @@ struct AlbumCardCell: View {
     let hasSynced: Bool
     let cardOpacity: Double
 
-    private var remoteURL: URL? {
-        if let urlString = CardDatabase.remoteArtworks[name]?.imageUrl {
-            return URL(string: urlString)
-        }
-        return nil
+    private var artwork: NetworkArtwork? { CardDatabase.remoteArtworks[name] }
+
+    private var cardTitle: String { artwork?.title ?? name }
+
+    private var artistDateLine: String {
+        [artwork?.artist, artwork?.date]
+            .compactMap { v -> String? in
+                guard let s = v, !s.isEmpty else { return nil }
+                return s
+            }
+            .joined(separator: "; ")
     }
 
+    private let goldBorder = LinearGradient(
+        colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+        startPoint: .topLeading, endPoint: .bottomTrailing
+    )
+
     var body: some View {
-        ZStack {
-            if isFound {
-                ZStack(alignment: .top) {
-                    ZStack {
-                        Color.white
-                        ArtImageView(cardName: name, isRevealed: isRevealed)
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 50, height: 63)
-                            .clipped()
-                            .cornerRadius(5)
-                            .padding(.top, 4)
-                            .padding(.horizontal, 4)
+        if isFound {
+            ZStack(alignment: .topTrailing) {
+                VStack(spacing: 0) {
+                    ArtImageView(cardName: name, isRevealed: isRevealed)
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 64, height: 66)
+                        .clipped()
+                        .cornerRadius(6)
+                        .padding(.top, 3)
+                        .padding(.horizontal, 4)
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(cardTitle)
+                            .font(.system(size: 5.5, weight: .bold))
+                            .foregroundColor(.black)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if !artistDateLine.isEmpty {
+                            Text(artistDateLine)
+                                .font(.system(size: 4.5))
+                                .foregroundColor(Color(white: 0.45))
+                                .lineLimit(1)
+                        }
                     }
-                    .frame(width: 58, height: 84)
-                    .cornerRadius(8)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(
-                        LinearGradient(colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: 1.5
-                    ))
-                    .opacity(cardOpacity)
-
-                    Image("pocket_outline")
-                        .resizable()
-                        .frame(width: 72, height: 94)
-                        .padding(.top, 5)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(width: 72, height: 103)
+                .frame(width: 72, height: 103, alignment: .top)
+                .background(Color.white)
+                .cornerRadius(8)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(goldBorder, lineWidth: 1.5))
+                .opacity(cardOpacity)
 
-            } else {
-                ZStack(alignment: .top) {
-                    ZStack(alignment: .topTrailing) {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color(hex: "1A0E6E"))
-                        Image("LogoKeepsy")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 29)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(
-                                LinearGradient(colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
-                                               startPoint: .topLeading, endPoint: .bottomTrailing),
-                                lineWidth: 1.5
-                            )
-                        Text(String(format: "%03d", index + 1))
-                            .font(.system(size: 7, weight: .bold, design: .monospaced))
-                            .foregroundColor(Color(hex: "1A0E6E"))
-                            .padding(.horizontal, 3)
-                            .padding(.vertical, 1.5)
-                            .background(Capsule().fill(Color(hex: "F1B40A")))
-                            .padding(.top, 3)
-                            .padding(.trailing, 3)
-                    }
-                    .frame(width: 58, height: 84)
-
-                    Image("pocket_outline")
-                        .resizable()
-                        .frame(width: 72, height: 94)
-                        .padding(.top, 5)
-                }
-                .frame(width: 72, height: 103)
+                Text(String(format: "%03d", index + 1))
+                    .font(.system(size: 5.5, weight: .bold, design: .monospaced))
+                    .foregroundColor(Color(hex: "1A0E6E"))
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1.5)
+                    .background(Capsule().fill(Color(hex: "F1B40A")))
+                    .padding(.top, 3)
+                    .padding(.trailing, 3)
             }
+            .frame(width: 72, height: 103)
+        } else {
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(hex: "1A0E6E"))
+                Image("LogoKeepsy")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 29)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(goldBorder, lineWidth: 1.5)
+                Text(String(format: "%03d", index + 1))
+                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                    .foregroundColor(Color(hex: "1A0E6E"))
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1.5)
+                    .background(Capsule().fill(Color(hex: "F1B40A")))
+                    .padding(.top, 3)
+                    .padding(.trailing, 3)
+            }
+            .frame(width: 72, height: 103)
         }
     }
 }

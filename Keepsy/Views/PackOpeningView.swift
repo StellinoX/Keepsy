@@ -29,6 +29,8 @@ struct PackOpeningView: View {
     @State private var cardScale: [CGFloat] = Array(repeating: 1.0, count: 5)
     @State private var cardOpacity: [Double] = Array(repeating: 0, count: 5)
     @State private var cardRotation: [Double] = [-4, 2, -2, 3, 0]
+    @State private var shimmerPhase: CGFloat = 0
+    @State private var nextButtonScale: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -94,25 +96,12 @@ struct PackOpeningView: View {
                     if packState == .opened {
                         VStack {
                             Spacer()
-                            VStack(spacing: 20) {
-                                // Riga 1: carte 0,1,2
-                                HStack(spacing: 12) {
-                                    ForEach(0..<min(3, cards.count), id: \.self) { index in
-                                        CardView(card: $cards[index], cardIndex: index) {
-                                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                                inspectedCard = cards[index]
-                                            }
-                                        }
-                                        .offset(x: cardOffsetX[index], y: cardOffsetY[index])
-                                        .rotationEffect(.degrees(cardRotation[index]))
-                                        .scaleEffect(cardScale[index])
-                                        .opacity(cardOpacity[index])
-                                    }
-                                }
-                                // Riga 2: carte 3,4
-                                if cards.count > 3 {
+
+                            ZStack {
+                                VStack(spacing: 20) {
+                                    // Riga 1: carte 0,1,2
                                     HStack(spacing: 12) {
-                                        ForEach(3..<min(5, cards.count), id: \.self) { index in
+                                        ForEach(0..<min(3, cards.count), id: \.self) { index in
                                             CardView(card: $cards[index], cardIndex: index) {
                                                 withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                                                     inspectedCard = cards[index]
@@ -124,15 +113,45 @@ struct PackOpeningView: View {
                                             .opacity(cardOpacity[index])
                                         }
                                     }
+                                    // Riga 2: carte 3,4
+                                    if cards.count > 3 {
+                                        HStack(spacing: 12) {
+                                            ForEach(3..<min(5, cards.count), id: \.self) { index in
+                                                CardView(card: $cards[index], cardIndex: index) {
+                                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                                        inspectedCard = cards[index]
+                                                    }
+                                                }
+                                                .offset(x: cardOffsetX[index], y: cardOffsetY[index])
+                                                .rotationEffect(.degrees(cardRotation[index]))
+                                                .scaleEffect(cardScale[index])
+                                                .opacity(cardOpacity[index])
+                                            }
+                                        }
+                                    }
                                 }
+
+                                // Diagonal shimmer sweep after cards land
+                                Rectangle()
+                                    .fill(LinearGradient(
+                                        colors: [.clear, .white.opacity(0.85), .clear],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    ))
+                                    .frame(width: 40, height: 520)
+                                    .rotationEffect(.degrees(-25))
+                                    .offset(x: -260 + shimmerPhase * 700)
+                                    .opacity(shimmerPhase > 0.001 ? 1 : 0)
+                                    .blendMode(.overlay)
+                                    .allowsHitTesting(false)
                             }
+
                             Spacer()
                             if cards.allSatisfy({ $0.isFlipped }) {
                                 Button(action: {
                                     withAnimation(.easeInOut(duration: 0.35)) {
                                         activeView = .arScanner
                                     }
-                                    // Reset the pack selection state only after the transition completes
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                                         resetPack()
                                     }
@@ -140,9 +159,29 @@ struct PackOpeningView: View {
                                     Text("NEXT")
                                         .font(.system(.headline, design: .monospaced))
                                         .bold()
-                                        .frame(width: 240, height: 50)
-                                        .background(Capsule().fill(Color(white: 0.9)))
                                         .foregroundColor(.black)
+                                        .frame(width: 240, height: 50)
+                                        .background(
+                                            Capsule()
+                                                .fill(LinearGradient(
+                                                    colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00")],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ))
+                                        )
+                                        .shadow(color: Color(hex: "F1B40A").opacity(0.55), radius: 18, x: 0, y: 7)
+                                }
+                                .scaleEffect(nextButtonScale)
+                                .onAppear {
+                                    nextButtonScale = 0
+                                    withAnimation(.spring(response: 0.52, dampingFraction: 0.62)) {
+                                        nextButtonScale = 1.08
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                            nextButtonScale = 1.0
+                                        }
+                                    }
                                 }
                                 .padding(.bottom, 60)
                             }
@@ -222,26 +261,51 @@ struct PackOpeningView: View {
     // MARK: - Animazione ingresso carte
 
     func animateCardsIn() {
-        // 1. Fai comparire le carte sovrapposte al centro (opacità = 1)
-        for index in 0..<5 {
-            cardOffsetX[index] = [123.0, 0.0, -123.0, 61.5, -61.5][index]
-            cardOffsetY[index] = [94.0, 94.0, 94.0, -94.0, -94.0][index]
-            cardScale[index] = 1.0
-            cardOpacity[index] = 1.0
-            cardRotation[index] = [-4.0, 2.0, -2.0, 3.0, 0.0][index]
+        // Cards start at center-screen (offset counters their natural grid positions),
+        // scaled down and randomly rotated — each bursts to its grid slot one by one.
+        let startOffsets: [(x: CGFloat, y: CGFloat)] = [
+            (123, 94), (0, 94), (-123, 94), (61.5, -94), (-61.5, -94)
+        ]
+        let startRotations: [Double] = [-38, 22, -30, 35, -18]
+
+        for i in 0..<5 {
+            cardOffsetX[i] = startOffsets[i].x
+            cardOffsetY[i] = startOffsets[i].y
+            cardScale[i] = 0.25
+            cardOpacity[i] = 0
+            cardRotation[i] = startRotations[i]
         }
-        
-        // 2. Dopo 0.2s, allarga e disponi le carte verso le loro posizioni nella griglia
-        let delays: [Double] = [0.0, 0.08, 0.16, 0.10, 0.18]
-        
-        for index in 0..<5 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2 + delays[index]) {
-                HapticManager.shared.triggerImpact(style: .medium)
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) {
-                    cardOffsetX[index] = 0
-                    cardOffsetY[index] = 0
-                    cardRotation[index] = 0
+
+        // Interleaved order: top-left, bottom-left, top-center, bottom-right, top-right
+        let revealOrder: [Int] = [0, 3, 1, 4, 2]
+        let stagger = 0.14
+        let baseDelay = 0.12
+
+        for seq in 0..<min(5, cards.count) {
+            let i = revealOrder[seq]
+            let delay = baseDelay + Double(seq) * stagger
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                HapticManager.shared.triggerImpact(style: seq == 0 ? .heavy : .medium)
+                withAnimation(.spring(response: 0.46, dampingFraction: 0.6)) {
+                    cardOffsetX[i] = 0
+                    cardOffsetY[i] = 0
+                    cardScale[i] = 1.08
+                    cardOpacity[i] = 1.0
+                    cardRotation[i] = 0
                 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                        cardScale[i] = 1.0
+                    }
+                }
+            }
+        }
+
+        // Shimmer sweep starts after the last card settles
+        let shimmerStart = baseDelay + Double(revealOrder.count - 1) * stagger + 0.46
+        DispatchQueue.main.asyncAfter(deadline: .now() + shimmerStart) {
+            withAnimation(.easeInOut(duration: 0.65)) {
+                shimmerPhase = 1.0
             }
         }
     }
@@ -313,7 +377,9 @@ struct PackOpeningView: View {
         inspectedCard = nil
         flashOpacity = 0.0
         showOpeningEffect = false
-        
+        shimmerPhase = 0
+        nextButtonScale = 0
+
         cardOffsetX = [123, 0, -123, 61.5, -61.5]
         cardOffsetY = [94, 94, 94, -94, -94]
         cardScale = Array(repeating: 1.0, count: 5)
@@ -575,151 +641,114 @@ struct PackExpansionRow: View {
     }
 }
 
-// MARK: - PackOpeningFlashView — effetto apertura stile Pokemon Pocket
+// MARK: - PackOpeningFlashView — warm gold burst
 
 struct PackOpeningFlashView: View {
     var onComplete: () -> Void
 
-    // Burst radiale
     @State private var burstScale: CGFloat = 0.1
     @State private var burstOpacity: Double = 0.0
-
-    // Raggi rotanti — veloci
     @State private var rayRotation: Double = 0
     @State private var rayOpacity: Double = 0.0
     @State private var rayScale: CGFloat = 0.3
-
-    // Secondo layer raggi (counter-rotate, colore diverso)
-    @State private var ray2Rotation: Double = 0
-    @State private var ray2Opacity: Double = 0.0
-
-    // Ring esplosivo
-    @State private var ringScale: CGFloat = 0.1
-    @State private var ringOpacity: Double = 0.0
-
-    // Scintille
+    @State private var ring1Scale: CGFloat = 0.1
+    @State private var ring1Opacity: Double = 0.0
+    @State private var ring2Scale: CGFloat = 0.1
+    @State private var ring2Opacity: Double = 0.0
     @State private var sparkOpacity: Double = 0.0
-    @State private var sparkScale: CGFloat = 0.2
-
-    // Fade out generale
+    @State private var sparkScale: CGFloat = 0.15
     @State private var globalOpacity: Double = 1.0
 
-    let rayColors: [Color] = [
-        Color(hex: "00CFFF"),  // ciano elettrico
-        Color(hex: "FFFFFF"),  // bianco
-        Color(hex: "7B2FFF"),  // viola
-        Color(hex: "00CFFF"),
-        Color(hex: "FFFFFF"),
-        Color(hex: "FFD700"),  // oro
+    private let goldColors: [Color] = [
+        Color(hex: "F5E480"), Color(hex: "FFFFFF"),
+        Color(hex: "F1B40A"), Color(hex: "FFD050"),
+        Color(hex: "C8860A"), Color(hex: "FFFFFF"),
     ]
 
     var body: some View {
         ZStack {
-            // 1. Burst radiale centrale — esplode verso l'esterno
+            // 1. Central radial bloom — white core fading to warm gold
             RadialGradient(
                 colors: [
-                    Color.white.opacity(0.95),
-                    Color(hex: "00CFFF").opacity(0.7),
-                    Color(hex: "7B2FFF").opacity(0.4),
+                    Color.white.opacity(0.98),
+                    Color(hex: "F5E480").opacity(0.9),
+                    Color(hex: "F1B40A").opacity(0.55),
+                    Color(hex: "9A6F00").opacity(0.25),
                     Color.clear
                 ],
                 center: .center,
                 startRadius: 0,
-                endRadius: 320
+                endRadius: 310
             )
             .scaleEffect(burstScale)
             .opacity(burstOpacity)
             .blendMode(.screen)
 
-            // 2. Raggi veloci layer 1 — ciano/bianco
+            // 2. Gold rays — static spokes, whole group rotates as one layer
             ZStack {
-                ForEach(0..<16, id: \.self) { i in
+                ForEach(0..<12, id: \.self) { i in
                     Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    .clear,
-                                    rayColors[i % rayColors.count].opacity(0.55),
-                                    .clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(width: 3 + CGFloat(i % 4) * 2, height: 700)
-                        .rotationEffect(.degrees(Double(i) * (360.0 / 16.0) + rayRotation))
+                        .fill(LinearGradient(
+                            colors: [
+                                .clear,
+                                goldColors[i % goldColors.count].opacity(0.52),
+                                .clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ))
+                        .frame(width: 2 + CGFloat(i % 4) * 1.5, height: 680)
+                        .rotationEffect(.degrees(Double(i) * 30.0)) // static per-ray angle
                 }
             }
-            .blur(radius: 3)
+            .drawingGroup() // rasterise to Metal texture once, then rotate that texture
+            .rotationEffect(.degrees(rayRotation)) // single transform drives the spin
+            .blur(radius: 1.0)
             .scaleEffect(rayScale)
             .opacity(rayOpacity)
             .blendMode(.screen)
 
-            // 3. Raggi veloci layer 2 — oro/viola, counter-rotate
-            ZStack {
-                ForEach(0..<10, id: \.self) { i in
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    .clear,
-                                    (i % 2 == 0 ? Color(hex: "FFD700") : Color(hex: "7B2FFF")).opacity(0.45),
-                                    .clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(width: 5 + CGFloat(i % 3) * 3, height: 800)
-                        .rotationEffect(.degrees(Double(i) * 36.0 + ray2Rotation))
-                }
-            }
-            .blur(radius: 5)
-            .scaleEffect(rayScale * 1.1)
-            .opacity(ray2Opacity)
-            .blendMode(.screen)
-
-            // 4. Ring esplosivo — cerchio che si espande
+            // 3. Inner ring — gold gradient expanding fast
             Circle()
                 .stroke(
                     LinearGradient(
-                        colors: [Color(hex: "00CFFF"), Color(hex: "FFFFFF"), Color(hex: "7B2FFF")],
+                        colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A")],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    lineWidth: 4
+                    lineWidth: 3.5
                 )
-                .frame(width: 200, height: 200)
-                .scaleEffect(ringScale)
-                .opacity(ringOpacity)
-                .blur(radius: 2)
+                .frame(width: 190, height: 190)
+                .scaleEffect(ring1Scale)
+                .opacity(ring1Opacity)
+                .blur(radius: 1.5)
                 .blendMode(.screen)
 
-            // Ring secondo — leggermente dopo
+            // 4. Outer ring — softer gold, slightly delayed
             Circle()
-                .stroke(Color(hex: "FFD700").opacity(0.6), lineWidth: 2)
-                .frame(width: 260, height: 260)
-                .scaleEffect(ringScale * 0.75)
-                .opacity(ringOpacity * 0.7)
+                .stroke(Color(hex: "F1B40A").opacity(0.45), lineWidth: 2)
+                .frame(width: 290, height: 290)
+                .scaleEffect(ring2Scale)
+                .opacity(ring2Opacity)
                 .blur(radius: 3)
                 .blendMode(.screen)
 
+            // 5. Ember sparks flying outward
             ZStack {
-                ForEach(0..<12, id: \.self) { i in
-                    let size = CGFloat(6 + (i % 3) * 3)
-                    let angle = Double(i) * .pi / 6.0
-                    let offsetX = CGFloat(cos(angle) * 140.0 * Double(sparkScale))
-                    let offsetY = CGFloat(sin(angle) * 140.0 * Double(sparkScale))
-                    let color = rayColors[i % rayColors.count]
-                    
+                ForEach(0..<16, id: \.self) { i in
+                    let size = CGFloat(4) + CGFloat(i % 4) * 2.5
+                    let angle = Double(i) * (.pi * 2.0 / 16.0)
+                    let radius = 145.0 * Double(sparkScale)
                     Circle()
-                        .fill(color)
+                        .fill(goldColors[i % goldColors.count])
                         .frame(width: size, height: size)
-                        .blur(radius: 2)
-                        .offset(x: offsetX, y: offsetY)
-                        .opacity(sparkOpacity)
+                        .offset(x: CGFloat(cos(angle) * radius),
+                                y: CGFloat(sin(angle) * radius))
                 }
             }
+            .drawingGroup()
+            .blur(radius: 1.5)
+            .opacity(sparkOpacity)
             .blendMode(.screen)
         }
         .opacity(globalOpacity)
@@ -728,50 +757,40 @@ struct PackOpeningFlashView: View {
     }
 
     func runAnimation() {
-        // Burst immediato
-        withAnimation(.easeOut(duration: 0.25)) {
-            burstScale = 2.2
+        withAnimation(.easeOut(duration: 0.22)) {
+            burstScale = 2.3
             burstOpacity = 1.0
         }
-
-        // Raggi appaiono veloci e ruotano
-        withAnimation(.easeOut(duration: 0.15)) {
+        withAnimation(.easeOut(duration: 0.14)) {
             rayOpacity = 1.0
-            ray2Opacity = 0.8
-            rayScale = 1.5
+            rayScale = 1.55
         }
-        // Rotazione rapida layer 1
-        withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) {
+        withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
             rayRotation = 360
         }
-        // Counter-rotazione layer 2
-        withAnimation(.linear(duration: 0.6).repeatForever(autoreverses: false)) {
-            ray2Rotation = -360
+        withAnimation(.easeOut(duration: 0.38)) {
+            ring1Scale = 4.0
+            ring1Opacity = 1.0
         }
-
-        // Ring esplode
-        withAnimation(.easeOut(duration: 0.45)) {
-            ringScale = 3.5
-            ringOpacity = 0.9
+        withAnimation(.easeOut(duration: 0.52).delay(0.08)) {
+            ring2Scale = 3.2
+            ring2Opacity = 0.8
         }
-
-        // Scintille esplodono verso l'esterno
-        withAnimation(.easeOut(duration: 0.4)) {
+        withAnimation(.easeOut(duration: 0.36)) {
             sparkOpacity = 1.0
             sparkScale = 1.0
         }
 
-        // Tutto inizia a sparire dopo 0.5s
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            withAnimation(.easeInOut(duration: 0.55)) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.46) {
+            withAnimation(.easeInOut(duration: 0.54)) {
                 burstOpacity = 0
                 rayOpacity = 0
-                ray2Opacity = 0
-                ringOpacity = 0
+                ring1Opacity = 0
+                ring2Opacity = 0
                 sparkOpacity = 0
                 globalOpacity = 0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.54) {
                 onComplete()
             }
         }

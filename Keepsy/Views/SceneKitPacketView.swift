@@ -10,40 +10,61 @@ fileprivate func createCardBackTexture() -> UIImage {
     let format = UIGraphicsImageRendererFormat()
     format.scale = 2.0
     let renderer = UIGraphicsImageRenderer(size: size, format: format)
-    
+
     let result = renderer.image { ctx in
         let context = ctx.cgContext
-        
-    
-        let rectPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 40)
-        context.addPath(rectPath.cgPath)
+        let cornerRadius: CGFloat = 58 // matches SwiftUI cr = 12/111 * 540
+
+        // 1. Clip to rounded rect
+        let clipPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: cornerRadius)
+        context.addPath(clipPath.cgPath)
         context.clip()
-        
-        let colors = [UIColor(white: 0.15, alpha: 1.0).cgColor, UIColor(white: 0.02, alpha: 1.0).cgColor]
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: [0.0, 1.0])!
-        context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: 0), end: CGPoint(x: size.width, y: size.height), options: [])
+
+        // 2. Navy blue fill matching SwiftUI cardBack (#1A0E6E)
+        UIColor(red: 0x1A / 255.0, green: 0x0E / 255.0, blue: 0x6E / 255.0, alpha: 1.0).setFill()
+        context.fill(CGRect(origin: .zero, size: size))
+
+        // 3. LogoKeepsy centered (same visual as SwiftUI cardBack)
+        if let logo = UIImage(named: "LogoKeepsy") {
+            let logoSize: CGFloat = 262
+            let logoRect = CGRect(
+                x: (size.width - logoSize) / 2,
+                y: (size.height - logoSize) / 2,
+                width: logoSize,
+                height: logoSize
+            )
+            logo.draw(in: logoRect)
+        }
+
         context.resetClip()
-        
-        rectPath.lineWidth = 8
-        UIColor(white: 1.0, alpha: 0.1).setStroke()
-        rectPath.stroke()
-        
-        let circleRadius: CGFloat = 110
-        let circleRect = CGRect(x: size.width/2 - circleRadius, y: size.height/2 - circleRadius, width: circleRadius*2, height: circleRadius*2)
-        
-        // Bottom-right highlight
+
+        // 4. Gold gradient border matching SwiftUI goldBorder
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let goldColors: [CGColor] = [
+            UIColor(red: 0xF5/255.0, green: 0xE4/255.0, blue: 0x80/255.0, alpha: 1.0).cgColor,
+            UIColor(red: 0xF1/255.0, green: 0xB4/255.0, blue: 0x0A/255.0, alpha: 1.0).cgColor,
+            UIColor(red: 0x9A/255.0, green: 0x6F/255.0, blue: 0x00/255.0, alpha: 1.0).cgColor,
+            UIColor(red: 0xF1/255.0, green: 0xB4/255.0, blue: 0x0A/255.0, alpha: 1.0).cgColor,
+            UIColor(red: 0xF5/255.0, green: 0xE4/255.0, blue: 0x80/255.0, alpha: 1.0).cgColor,
+        ]
+        let goldGradient = CGGradient(colorsSpace: colorSpace, colors: goldColors as CFArray,
+                                      locations: [0.0, 0.25, 0.5, 0.75, 1.0])!
+
+        let borderLineWidth: CGFloat = 10
+        let borderInset = borderLineWidth / 2
+        let borderPath = UIBezierPath(
+            roundedRect: CGRect(origin: .zero, size: size).insetBy(dx: borderInset, dy: borderInset),
+            cornerRadius: cornerRadius - borderInset
+        )
         context.saveGState()
-        context.setShadow(offset: CGSize(width: 3, height: 3), blur: 4, color: UIColor(white: 1.0, alpha: 0.15).cgColor)
-        UIColor(white: 0.01, alpha: 1.0).setFill()
-        context.fillEllipse(in: circleRect)
-        context.restoreGState()
-        
-        // Top-left dark shadow
-        context.saveGState()
-        context.setShadow(offset: CGSize(width: -3, height: -3), blur: 4, color: UIColor.black.cgColor)
-        UIColor(white: 0.01, alpha: 1.0).setFill()
-        context.fillEllipse(in: circleRect)
+        context.setLineWidth(borderLineWidth)
+        context.addPath(borderPath.cgPath)
+        context.replacePathWithStrokedPath()
+        context.clip()
+        context.drawLinearGradient(goldGradient,
+                                   start: CGPoint(x: 0, y: 0),
+                                   end: CGPoint(x: size.width, y: size.height),
+                                   options: [])
         context.restoreGState()
     }
     cachedCardBackTexture = result
@@ -991,93 +1012,79 @@ public class PacketCoordinator: NSObject {
     }
     
     private func animateOpen() {
-        // === FLARE: Flash bright, expand vertically, then fade out ===
+        // Keep rendering active during animation to prevent dropped frames.
+        scnView?.rendersContinuously = true
+
+        // === FLARE ===
         flareNode.opacity = 0.0
         flareNode.scale = SCNVector3(1.0, 0.1, 1.0)
-        
         let flashDuration = 0.12
         let fadeDuration = 0.6
-        
         let fadeIn = SCNAction.fadeIn(duration: 0.08)
         let scaleYUp = SCNAction.customAction(duration: flashDuration) { node, elapsedTime in
-            let progress = Float(elapsedTime / flashDuration)
-            node.scale = SCNVector3(1.0, 0.1 + progress * 1.7, 1.0)
+            node.scale = SCNVector3(1.0, 0.1 + Float(elapsedTime / flashDuration) * 1.7, 1.0)
         }
-        let flashGroup = SCNAction.group([fadeIn, scaleYUp])
-        
         let fadeOut = SCNAction.fadeOut(duration: fadeDuration)
         let scaleYDown = SCNAction.customAction(duration: fadeDuration) { node, elapsedTime in
-            let progress = Float(elapsedTime / fadeDuration)
-            node.scale = SCNVector3(1.0, 1.8 - progress * 1.78, 1.0)
+            node.scale = SCNVector3(1.0, 1.8 - Float(elapsedTime / fadeDuration) * 1.78, 1.0)
         }
-        let fadeGroup = SCNAction.group([fadeOut, scaleYDown])
-        
-        let flareSequence = SCNAction.sequence([
-            flashGroup,
+        flareNode.runAction(SCNAction.sequence([
+            SCNAction.group([fadeIn, scaleYUp]),
             SCNAction.wait(duration: 0.08),
-            fadeGroup,
+            SCNAction.group([fadeOut, scaleYDown]),
             SCNAction.removeFromParentNode()
-        ])
-        flareNode.runAction(flareSequence)
-        
-        // === PARTICLES: Explosion of glowing sparks at the tear line ===
+        ]))
+
+        // === PARTICLES ===
         let particleNode = SCNNode()
         particleNode.position = SCNVector3(0, 3.0, 0.2)
-        
-        let tearPS = createTearParticleSystem()
-        let blastPS = createCenterBlastParticleSystem()
-        
-        particleNode.addParticleSystem(tearPS)
-        particleNode.addParticleSystem(blastPS)
+        particleNode.addParticleSystem(createTearParticleSystem())
+        particleNode.addParticleSystem(createCenterBlastParticleSystem())
         tiltContainerNode.addChildNode(particleNode)
-        
-        let removeAction = SCNAction.sequence([
+        particleNode.runAction(SCNAction.sequence([
             SCNAction.wait(duration: 1.5),
             SCNAction.removeFromParentNode()
-        ])
-        particleNode.runAction(removeAction)
-        
-        // === TOP: flap + back flap + top seal fly away AS ONE RIGID BODY ===
-        // Separate Y (gravity) and Z (shoot forward) to avoid clipping during tumbling
-        let fallY = SCNAction.moveBy(x: 2.5, y: -20.0, z: 0.0, duration: 1.5)
-        fallY.timingMode = .easeIn
-        
-        let fallZ = SCNAction.moveBy(x: 0, y: 0, z: 10.0, duration: 1.5)
-        fallZ.timingMode = .easeOut // Shoots towards the camera instantly!
-        
-        let rotateAction = SCNAction.rotateBy(x: 3.2, y: 1.5, z: -1.0, duration: 1.5)
-        rotateAction.timingMode = .easeIn
-        let scaleAction = SCNAction.scale(to: 0.6, duration: 1.5)
-        scaleAction.timingMode = .easeIn
-        
-        let flapGroup = SCNAction.group([fallY, fallZ, rotateAction, scaleAction])
-        topGroupNode.runAction(flapGroup)
-        
-        // === BOTTOM: body + back body + bottom seal slide down AS ONE RIGID BODY ===
-        let bodyDownAction = SCNAction.moveBy(x: 0, y: -20.0, z: 0.0, duration: 1.4)
+        ]))
+
+        // === TOP GROUP: small flap flicks up and away quickly ===
+        let flyUp = SCNAction.moveBy(x: 2.5, y: 14.0, z: 1.0, duration: 0.9)
+        flyUp.timingMode = .easeOut
+        let topRotate = SCNAction.rotateBy(x: 2.2, y: 1.2, z: -1.0, duration: 0.9)
+        topRotate.timingMode = .linear
+        let topScale = SCNAction.scale(to: 0.3, duration: 0.9)
+        topScale.timingMode = .easeIn
+        topGroupNode.runAction(SCNAction.group([flyUp, topRotate, topScale]))
+
+        // === BOTTOM GROUP: falls DOWN and BACKWARD so it recedes behind the deck ===
+        // z: -4 moves it away from camera — deck cards stay in front, no clip-through.
+        let bodyDownAction = SCNAction.moveBy(x: 0, y: -18.0, z: -4.0, duration: 1.3)
         bodyDownAction.timingMode = .easeIn
         bottomGroupNode.runAction(bodyDownAction)
-        
-        // === DECK: Pop UP out of the packet to avoid clipping, THEN move FORWARD ===
+
+        // === DECK: slide up, then present forward — single smooth motion ===
         let wait = SCNAction.wait(duration: 0.1)
-        
-        // Phase 1: Slide UP on the Y axis ONLY (stays inside the packet's Z-layer)
-        let slideUp = SCNAction.moveBy(x: 0, y: 5.5, z: 0.0, duration: 0.5)
-        slideUp.timingMode = .easeOut
-        
-        // Phase 2: Once it's physically out of the packet, move FORWARD and DOWN to center
+
+        // Linear timing on slideUp eliminates deceleration at the top,
+        // so the transition into presentGroup has no double-pause.
+        let slideUp = SCNAction.moveBy(x: 0, y: 5.5, z: 0.0, duration: 0.45)
+        slideUp.timingMode = .linear
+
         let moveForward = SCNAction.moveBy(x: 0, y: -5.5, z: 1.0, duration: 0.6)
-        let scaleDown = SCNAction.scale(to: 0.44, duration: 0.6) // Shrink to match 2D SwiftUI size
-        // Counteract the tiltContainerNode's tilt (-0.06) to appear straight to the camera
+        let scaleDown = SCNAction.scale(to: 0.44, duration: 0.6)
         let straighten = SCNAction.rotateTo(x: 0, y: 0, z: 0.06, duration: 0.6)
         let presentGroup = SCNAction.group([moveForward, straighten, scaleDown])
         presentGroup.timingMode = .easeOut
-        
+
         deckContainer.runAction(SCNAction.sequence([wait, slideUp, presentGroup]))
-        
-        // Notify after the deck moves to the center
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
+
+        // Notify after deck reaches center.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.25) {
             self.onOpen?()
+        }
+
+        // Drop back to on-demand rendering once animations finish.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+            self.scnView?.rendersContinuously = false
         }
     }
 }
