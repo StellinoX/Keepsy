@@ -9,6 +9,10 @@ struct PackOpeningView: View {
     @Binding var activeView: ContentView.ActiveView
     @StateObject private var locationManager = LocationManager()
     @State private var packState: PackState = .selecting
+    // Museum currently selected in the swipeable pack pager. Drives which museum's
+    // cards a newly opened pack draws from. Persisted to the "currentCity" UserDefaults
+    // key on open, which ARArtworkView reads for tracking + collection routing.
+    @State private var selectedMuseumId: String = MuseumConfig.shared.museums.first?.id ?? "capodimonte"
 
     @State private var cards: [ArtworkCard] = []
     @State private var showCards = false
@@ -56,6 +60,7 @@ struct PackOpeningView: View {
             if packState == .selecting {
                 SingleScrollPackView(
                     currentCity: locationManager.currentCity,
+                    selectedMuseumId: $selectedMuseumId,
                     onStart: {
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
                             packState = .tearing
@@ -93,7 +98,7 @@ struct PackOpeningView: View {
                                 // Riga 1: carte 0,1,2
                                 HStack(spacing: 12) {
                                     ForEach(0..<min(3, cards.count), id: \.self) { index in
-                                        CardView(card: $cards[index]) {
+                                        CardView(card: $cards[index], cardIndex: index) {
                                             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                                                 inspectedCard = cards[index]
                                             }
@@ -108,7 +113,7 @@ struct PackOpeningView: View {
                                 if cards.count > 3 {
                                     HStack(spacing: 12) {
                                         ForEach(3..<min(5, cards.count), id: \.self) { index in
-                                            CardView(card: $cards[index]) {
+                                            CardView(card: $cards[index], cardIndex: index) {
                                                 withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                                                     inspectedCard = cards[index]
                                                 }
@@ -205,6 +210,11 @@ struct PackOpeningView: View {
             if synced && packState == .opened { loadActivePack() }
         }
         .onAppear {
+            // Open the pager on the active pack's museum, if one is in progress.
+            if CardDatabase.hasActivePack(),
+               let activeMuseum = UserDefaults.standard.string(forKey: "currentCity") {
+                selectedMuseumId = activeMuseum
+            }
             loadActivePack()
         }
     }
@@ -239,9 +249,12 @@ struct PackOpeningView: View {
     // MARK: - Logic
 
     func completeOpening() {
-        let artworks = CardDatabase.artworksFor(location: locationManager.currentCity).shuffled()
+        // Persist the opened museum so AR tracking + collection routing target it.
+        UserDefaults.standard.set(selectedMuseumId, forKey: "currentCity")
+
+        let artworks = CardDatabase.artworksFor(location: selectedMuseumId).shuffled()
         let selectedArtworks = Array(artworks.prefix(5))
-        
+
         self.cards = selectedArtworks.map {
             ArtworkCard(
                 name: $0,
@@ -314,106 +327,93 @@ struct PackOpeningView: View {
 
 struct SingleScrollPackView: View {
     let currentCity: String
+    @Binding var selectedMuseumId: String
     let onStart: () -> Void
     let onTapActivePack: () -> Void
 
-    @State private var foundCards: Set<String> = []
     @State private var revealedCards: Set<String> = []
     @State private var activeLocation: LocationContainer? = nil
-
     @State private var savedTearMask: UIImage?
 
-    let expansions: [(location: String, title: String)] = [
-        ("FULL_COLLECTION", "Capodimonte")
-    ]
+    private var museums: [Museum] { MuseumConfig.shared.museums }
+
+    // The museum whose pack is currently opened (awaiting AR scan), if any.
+    // Falls back to the first museum so a pack opened before museum separation
+    // existed (no stored "currentCity") still surfaces instead of orphaning.
+    private var activePackMuseum: String? {
+        guard CardDatabase.hasActivePack() else { return nil }
+        return UserDefaults.standard.string(forKey: "currentCity") ?? museums.first?.id
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
-                VStack(spacing: 0) {
-                    HStack(spacing: 5) {
-                        ZStack {
-                            Circle()
-                                .fill(LinearGradient(colors: [Color(white: 0.8), Color(white: 0.4)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .frame(width: 20, height: 20)
-                                .shadow(color: .black.opacity(0.45), radius: 8, x: 0, y: 4)
-                            Image(systemName: "location.fill")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                        Text(currentCity)
-                            .font(.system(size: 11, weight: .black))
-                            .italic()
-                            .foregroundColor(.white)
-                    }
-                    .padding(.leading, 5)
-                    .padding(.trailing, 10)
-                    .frame(width: 109, height: 30)
-                    .background(Capsule().fill(LinearGradient(colors: [Color(white: 0.18), Color(white: 0.12)], startPoint: .top, endPoint: .bottom)))
-                    .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
+                locationChip
                     .padding(.top, 105)
-                    .padding(.bottom, 30)
+                    .padding(.bottom, 16)
 
-                    if CardDatabase.hasActivePack(), let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
-                        let firstCardName = activePack[0]
-                        let isFirstCardRevealed = revealedCards.contains(firstCardName)
-
-                        ZStack(alignment: .center) {
-                            SceneKitPacketView(interactive: false, isTorn: true, firstCardName: firstCardName, isFirstCardRevealed: isFirstCardRevealed, tearMaskImage: savedTearMask)
-                                .frame(width: 310, height: 457)
-                                .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
-                        }
-                        .frame(width: 310, height: 400)
-                        .contentShape(Rectangle())
-                        .onTapGesture { onTapActivePack() }
-                        .padding(.bottom, 24)
-
-                        Button(action: { onTapActivePack() }) {
-                            Text("VEDI CARTE")
-                                .font(.system(size: 16, weight: .black)).italic()
-                                .foregroundColor(.black)
-                                .frame(width: 160, height: 44)
-                                .background(Capsule().fill(Color.orange).shadow(color: .black.opacity(0.5), radius: 39, x: 0, y: 4))
-                        }
-                        .padding(.bottom, 40)
-                    } else {
-                        ZStack {
-                            SceneKitPacketView(interactive: false)
-                                .frame(width: 170, height: 250).opacity(0.4).scaleEffect(0.82)
-                                .rotation3DEffect(.degrees(28), axis: (x: 0, y: 1, z: 0)).offset(x: -200, y: 10)
-                            SceneKitPacketView(interactive: false)
-                                .frame(width: 170, height: 250).opacity(0.4).scaleEffect(0.82)
-                                .rotation3DEffect(.degrees(-28), axis: (x: 0, y: 1, z: 0)).offset(x: 200, y: 10)
-                            SceneKitPacketView(interactive: false)
-                                .frame(width: 310, height: 457)
-                                .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
-                        }
-                        .frame(height: 400).padding(.bottom, 24)
-
-                        Button(action: { onStart() }) {
-                            Text("START")
-                                .font(.system(size: 16, weight: .black)).italic()
-                                .foregroundColor(.black)
-                                .frame(width: 134, height: 44)
-                                .background(Capsule().fill(Color(hex: "D8D8D8")).shadow(color: .black.opacity(0.5), radius: 39, x: 0, y: 4))
-                        }
-                        .padding(.bottom, 40)
+                // Pacchetti divisi per museo — scorri orizzontalmente
+                TabView(selection: $selectedMuseumId) {
+                    ForEach(museums) { museum in
+                        MuseumPackPage(
+                            museum: museum,
+                            isActiveMuseum: activePackMuseum == museum.id,
+                            savedTearMask: savedTearMask,
+                            revealedCards: revealedCards,
+                            onTapActivePack: onTapActivePack
+                        )
+                        .tag(museum.id)
                     }
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(height: 490)
 
+                // Indicatori pagina tra i pacchetti e il bottone
+                if museums.count > 1 {
+                    HStack(spacing: 7) {
+                        ForEach(museums) { museum in
+                            Circle()
+                                .fill(museum.id == selectedMuseumId ? Color.white : Color.white.opacity(0.3))
+                                .frame(width: 7, height: 7)
+                                .animation(.easeInOut(duration: 0.2), value: selectedMuseumId)
+                        }
+                    }
+                    .padding(.bottom, 14)
+                }
+
+                // Bottone statico: cambia stato in base al museo selezionato, non scorre
+                let isSelectedActive = activePackMuseum == selectedMuseumId
+                Button(action: isSelectedActive ? onTapActivePack : onStart) {
+                    Text(isSelectedActive ? "VEDI CARTE" : "START")
+                        .font(.system(size: 16, weight: .black)).italic()
+                        .foregroundColor(.black)
+                        .frame(width: isSelectedActive ? 160 : 134, height: 44)
+                        .background(
+                            Capsule()
+                                .fill(isSelectedActive ? Color.orange : Color(hex: "D8D8D8"))
+                                .shadow(color: .black.opacity(0.5), radius: 39, x: 0, y: 4)
+                        )
+                }
+                .padding(.bottom, 36)
+                .animation(.easeInOut(duration: 0.2), value: selectedMuseumId)
+
+                // Collezioni divise per museo
                 VStack(spacing: 14) {
-                    ForEach(expansions.indices, id: \.self) { idx in
-                        let item = expansions[idx]
-                        let info = progressFor(item.location, title: item.title)
-                        PackExpansionRow(progress: info.progress, onTap: { activeLocation = LocationContainer(name: item.location) })
+                    ForEach(museums) { museum in
+                        let info = progressFor(museum.id)
+                        PackExpansionRow(
+                            title: museum.name,
+                            progress: info.progress,
+                            onTap: { activeLocation = LocationContainer(name: museum.id) }
+                        )
                     }
                 }
-                .padding(.horizontal, 20).padding(.bottom, 40)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40)
             }
         }
         .ignoresSafeArea(edges: .top)
         .onAppear {
-            foundCards = CardDatabase.getFoundCards()
             revealedCards = CardDatabase.getRevealedCards()
             if let data = UserDefaults.standard.data(forKey: "activePackTearMask") {
                 savedTearMask = UIImage(data: data)
@@ -424,14 +424,78 @@ struct SingleScrollPackView: View {
         }
     }
 
-    func progressFor(_ location: String, title: String) -> (progress: Double, found: Int, total: Int) {
-        let artworks = CardDatabase.artworksFor(location: "NAPLES")
+    private var locationChip: some View {
+        HStack(spacing: 5) {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(colors: [Color(white: 0.8), Color(white: 0.4)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 20, height: 20)
+                    .shadow(color: .black.opacity(0.45), radius: 8, x: 0, y: 4)
+                Image(systemName: "location.fill")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            Text(currentCity)
+                .font(.system(size: 11, weight: .black))
+                .italic()
+                .foregroundColor(.white)
+        }
+        .padding(.leading, 5)
+        .padding(.trailing, 10)
+        .frame(width: 109, height: 30)
+        .background(Capsule().fill(LinearGradient(colors: [Color(white: 0.18), Color(white: 0.12)], startPoint: .top, endPoint: .bottom)))
+        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
+    }
+
+    func progressFor(_ museumId: String) -> (progress: Double, found: Int, total: Int) {
+        let artworks = CardDatabase.artworksFor(location: museumId)
         let found = artworks.filter { revealedCards.contains($0) }.count
         return (artworks.isEmpty ? 0 : Double(found) / Double(artworks.count), found, artworks.count)
     }
 }
 
+// MARK: - MuseumPackPage — una pagina del pager, il pacchetto di un singolo museo
+
+struct MuseumPackPage: View {
+    let museum: Museum
+    let isActiveMuseum: Bool
+    let savedTearMask: UIImage?
+    let revealedCards: Set<String>
+    let onTapActivePack: () -> Void
+
+    private var activePack: [String]? {
+        guard isActiveMuseum, let pack = CardDatabase.getActivePack(), !pack.isEmpty else { return nil }
+        return pack
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(museum.name)
+                .font(.system(size: 22, weight: .black)).italic()
+                .foregroundColor(.white)
+                .padding(.bottom, 10)
+
+            if let activePack = activePack {
+                let firstCardName = activePack[0]
+                SceneKitPacketView(interactive: false, isTorn: true, firstCardName: firstCardName,
+                                   isFirstCardRevealed: revealedCards.contains(firstCardName),
+                                   tearMaskImage: savedTearMask)
+                    .frame(width: 290, height: 427)
+                    .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onTapActivePack() }
+            } else {
+                SceneKitPacketView(interactive: false)
+                    .frame(width: 290, height: 427)
+                    .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
+            }
+        }
+        .padding(.top, 4)
+    }
+}
+
 struct PackExpansionRow: View {
+    let title: String
     let progress: Double
     let onTap: () -> Void
     var isComplete: Bool { progress >= 1.0 }
@@ -467,8 +531,11 @@ struct PackExpansionRow: View {
                     
                     Spacer()
                     
-                    // Percentuale e barra di progresso in basso a destra
+                    // Nome museo + percentuale + barra di progresso in basso a destra
                     VStack(alignment: .trailing, spacing: 6) {
+                        Text(title)
+                            .font(.system(size: 15, weight: .bold)).italic()
+                            .foregroundColor(.white.opacity(0.85))
                         Text(percentText)
                             .font(.system(size: 28, weight: .bold)).italic()
                             .foregroundColor(.white)

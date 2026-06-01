@@ -139,8 +139,11 @@ struct CardInspectionView: View {
                                 }
                             }
                             .frame(width: 250, height: 380)
-                            .background(card.gradient)
+                            .background(Color(hex: "1A0E6E"))
                             .cornerRadius(20)
+                            .overlay(RoundedRectangle(cornerRadius: 20).stroke(
+                                LinearGradient(colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2))
                             .shadow(color: Color.white.opacity(0.12), radius: 15)
                         } else {
                             // Modalità bustina: il meraviglioso Museum Archive Details Sheet
@@ -256,61 +259,49 @@ struct CardInspectionView: View {
                                 .padding(.horizontal, 12)
                         }
                         .frame(width: 250, height: 380)
-                        .background(card.gradient)
+                        .background(Color.white)
                         .cornerRadius(20)
-                        .shadow(color: Color.white.opacity(0.12), radius: 15)
+                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(
+                            LinearGradient(colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                                           startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2))
+                        .shadow(color: .black.opacity(0.2), radius: 15, x: 0, y: 8)
                         .opacity(abs(currentRotation.truncatingRemainder(dividingBy: 360)) > 90 && abs(currentRotation.truncatingRemainder(dividingBy: 360)) < 270 ? 0 : 1)
                     } else {
-                        // Modalità Bustina: comportamento e layout originale (testo sulla carta)
+                        // Modalità Bustina: artwork pulita con info strip, design nuovo
                         VStack(spacing: 0) {
-                            Group {
-                                ArtImageView(cardName: card.name, isRevealed: isRevealed)
-                            }
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 280, height: 350)
-                            .cornerRadius(20)
-                            .padding(.top, 15)
-                            .padding(.horizontal, 15)
-                            
-                            Spacer()
-                            
-                            ZStack {
-                                Rectangle()
-                                    .fill(Color.clear)
-                                    .frame(height: 105)
-                                    
-                                if isRevealed {
-                                    VStack(spacing: 4) {
-                                        Text(card.title)
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .multilineTextAlignment(.center)
-                                            .lineLimit(2)
-                                        
-                                        if let description = card.description {
-                                            Text(description)
-                                                .font(.system(size: 12))
-                                                .foregroundColor(.white.opacity(0.8))
-                                                .multilineTextAlignment(.center)
-                                                .lineLimit(3)
-                                        }
-                                    }
-                                    .padding(.horizontal, 10)
-                                } else {
-                                    VStack(spacing: 4) {
-                                        Text(card.title)
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .multilineTextAlignment(.center)
-                                            .lineLimit(2)
-                                    }
-                                    .padding(.horizontal, 10)
+                            ArtImageView(cardName: card.name, isRevealed: isRevealed)
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 280, height: 350)
+                                .clipped()
+                                .cornerRadius(20)
+                                .padding(.top, 15)
+                                .padding(.horizontal, 15)
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(card.title)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.black)
+                                    .lineLimit(2)
+                                if let details = CardDatabase.remoteArtworks[card.name],
+                                   let artist = details.artist, !artist.isEmpty {
+                                    Text(artist)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color(white: 0.45))
+                                        .lineLimit(1)
                                 }
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+
+                            Spacer()
                         }
                         .frame(width: 310, height: 470)
-                        .background(card.gradient)
+                        .background(Color.white)
                         .cornerRadius(24)
+                        .overlay(RoundedRectangle(cornerRadius: 24).stroke(
+                            LinearGradient(colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                                           startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 2))
                         .opacity(abs(currentRotation.truncatingRemainder(dividingBy: 360)) > 90 && abs(currentRotation.truncatingRemainder(dividingBy: 360)) < 270 ? 0 : 1)
                     }
                 }

@@ -439,26 +439,29 @@ struct ScannerCardView: View {
     let height: CGFloat
     
     var body: some View {
-        let gradient = CardDatabase.gradientFor(name: name)
+        let cr = width * 12 / 111
         let imgWidth = width * 101 / 111
-        let imgHeight = height * 125 / 168
+        let imgHeight = height * 116 / 168
         let paddingSize = width * 5 / 111
-        
+
         VStack(spacing: 0) {
-            Group {
-                ArtImageView(cardName: name)
-            }
-            .aspectRatio(contentMode: .fill)
-            .frame(width: imgWidth, height: imgHeight)
-            .cornerRadius(width * 12 / 111)
-            .padding(.top, paddingSize)
-            .padding(.horizontal, paddingSize)
-            
+            ArtImageView(cardName: name)
+                .aspectRatio(contentMode: .fill)
+                .frame(width: imgWidth, height: imgHeight)
+                .clipped()
+                .cornerRadius(cr - 2)
+                .padding(.top, paddingSize)
+                .padding(.horizontal, paddingSize)
             Spacer()
         }
         .frame(width: width, height: height)
-        .background(gradient)
-        .cornerRadius(width * 12 / 111)
+        .background(Color.white)
+        .cornerRadius(cr)
+        .overlay(RoundedRectangle(cornerRadius: cr).stroke(
+            LinearGradient(colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                           startPoint: .topLeading, endPoint: .bottomTrailing),
+            lineWidth: 2
+        ))
     }
 }
 

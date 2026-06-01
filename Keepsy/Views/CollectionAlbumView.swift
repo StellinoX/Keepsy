@@ -334,21 +334,26 @@ struct CollectionAlbumView: View {
     @ViewBuilder
     func flyingCardView(for name: String) -> some View {
         let pad = dynamicPadding
+        let cr = flyingCornerRadius
         VStack(spacing: 0) {
             ArtImageView(cardName: name, isRevealed: true)
                 .aspectRatio(contentMode: .fill)
                 .frame(width: flyingFrame.width - pad * 2, height: flyingFrame.height - pad * 2)
-                .cornerRadius(max(4, flyingCornerRadius - pad))
+                .clipped()
+                .cornerRadius(max(4, cr - pad))
                 .padding(pad)
         }
         .frame(width: flyingFrame.width, height: flyingFrame.height)
-        .background(CardDatabase.gradientFor(name: name))
-        .cornerRadius(flyingCornerRadius)
+        .background(Color.white)
+        .cornerRadius(cr)
         .overlay(
-            RoundedRectangle(cornerRadius: flyingCornerRadius)
-                .stroke(CardDatabase.borderGradientFor(name: name), lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: cr)
+                .stroke(
+                    LinearGradient(colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing),
+                    lineWidth: 1.5)
         )
-        .shadow(color: Color.white.opacity(0.3), radius: 10)
+        .shadow(color: .black.opacity(0.25), radius: 10, x: 0, y: 4)
         .opacity(flyingOpacity)
         .position(x: flyingFrame.midX, y: flyingFrame.midY)  // stesso spazio "root"
     }
@@ -604,18 +609,23 @@ struct AlbumCardCell: View {
         ZStack {
             if isFound {
                 ZStack(alignment: .top) {
-                    VStack(spacing: 0) {
+                    ZStack {
+                        Color.white
                         ArtImageView(cardName: name, isRevealed: isRevealed)
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: 50, height: 76)
+                            .frame(width: 50, height: 63)
+                            .clipped()
                             .cornerRadius(5)
-                            .padding(4)
+                            .padding(.top, 4)
+                            .padding(.horizontal, 4)
                     }
                     .frame(width: 58, height: 84)
-                    .background(CardDatabase.gradientFor(name: name))
                     .cornerRadius(8)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(CardDatabase.borderGradientFor(name: name), lineWidth: 1))
-                    .shadow(color: Color.white.opacity(0.35), radius: 6, x: 0, y: 0)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(
+                        LinearGradient(colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1.5
+                    ))
                     .opacity(cardOpacity)
 
                     Image("pocket_outline")
@@ -626,26 +636,38 @@ struct AlbumCardCell: View {
                 .frame(width: 72, height: 103)
 
             } else {
-                ZStack(alignment: .bottom) {
-                    ZStack(alignment: .center) {
-                        Text(String(format: "%03d", index + 1))
-                            .font(.custom("Helvetica-BoldOblique", size: 17))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [Color(hex: "000000"), Color(hex: "6F6F6F")],
-                                    startPoint: .topTrailing,
-                                    endPoint: .bottomLeading
-                                )
-                            )
-                            .shadow(color: Color.black.opacity(0.25), radius: 1, x: 0, y: 1)
-                            .padding(.top, 4)
-
-                        Image("pocket_outline")
+                ZStack(alignment: .top) {
+                    ZStack(alignment: .topTrailing) {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(hex: "1A0E6E"))
+                        Image("LogoKeepsy")
                             .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 29)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(
+                                LinearGradient(colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                                lineWidth: 1.5
+                            )
+                        Text(String(format: "%03d", index + 1))
+                            .font(.system(size: 7, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(hex: "1A0E6E"))
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1.5)
+                            .background(Capsule().fill(Color(hex: "F1B40A")))
+                            .padding(.top, 3)
+                            .padding(.trailing, 3)
                     }
-                    .frame(width: 72, height: 94)
+                    .frame(width: 58, height: 84)
+
+                    Image("pocket_outline")
+                        .resizable()
+                        .frame(width: 72, height: 94)
+                        .padding(.top, 5)
                 }
-                .frame(width: 72, height: 103, alignment: .bottom)
+                .frame(width: 72, height: 103)
             }
         }
     }

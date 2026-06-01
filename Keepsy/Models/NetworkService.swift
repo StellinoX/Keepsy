@@ -32,7 +32,9 @@ class NetworkService {
     }
 
     func fetchArtworks(for museumId: String) async throws -> [NetworkArtwork] {
-        let snapshot = try await db.collection("artworks").getDocuments()
+        let snapshot = try await db.collection("artworks")
+            .whereField("museumId", isEqualTo: museumId)
+            .getDocuments()
 
         var artworks: [NetworkArtwork] = []
         var pendingDownloads: [(url: String, name: String)] = []
