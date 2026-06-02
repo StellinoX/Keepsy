@@ -50,10 +50,18 @@ struct CardView: View {
 
     // MARK: - Card Back (unrevealed)
 
+    private var cardBackGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: "2D1C76"), Color(hex: "432B3F")],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
     private var cardBack: some View {
         ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: cr)
-                .fill(Color(hex: "1A0E6E"))
+                .fill(cardBackGradient)
 
             Image("LogoKeepsy")
                 .resizable()
@@ -63,83 +71,129 @@ struct CardView: View {
 
             RoundedRectangle(cornerRadius: cr)
                 .stroke(goldBorder, lineWidth: 2)
-
-            if let idx = cardIndex {
-                badge(idx)
-                    .padding(.top, 5)
-                    .padding(.trailing, 5)
-            }
         }
         .frame(width: w, height: h)
     }
-
-    // MARK: - Card Front (flipped / found)
 
     private var cardFront: some View {
-        let imageH: CGFloat = 116
         let isRevealed = CardDatabase.getRevealedCards().contains(card.name)
+        return ArtworkCardFrontView(
+            name: card.name,
+            title: card.title,
+            cardIndex: cardIndex,
+            width: w,
+            height: h,
+            isRevealed: isRevealed,
+            goldBorder: goldBorder
+        )
+    }
+}
 
-        return ZStack(alignment: .topTrailing) {
-            VStack(spacing: 0) {
-                // Artwork image
-                ArtImageView(cardName: card.name, isRevealed: isRevealed)
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: w - 10, height: imageH)
-                    .clipped()
-                    .cornerRadius(cr - 2)
-                    .padding(.top, 5)
-                    .padding(.horizontal, 5)
+// MARK: - Reusable Scalable Card Front
+struct ArtworkCardFrontView: View {
+    let name: String
+    let title: String
+    let cardIndex: Int?
+    let width: CGFloat
+    let height: CGFloat
+    let isRevealed: Bool
+    let goldBorder: LinearGradient
 
-                // Info strip
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(card.title)
-                        .font(.system(size: 7.5, weight: .bold))
-                        .foregroundColor(.black)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+    private var scale: CGFloat { width / 111.0 }
+    private var cr: CGFloat { 12 * scale }
+    private var artwork: NetworkArtwork? { CardDatabase.remoteArtworks[name] }
 
-                    if let art = artwork {
-                        let line = [art.artist, art.date]
-                            .compactMap { v -> String? in
-                                guard let s = v, !s.isEmpty else { return nil }
-                                return s
-                            }
-                            .joined(separator: "; ")
-                        if !line.isEmpty {
-                            Text(line)
-                                .font(.system(size: 6.5))
-                                .foregroundColor(Color(white: 0.45))
-                                .lineLimit(1)
-                        }
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            // 1. Full-bleed image
+            ArtImageView(cardName: name, isRevealed: isRevealed)
+                .aspectRatio(contentMode: .fill)
+                .frame(width: width, height: height)
+                .clipped()
+                .cornerRadius(cr)
+
+            // 2. Info Overlay (Title and Author/Year)
+            VStack(alignment: .leading, spacing: 3 * scale) {
+                // Title Box (Rectangle 89)
+                Text(title)
+                    .font(.system(size: 5.5 * scale, weight: .bold))
+                    .foregroundColor(.black)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, 5 * scale)
+                    .padding(.vertical, 3 * scale)
+                    .frame(width: 105 * scale)
+                    .frame(minHeight: 19 * scale, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3 * scale)
+                            .fill(Color.white)
+                            .overlay(RoundedRectangle(cornerRadius: 3 * scale).stroke(Color.black.opacity(0.12), lineWidth: 0.2 * scale))
+                            .shadow(color: .black.opacity(0.35), radius: 14 * scale / 2.0, x: 0, y: -4 * scale / 2.0)
+                    )
+
+                // Author/Year Box (Rectangle 90)
+                let authorText = [artwork?.artist, artwork?.date]
+                    .compactMap { v -> String? in
+                        guard let s = v, !s.isEmpty else { return nil }
+                        return s
                     }
-                }
-                .padding(.horizontal, 7)
-                .padding(.vertical, 5)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(width: w, height: h, alignment: .top)
-            .background(Color.white)
-            .cornerRadius(cr)
-            .overlay(RoundedRectangle(cornerRadius: cr).stroke(goldBorder, lineWidth: 2))
+                    .joined(separator: "; ")
 
+                if !authorText.isEmpty {
+                    Text(authorText)
+                        .font(.system(size: 3.2 * scale).italic())
+                        .foregroundColor(Color(white: 0.45))
+                        .lineLimit(1)
+                        .padding(.horizontal, 4 * scale)
+                        .frame(height: 7 * scale)
+                        .frame(minWidth: 40 * scale)
+                        .background(
+                            Capsule()
+                                .fill(Color.white)
+                                .overlay(Capsule().stroke(Color.black.opacity(0.12), lineWidth: 0.2 * scale))
+                                .shadow(color: .black.opacity(0.35), radius: 14 * scale / 2.0, x: 0, y: -4 * scale / 2.0)
+                        )
+                }
+            }
+            .padding(.leading, 3 * scale)
+            .padding(.bottom, 4 * scale)
+
+            // 3. Number Badge (Top Right) (Rectangle 88)
             if let idx = cardIndex {
-                badge(idx)
-                    .padding(.top, 5)
-                    .padding(.trailing, 5)
+                VStack {
+                    HStack {
+                        Spacer()
+                        
+                        let numStr = String(format: "%03d", idx + 1)
+                        Text(numStr)
+                            .font(.system(size: 4.2 * scale, weight: .black, design: .default).italic())
+                            .overlay(
+                                LinearGradient(
+                                    colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .mask(
+                                Text(numStr)
+                                    .font(.system(size: 4.2 * scale, weight: .black, design: .default).italic())
+                            )
+                            .frame(width: 17 * scale, height: 7 * scale)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white)
+                                    .overlay(Capsule().stroke(Color.black.opacity(0.12), lineWidth: 0.3 * scale))
+                                    .shadow(color: .black.opacity(0.87), radius: 3 * scale / 2.0, x: 0, y: 0)
+                            )
+                            .padding(.top, 3 * scale)
+                            .padding(.trailing, 3 * scale)
+                    }
+                    Spacer()
+                }
             }
         }
-        .frame(width: w, height: h)
-        .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
-    }
-
-    // MARK: - Number Badge
-
-    private func badge(_ index: Int) -> some View {
-        Text(String(format: "%03d", index + 1))
-            .font(.system(size: 7.5, weight: .bold, design: .monospaced))
-            .foregroundColor(Color(hex: "1A0E6E"))
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-            .background(Capsule().fill(Color(hex: "F1B40A")))
+        .frame(width: width, height: height)
+        .overlay(RoundedRectangle(cornerRadius: cr).stroke(Color(hex: "B1B1B1"), lineWidth: 2))
+        .shadow(color: .black.opacity(0.25), radius: 6 * scale, x: 0, y: 3 * scale)
     }
 }

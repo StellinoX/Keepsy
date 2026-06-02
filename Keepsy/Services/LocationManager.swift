@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 import Combine
-import MapKit
+@preconcurrency import MapKit
 
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
@@ -45,25 +45,29 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         if #available(iOS 26.0, *) {
             Task {
-                if let request = MKReverseGeocodingRequest(location: location) {
-                    do {
-                        let mapItems = try await request.mapItems
-                        if let firstItem = mapItems.first, let city = firstItem.addressRepresentations?.cityName {
-                            await MainActor.run {
-                                let upperCity = city.uppercased()
-                                self.currentCity = upperCity
-                                self.isInNaples = (upperCity == "NAPLES" || upperCity == "NAPOLI")
-                            }
-                        }
-                    } catch {
-                        // Suppress timeout errors on poor network/simulator
-                        // print("Reverse geocoding failed: \(error.localizedDescription)")
-                    }
+                if let city = await reverseGeocode(location: location) {
+                    let upperCity = city.uppercased()
+                    self.currentCity = upperCity
+                    self.isInNaples = (upperCity == "NAPLES" || upperCity == "NAPOLI")
                 }
             }
         } else {
             performLegacyGeocoding(location: location)
         }
+    }
+    
+    nonisolated private func reverseGeocode(location: CLLocation) async -> String? {
+        if #available(iOS 26.0, *) {
+            if let request = MKReverseGeocodingRequest(location: location) {
+                do {
+                    let mapItems = try await request.mapItems
+                    return mapItems.first?.addressRepresentations?.cityName
+                } catch {
+                    return nil
+                }
+            }
+        }
+        return nil
     }
     
     @available(iOS, deprecated: 26.0)

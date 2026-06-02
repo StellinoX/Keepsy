@@ -78,9 +78,9 @@ struct CollectionAlbumView: View {
     var destinationFrame: CGRect {
         let sw = screenSize.width
         let sh = screenSize.height
-        let w: CGFloat = 250
-        let h: CGFloat = 380
-        return CGRect(x: (sw - w) / 2, y: (sh - h) / 2 - 80, width: w, height: h)
+        let w: CGFloat = 310
+        let h: CGFloat = 470
+        return CGRect(x: (sw - w) / 2, y: (sh - h) / 2 - 50, width: w, height: h)
     }
     var body: some View {
         // GeometryReader cattura le dimensioni schermo — usate da tutte le animazioni
@@ -90,27 +90,47 @@ struct CollectionAlbumView: View {
             Color(red: 0.05, green: 0.05, blue: 0.1).ignoresSafeArea()
             GridBackground()
 
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 if showCloseButton {
-                    HStack {
-                        Spacer()
-                        Text(headerTitle)
-                            .font(.system(.headline, design: .monospaced))
-                            .bold()
-                            .foregroundColor(.white)
-                        Spacer()
-                    }
-                    .padding(.top, 83 + 12)
+                    Spacer().frame(height: 83)
                 } else {
                     Spacer().frame(height: 40)
                 }
 
+                // ── EXPERIENCE CARD SECTION ──────────────────────────────────
+                VStack(spacing: 12) {
+                    Text("EXPERIENCE CARD")
+                        .font(.system(size: 13, weight: .black)).italic()
+                        .foregroundColor(.white)
+                        .tracking(1.5)
+                    
+                    // Large "?" Indigo-Blue Card
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 24)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        
+                        Text("?")
+                            .font(.system(size: 80, weight: .black))
+                            .foregroundColor(.white)
+                    }
+                    .frame(width: 180, height: 270)
+                    .shadow(color: Color(hex: "5168C4").opacity(0.4), radius: 25, x: 0, y: 10)
+                }
+                .padding(.top, 10)
+
+                // ── ALBUM GRID CONTAINER ─────────────────────────────────────
                 ZStack {
                     RoundedRectangle(cornerRadius: 33)
                         .fill(Color(white: 0.12))
                         .overlay(RoundedRectangle(cornerRadius: 33).stroke(
                             LinearGradient(
-                                colors: [Color(hex: "B1B1B1"), Color(hex: "B1B1B1").opacity(0.15)],
+                                colors: [Color(hex: "B1B1B1"), Color(hex: "464646")],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -169,89 +189,23 @@ struct CollectionAlbumView: View {
                     HapticManager.shared.triggerImpact(style: .light)
                     onClose?()
                 }) {
-                    HStack(spacing: 5) {
+                    HStack(spacing: 6) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 15, weight: .bold))
                         Text("Back")
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.system(size: 15, weight: .bold))
                     }
                     .foregroundColor(.white)
                     .frame(width: 85, height: 44)
                     .background(
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        Capsule().fill(Color(hex: "383838"))
                     )
-                    .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
+                    .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 4)
                 }
                 .position(x: 30 + 85/2, y: 83 + 44/2)
             }
 
-            // FLOATING CARDS BAR — album-sized cards floating at top during sticker intro
-            if stickerIntroActive && !recentlyCompletedPack.isEmpty {
-                VStack(spacing: 8) {
-                    Text("NUOVE OPERE RIVELATE!")
-                        .font(.system(size: 13, weight: .black, design: .monospaced))
-                        .italic()
-                        .foregroundColor(Color(hex: "FFD700"))
-                        .shadow(color: .black, radius: 2)
-                    
-                    HStack(spacing: 12) {
-                        ForEach(recentlyCompletedPack, id: \.self) { name in
-                            let isCurrent = name == currentlyAnimatingSticker
-                            let isAnimated = animatedCompletedCards.contains(name)
-                            
-                            GeometryReader { cardGeo in
-                                VStack(spacing: 0) {
-                                    ArtImageView(cardName: name, isRevealed: true)
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 50, height: 76)
-                                        .cornerRadius(5)
-                                        .padding(4)
-                                }
-                                .frame(width: 58, height: 84)
-                                .background(CardDatabase.gradientFor(name: name))
-                                .cornerRadius(8)
-                                .overlay(
-                                    Group {
-                                        if isCurrent {
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(Color(hex: "4CD964"), lineWidth: 2)
-                                        } else {
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(CardDatabase.borderGradientFor(name: name), lineWidth: 1)
-                                        }
-                                    }
-                                )
-                                .shadow(color: isCurrent ? Color(hex: "4CD964").opacity(0.6) : Color.black.opacity(0.3), radius: isCurrent ? 8 : 4)
-                                .opacity(isAnimated ? 0.25 : (isCurrent ? 0.0 : 1.0))
-                                .scaleEffect(isCurrent ? 0.8 : 1.0)
-                                .onAppear {
-                                    let frame = cardGeo.frame(in: .named("root"))
-                                    frameTracker.floatingCardFrames[name] = frame
-                                }
-
-                            }
-                            .frame(width: 58, height: 84)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.black.opacity(0.6))
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.15), lineWidth: 1))
-                    )
-                }
-                .padding(.horizontal, 20)
-                .position(x: screenSize.width / 2, y: screenSize.height - 120)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            // Floating cards bar removed - cards now animate directly from the screen center
             
             // Flying card e overlay dentro lo stesso ZStack "root"
             // così .position usa le stesse coordinate del GeometryReader
@@ -264,7 +218,7 @@ struct CollectionAlbumView: View {
 
                 // Flying card — posizionata con .position nello spazio "root"
                 // Viene nascosta quando la CardInspectionView interattiva è aperta (.open) per evitare doppioni
-                if let name = animatingCardName, animationPhase != .idle {
+                if let name = animatingCardName, animationPhase != .idle && animationPhase != .open {
                     flyingCardView(for: name)
                         .id(name)
                 }
@@ -333,27 +287,21 @@ struct CollectionAlbumView: View {
 
     @ViewBuilder
     func flyingCardView(for name: String) -> some View {
-        let pad = dynamicPadding
-        let cr = flyingCornerRadius
-        VStack(spacing: 0) {
-            ArtImageView(cardName: name, isRevealed: true)
+        let isRevealed = CardDatabase.getRevealedCards().contains(name)
+        let scale = flyingFrame.width / 111.0
+        let cr = 12 * scale
+
+        ZStack {
+            ArtImageView(cardName: name, isRevealed: isRevealed)
                 .aspectRatio(contentMode: .fill)
-                .frame(width: flyingFrame.width - pad * 2, height: flyingFrame.height - pad * 2)
+                .frame(width: flyingFrame.width, height: flyingFrame.height)
                 .clipped()
-                .cornerRadius(max(4, cr - pad))
-                .padding(pad)
+                .cornerRadius(cr)
+
+            RoundedRectangle(cornerRadius: cr)
+                .stroke(Color(hex: "B1B1B1"), lineWidth: 2)
         }
         .frame(width: flyingFrame.width, height: flyingFrame.height)
-        .background(Color.white)
-        .cornerRadius(cr)
-        .overlay(
-            RoundedRectangle(cornerRadius: cr)
-                .stroke(
-                    LinearGradient(colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing),
-                    lineWidth: 1.5)
-        )
-        .shadow(color: .black.opacity(0.25), radius: 10, x: 0, y: 4)
         .opacity(flyingOpacity)
         .position(x: flyingFrame.midX, y: flyingFrame.midY)  // stesso spazio "root"
     }
@@ -368,7 +316,7 @@ struct CollectionAlbumView: View {
         flyingOpacity = 1.0
         cellCardOpacity = 0
         overlayOpacity = 0
-        inspectionOpacity = 0
+        alignmentCheck()
         pocketOverlayOpacity = 1.0   // la bustina copre la carta mentre esce
 
         HapticManager.shared.triggerImpact(style: .medium)
@@ -388,6 +336,10 @@ struct CollectionAlbumView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
             startZoomAnimation()
         }
+    }
+
+    private func alignmentCheck() {
+        inspectionOpacity = 0
     }
 
     func startZoomAnimation() {
@@ -519,10 +471,10 @@ struct CollectionAlbumView: View {
             let finalPocketFrame = CGRect(x: f.minX, y: f.minY + 5, width: 72, height: 94)
             let finalPulledSourceFrame = CGRect(x: finalSourceFrame.minX, y: finalSourceFrame.minY - 90, width: 58, height: 84) // Shifted up by 90pt so it starts completely outside/above the pocket slot!
             
-            // Measured source position in the bottom bar
-            let sourcePos = frameTracker.floatingCardFrames[cardName] ?? CGRect(
+            // Start the card flight from the center of the screen
+            let sourcePos = CGRect(
                 x: screenSize.width / 2 - 29,
-                y: screenSize.height - 120 + 20,
+                y: screenSize.height / 2 - 42,
                 width: 58,
                 height: 84
             )
@@ -597,92 +549,64 @@ struct AlbumCardCell: View {
     let isRevealed: Bool
     let hasSynced: Bool
     let cardOpacity: Double
+    let isAnimating: Bool
 
-    private var artwork: NetworkArtwork? { CardDatabase.remoteArtworks[name] }
-
-    private var cardTitle: String { artwork?.title ?? name }
-
-    private var artistDateLine: String {
-        [artwork?.artist, artwork?.date]
-            .compactMap { v -> String? in
-                guard let s = v, !s.isEmpty else { return nil }
-                return s
-            }
-            .joined(separator: "; ")
+    private var remoteURL: URL? {
+        if let urlString = CardDatabase.remoteArtworks[name]?.imageUrl {
+            return URL(string: urlString)
+        }
+        return nil
     }
 
-    private let goldBorder = LinearGradient(
-        colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
-        startPoint: .topLeading, endPoint: .bottomTrailing
-    )
-
     var body: some View {
-        if isFound {
-            ZStack(alignment: .topTrailing) {
-                VStack(spacing: 0) {
-                    ArtImageView(cardName: name, isRevealed: isRevealed)
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 64, height: 66)
-                        .clipped()
-                        .cornerRadius(6)
-                        .padding(.top, 3)
-                        .padding(.horizontal, 4)
+        ZStack {
+            if isFound {
+                ZStack(alignment: .top) {
+                    let borderGrad = CardDatabase.borderGradientFor(name: name)
+                    ArtworkCardFrontView(
+                        name: name,
+                        title: CardDatabase.remoteArtworks[name]?.title ?? CardDatabase.cleanedArtworkName(name),
+                        cardIndex: index,
+                        width: 58,
+                        height: 84,
+                        isRevealed: isRevealed,
+                        goldBorder: borderGrad
+                    )
+                    .opacity(cardOpacity)
 
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(cardTitle)
-                            .font(.system(size: 5.5, weight: .bold))
-                            .foregroundColor(.black)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
+                    if !isAnimating {
+                        Image("pocket_outline")
+                            .resizable()
+                            .frame(width: 72, height: 94)
+                            .padding(.top, 5)
+                    }
+                }
+                .frame(width: 72, height: 103)
 
-                        if !artistDateLine.isEmpty {
-                            Text(artistDateLine)
-                                .font(.system(size: 4.5))
-                                .foregroundColor(Color(white: 0.45))
-                                .lineLimit(1)
+            } else {
+                ZStack(alignment: .bottom) {
+                    ZStack(alignment: .center) {
+                        Text(String(format: "%03d", index + 1))
+                            .font(.custom("Helvetica-BoldOblique", size: 17))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hex: "000000"), Color(hex: "6F6F6F")],
+                                    startPoint: .topTrailing,
+                                    endPoint: .bottomLeading
+                                )
+                            )
+                            .shadow(color: Color.black.opacity(0.25), radius: 1, x: 0, y: 1)
+                            .padding(.top, 4)
+
+                        if !isAnimating {
+                            Image("pocket_outline")
+                                .resizable()
                         }
                     }
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(width: 72, height: 94)
                 }
-                .frame(width: 72, height: 103, alignment: .top)
-                .background(Color.white)
-                .cornerRadius(8)
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(goldBorder, lineWidth: 1.5))
-                .opacity(cardOpacity)
-
-                Text(String(format: "%03d", index + 1))
-                    .font(.system(size: 5.5, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color(hex: "1A0E6E"))
-                    .padding(.horizontal, 3)
-                    .padding(.vertical, 1.5)
-                    .background(Capsule().fill(Color(hex: "F1B40A")))
-                    .padding(.top, 3)
-                    .padding(.trailing, 3)
+                .frame(width: 72, height: 103, alignment: .bottom)
             }
-            .frame(width: 72, height: 103)
-        } else {
-            ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(hex: "1A0E6E"))
-                Image("LogoKeepsy")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 29)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(goldBorder, lineWidth: 1.5)
-                Text(String(format: "%03d", index + 1))
-                    .font(.system(size: 7, weight: .bold, design: .monospaced))
-                    .foregroundColor(Color(hex: "1A0E6E"))
-                    .padding(.horizontal, 3)
-                    .padding(.vertical, 1.5)
-                    .background(Capsule().fill(Color(hex: "F1B40A")))
-                    .padding(.top, 3)
-                    .padding(.trailing, 3)
-            }
-            .frame(width: 72, height: 103)
         }
     }
 }
@@ -735,10 +659,11 @@ struct StickerGridView: View, Equatable {
                 AlbumCardCell(
                     name: name,
                     index: index,
-                    isFound: foundCards.contains(name) || recentlyCompletedPack.contains(name),
+                    isFound: revealedCards.contains(name) || recentlyCompletedPack.contains(name),
                     isRevealed: revealedCards.contains(name) && !recentlyCompletedPack.contains(name) ? true : animatedCompletedCards.contains(name),
                     hasSynced: hasSyncedWithCloud,
-                    cardOpacity: (animatingCardName == name) ? cellCardOpacity : (recentlyCompletedPack.contains(name) && !animatedCompletedCards.contains(name) ? 0.0 : 1.0)
+                    cardOpacity: (animatingCardName == name) ? cellCardOpacity : (recentlyCompletedPack.contains(name) && !animatedCompletedCards.contains(name) ? 0.0 : 1.0),
+                    isAnimating: animatingCardName == name
                 )
                 .contentShape(Rectangle())
                 .background(
@@ -751,7 +676,7 @@ struct StickerGridView: View, Equatable {
                 )
                 .onTapGesture {
                     guard recentlyCompletedPack.isEmpty else { return }
-                    guard foundCards.contains(name), animationPhase == .idle else { return }
+                    guard revealedCards.contains(name), animationPhase == .idle else { return }
                     if let f = frameTracker.cellFrames[name] {
                         onTapCard(name, f)
                     }
@@ -767,4 +692,3 @@ struct StickerGridView: View, Equatable {
         }
     }
 }
-

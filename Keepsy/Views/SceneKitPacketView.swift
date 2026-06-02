@@ -20,9 +20,14 @@ fileprivate func createCardBackTexture() -> UIImage {
         context.addPath(clipPath.cgPath)
         context.clip()
 
-        // 2. Navy blue fill matching SwiftUI cardBack (#1A0E6E)
-        UIColor(red: 0x1A / 255.0, green: 0x0E / 255.0, blue: 0x6E / 255.0, alpha: 1.0).setFill()
-        context.fill(CGRect(origin: .zero, size: size))
+        // 2. Gradient fill matching SwiftUI cardBackGradient (#2D1C76 to #432B3F)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let gradientColors = [
+            UIColor(red: 0x2D / 255.0, green: 0x1C / 255.0, blue: 0x76 / 255.0, alpha: 1.0).cgColor,
+            UIColor(red: 0x43 / 255.0, green: 0x2B / 255.0, blue: 0x3F / 255.0, alpha: 1.0).cgColor
+        ]
+        let gradient = CGGradient(colorsSpace: colorSpace, colors: gradientColors as CFArray, locations: [0.0, 1.0])!
+        context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: size.height), options: [])
 
         // 3. LogoKeepsy centered (same visual as SwiftUI cardBack)
         if let logo = UIImage(named: "LogoKeepsy") {
@@ -39,7 +44,6 @@ fileprivate func createCardBackTexture() -> UIImage {
         context.resetClip()
 
         // 4. Gold gradient border matching SwiftUI goldBorder
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
         let goldColors: [CGColor] = [
             UIColor(red: 0xF5/255.0, green: 0xE4/255.0, blue: 0x80/255.0, alpha: 1.0).cgColor,
             UIColor(red: 0xF1/255.0, green: 0xB4/255.0, blue: 0x0A/255.0, alpha: 1.0).cgColor,

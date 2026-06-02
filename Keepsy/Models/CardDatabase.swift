@@ -199,6 +199,31 @@ struct CardDatabase {
 
     static func downloadImages(for artworks: [String]) async {
         await syncWithCloud()
+        
+        let dir = artworksDirectoryURL
+        await withTaskGroup(of: Void.self) { group in
+            for name in artworks {
+                guard let art = remoteArtworks[name] else { continue }
+                let urlString = art.imageUrl
+                guard !urlString.isEmpty else { continue }
+                group.addTask {
+                    let destinationURL = dir.appendingPathComponent("\(name).jpg")
+                    if FileManager.default.fileExists(atPath: destinationURL.path) {
+                        let size = (try? FileManager.default.attributesOfItem(atPath: destinationURL.path)[.size] as? Int) ?? 0
+                        if size > 10000 { return }
+                    }
+                    
+                    guard let url = URL(string: urlString) else { return }
+                    do {
+                        let (data, _) = try await URLSession.shared.data(from: url)
+                        try data.write(to: destinationURL, options: .atomic)
+                        print("✅ Downloaded \(name) during AR preparation")
+                    } catch {
+                        print("❌ Failed download for \(name) during AR preparation: \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
     }
 
     static func prefetchImages(for location: String) async {

@@ -432,7 +432,7 @@ struct SingleScrollPackView: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 490)
+                .frame(height: 440)
 
                 // Indicatori pagina tra i pacchetti e il bottone
                 if museums.count > 1 {
@@ -536,11 +536,6 @@ struct MuseumPackPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(museum.name)
-                .font(.system(size: 22, weight: .black)).italic()
-                .foregroundColor(.white)
-                .padding(.bottom, 10)
-
             if let activePack = activePack {
                 let firstCardName = activePack[0]
                 SceneKitPacketView(interactive: false, isTorn: true, firstCardName: firstCardName,
@@ -570,25 +565,27 @@ struct PackExpansionRow: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 0) {
-                // ZStack con le due bustine che sporgono (overflow)
+                // Left side: Zoomed, fanned, and clipped packets
                 ZStack {
                     SceneKitPacketView(interactive: false)
-                        .frame(width: 104, height: 154)
-                        .rotationEffect(.degrees(-11))
-                        .offset(x: -12, y: 0)
+                        .frame(width: 140, height: 210)
+                        .rotationEffect(.degrees(-9))
+                        .offset(x: -18, y: 10)
                     
                     SceneKitPacketView(interactive: false)
-                        .frame(width: 104, height: 154)
-                        .rotationEffect(.degrees(12))
-                        .offset(x: 18, y: 8)
+                        .frame(width: 140, height: 210)
+                        .rotationEffect(.degrees(9))
+                        .offset(x: 18, y: 20)
                 }
-                .frame(width: 140, height: 142) // Area sinistra senza clipping
+                .frame(width: 140, height: 194)
+                .scaleEffect(1.2)
+                .offset(x: 12, y: 10)
                 
                 Spacer()
                 
-                // Contenuto di destra
+                // Right side
                 VStack(alignment: .trailing, spacing: 0) {
-                    // Chevron in alto a destra
+                    // Chevron at the top right
                     Image(systemName: "chevron.right")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white.opacity(0.6))
@@ -597,13 +594,14 @@ struct PackExpansionRow: View {
                     
                     Spacer()
                     
-                    // Nome museo + percentuale + barra di progresso in basso a destra
+                    // Museum name (title) + percentage + progress bar in bottom right
                     VStack(alignment: .trailing, spacing: 6) {
                         Text(title)
-                            .font(.system(size: 15, weight: .bold)).italic()
-                            .foregroundColor(.white.opacity(0.85))
+                            .font(.system(size: 13, weight: .semibold)).italic()
+                            .foregroundColor(.white.opacity(0.6))
+                        
                         Text(percentText)
-                            .font(.system(size: 28, weight: .bold)).italic()
+                            .font(.system(size: 28, weight: .black)).italic()
                             .foregroundColor(.white)
                         
                         ZStack(alignment: .leading) {
@@ -620,22 +618,22 @@ struct PackExpansionRow: View {
                     .padding(.trailing, 20)
                 }
             }
-            .frame(width: 350, height: 142)
-            // Sfondo arrotondato per non clippare le bustine che sporgono!
+            .frame(width: 344, height: 194)
             .background(
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(Color(hex: "1F1F21")) // Grigio scuro del design
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(hex: "121214")) // Elegant premium dark background
                     .overlay(
-                        RoundedRectangle(cornerRadius: 24)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(
                                 isComplete ?
                                     LinearGradient(colors: [Color(hex: "F2CA03"), Color(hex: "C7A245")], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                                    LinearGradient(colors: [Color.white.opacity(0.15), Color.white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                                lineWidth: 1.5
+                                    LinearGradient(colors: [Color(hex: "B1B1B1"), Color(hex: "464646")], startPoint: .topLeading, endPoint: .bottomTrailing),
+                                lineWidth: 2
                             )
                     )
-                    .shadow(color: .black.opacity(0.35), radius: 12, x: 0, y: 6)
             )
+            .clipShape(RoundedRectangle(cornerRadius: 16)) // Clip packets to card shape
+            .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 6)
         }
         .buttonStyle(PlainButtonStyle())
     }
