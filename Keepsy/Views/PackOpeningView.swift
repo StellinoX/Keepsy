@@ -63,6 +63,7 @@ struct PackOpeningView: View {
 
             if packState == .selecting {
                 SingleScrollPackView(
+                    activeView: $activeView,
                     currentCity: locationManager.currentCity,
                     selectedMuseumId: $selectedMuseumId,
                     onStart: {
@@ -324,8 +325,20 @@ struct PackOpeningView: View {
         // Persist the opened museum so AR tracking + collection routing target it.
         UserDefaults.standard.set(selectedMuseumId, forKey: "currentCity")
 
-        let artworks = CardDatabase.artworksFor(location: selectedMuseumId).shuffled()
-        let selectedArtworks = Array(artworks.prefix(5))
+        let revealed = CardDatabase.getRevealedCards()
+        let artworks = CardDatabase.artworksFor(location: selectedMuseumId)
+        
+        // Escludi le carte già trovate/rivelate
+        var remainingArtworks = artworks.filter { !revealed.contains($0) }
+        
+        // Se ci sono meno di 5 carte rimaste da trovare, riempi con le restanti già trovate
+        if remainingArtworks.count < 5 {
+            let needed = 5 - remainingArtworks.count
+            let alreadyRevealed = artworks.filter { revealed.contains($0) }.shuffled()
+            remainingArtworks.append(contentsOf: alreadyRevealed.prefix(needed))
+        }
+        
+        let selectedArtworks = Array(remainingArtworks.shuffled().prefix(5))
 
         self.cards = selectedArtworks.map {
             ArtworkCard(
@@ -406,6 +419,7 @@ struct PackOpeningView: View {
 // MARK: - SingleScrollPackView
 
 struct SingleScrollPackView: View {
+    @Binding var activeView: ContentView.ActiveView
     let currentCity: String
     @Binding var selectedMuseumId: String
     let onStart: () -> Void
@@ -413,7 +427,6 @@ struct SingleScrollPackView: View {
     let onTapCity: () -> Void
 
     @State private var revealedCards: Set<String> = []
-    @State private var activeLocation: LocationContainer? = nil
     @State private var carouselDragOffset: CGFloat = 0
 
     private var museums: [Museum] { MuseumConfig.shared.museums }
@@ -544,7 +557,11 @@ struct SingleScrollPackView: View {
                             museumId: museum.id,
                             title: museum.name,
                             progress: info.progress,
-                            onTap: { activeLocation = LocationContainer(name: museum.id) }
+                            onTap: {
+                                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                                    activeView = .collection(museum.id)
+                                }
+                            }
                         )
                     }
                 }
@@ -555,9 +572,6 @@ struct SingleScrollPackView: View {
         .ignoresSafeArea(edges: .top)
         .onAppear {
             revealedCards = CardDatabase.getRevealedCards()
-        }
-        .fullScreenCover(item: $activeLocation) { container in
-            CollectionAlbumView(museumLocation: container.name, showCloseButton: true) { activeLocation = nil }
         }
     }
 

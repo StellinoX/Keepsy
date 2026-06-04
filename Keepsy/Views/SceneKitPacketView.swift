@@ -124,6 +124,7 @@ fileprivate func createCardFrontTexture(name: String) -> UIImage {
     let index = CardDatabase.allArtworkNames.firstIndex(of: name)
     let isRevealed = CardDatabase.getRevealedCards().contains(name)
     let borderGrad = CardDatabase.borderGradientFor(name: name)
+    let isAlreadyOwned = CardDatabase.getDuplicatesInActivePack().contains(name)
     
     // Ensure the image is loaded into the memory cache first so ImageRenderer draws it
     if CardDatabase.imageCache.object(forKey: name as NSString) == nil {
@@ -140,7 +141,7 @@ fileprivate func createCardFrontTexture(name: String) -> UIImage {
         height: 818,
         isRevealed: isRevealed,
         goldBorder: borderGrad,
-        showCheckmark: false
+        showCheckmark: isAlreadyOwned || isRevealed
     )
     
     let renderer = ImageRenderer(content: cardView)

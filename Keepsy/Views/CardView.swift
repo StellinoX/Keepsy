@@ -40,6 +40,7 @@ struct CardView: View {
         .rotation3DEffect(.degrees(rotation), axis: (x: 0, y: 1, z: 0))
         .onTapGesture {
             if !card.isFlipped {
+                SoundManager.shared.playSound(named: "giro_carta")
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                     rotation += 180
                     card.isFlipped = true
@@ -73,7 +74,7 @@ struct CardView: View {
             height: h,
             isRevealed: isRevealed,
             goldBorder: goldBorder,
-            showCheckmark: isAlreadyOwned
+            showCheckmark: isAlreadyOwned || isRevealed
         )
     }
 }

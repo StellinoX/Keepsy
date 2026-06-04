@@ -623,25 +623,25 @@ struct CollectionAlbumView: View {
             animationPhase = .pulling
             cellCardOpacity = 0.0
             overlayOpacity = 0.0
-            hideCellPocket = true
+            hideCellPocket = false   // cella mostra il suo pocket durante il volo
             flyingFrame = sourcePos
             flyingCornerRadius = 8
             flyingOpacity = 1.0
-            
-            // Prepara il frame del pocket ma NON renderlo visibile — lo mostriamo solo nella Phase 3
+
             pocketFrame = finalPocketFrame
             pocketOverlayOpacity = 0.0
-            
+
             HapticManager.shared.triggerImpact(style: .medium)
-            
+
             // Phase 2: Fly from top bar down to just above its grid cell slot
             withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
                 flyingFrame = finalPulledSourceFrame
             }
-            
+
             // Wait 0.55 seconds for this flight to finish
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                // Phase 3: Mostra il pocket overlay ADESSO (fisso) e la carta scende dietro
+                // Phase 3: nascondi il pocket della cella e mostra l'overlay — così la carta scende "dentro"
+                hideCellPocket = true
                 pocketOverlayOpacity = 1.0
                 withAnimation(.easeOut(duration: 0.35)) {
                     flyingFrame = finalSourceFrame

@@ -321,7 +321,7 @@ struct CardInspectionView: View {
                             startPoint: .topLeading, endPoint: .bottomTrailing
                         )
                         
-                        let isAlreadyOwned = CardDatabase.getDuplicatesInActivePack().contains(card.name)
+                        let isAlreadyOwned = CardDatabase.getDuplicatesInActivePack().contains(card.name) || CardDatabase.getRevealedCards().contains(card.name)
                         ArtworkCardFrontView(
                             name: card.name,
                             title: card.title,
@@ -340,6 +340,7 @@ struct CardInspectionView: View {
                 .scaleEffect(namespace == nil && !isZoomingFromAlbum ? (animateContent ? 1.0 : 0.75) : 1.0)
                 .opacity(animateContent ? 1.0 : 0.0)
                 .onTapGesture {
+                    SoundManager.shared.playSound(named: "giro_carta")
                     withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) {
                         accumulatedRotation += 180
                     }
@@ -349,8 +350,13 @@ struct CardInspectionView: View {
                         .onChanged { value in dragOffset = value.translation }
                         .onEnded { value in
                             withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                                if value.translation.width > 80 { accumulatedRotation += 180 }
-                                else if value.translation.width < -80 { accumulatedRotation -= 180 }
+                                if value.translation.width > 80 {
+                                    SoundManager.shared.playSound(named: "giro_carta")
+                                    accumulatedRotation += 180
+                                } else if value.translation.width < -80 {
+                                    SoundManager.shared.playSound(named: "giro_carta")
+                                    accumulatedRotation -= 180
+                                }
                                 dragOffset = .zero
                             }
                         }
@@ -474,7 +480,7 @@ struct CardFullDetailView: View {
                         colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
-                    let isAlreadyOwned = CardDatabase.getDuplicatesInActivePack().contains(card.name)
+                    let isAlreadyOwned = CardDatabase.getDuplicatesInActivePack().contains(card.name) || CardDatabase.getRevealedCards().contains(card.name)
                     ArtworkCardFrontView(
                         name: card.name,
                         title: card.title,
@@ -491,14 +497,20 @@ struct CardFullDetailView: View {
             .scaleEffect(animateContent ? 1.0 : 0.85)
             .opacity(animateContent ? 1.0 : 0.0)
             .onTapGesture {
+                SoundManager.shared.playSound(named: "giro_carta")
                 withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) { accumulatedRotation += 180 }
             }
             .gesture(DragGesture()
                 .onChanged { dragOffset = $0.translation }
                 .onEnded { v in
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                        if v.translation.width > 80 { accumulatedRotation += 180 }
-                        else if v.translation.width < -80 { accumulatedRotation -= 180 }
+                        if v.translation.width > 80 {
+                            SoundManager.shared.playSound(named: "giro_carta")
+                            accumulatedRotation += 180
+                        } else if v.translation.width < -80 {
+                            SoundManager.shared.playSound(named: "giro_carta")
+                            accumulatedRotation -= 180
+                        }
                         dragOffset = .zero
                     }
                 }

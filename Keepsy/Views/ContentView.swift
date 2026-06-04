@@ -16,16 +16,21 @@ struct ContentView: View {
     }
     
     var body: some View {
-        Group {
+        ZStack {
             switch activeView {
             case .opening:
                 PackOpeningView(activeView: $activeView)
+                    .transition(.asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .leading)))
             case .arScanner:
                 ARArtworkView(activeView: $activeView)
+                    .transition(.opacity)
             case .collection(let city):
                 CollectionAlbumView(museumLocation: city, showCloseButton: true) {
-                    activeView = .opening
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                        activeView = .opening
+                    }
                 }
+                .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .trailing)))
             }
         }
         .task {

@@ -8,6 +8,8 @@ struct ARArtworkView: View {
     @State private var diagnosticMessage: String = "Avvio ARKit..."
     @State private var selectedTargetCard: String? = nil
     @State private var dragOffset: CGFloat = 0
+    @State private var sessionFoundCards: Set<String> = []
+    @State private var showQuitDialog: Bool = false
 
     @State private var imagesReady: Bool = false
     @State private var downloadProgress: String = "Scaricamento immagini..."
@@ -17,6 +19,10 @@ struct ARArtworkView: View {
     @State private var foundCardName: String? = nil
     @State private var isAnimatingUnlock: Bool = false
     @State private var unlockStep: UnlockAnimationStep = .none
+    @State private var showCardFoundFlash = false
+    @State private var greenFlashOpacity: Double = 0.0
+    @State private var catturataScale: CGFloat = 1.5
+    @State private var catturataOpacity: Double = 0.0
 
     enum UnlockAnimationStep {
         case none
@@ -83,9 +89,7 @@ struct ARArtworkView: View {
                         guard let selected = selectedTargetCard else {
                             return activePack.filter { $0 != foundCardName }
                         }
-                        let revealed = CardDatabase.getRevealedCards()
-                        let dupes = CardDatabase.getDuplicatesInActivePack()
-                        let foundSet = revealed.union(dupes)
+                        let foundSet = revealedCards.union(duplicatesInPack).union(sessionFoundCards)
 
                         // Solo le carte NON ancora trovate (esclusa quella in animazione)
                         let notFound = activePack
@@ -101,17 +105,21 @@ struct ARArtworkView: View {
 
                     // Carte già trovate (vanno in basso separatamente)
                     let foundCards: [String] = {
-                        let revealed = CardDatabase.getRevealedCards()
-                        let dupes = CardDatabase.getDuplicatesInActivePack()
-                        let foundSet = revealed.union(dupes)
-                        return activePack.filter { $0 != foundCardName && foundSet.contains($0) }
+                        let foundSet = revealedCards.union(duplicatesInPack).union(sessionFoundCards)
+                        return activePack.filter { $0 != foundCardName && $0 != selectedTargetCard && foundSet.contains($0) }
                     }()
 
                     // Floating Back Button (standard position)
                     Button(action: {
                         HapticManager.shared.triggerImpact(style: .light)
-                        withAnimation(.easeInOut(duration: 0.35)) {
-                            activeView = .opening
+                        if sessionFoundCards.isEmpty {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                activeView = .opening
+                            }
+                        } else {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showQuitDialog = true
+                            }
                         }
                     }) {
                         HStack(spacing: 5) {
@@ -235,7 +243,7 @@ struct ARArtworkView: View {
                                     let scale: CGFloat = {
                                         if isThisCardUnlocking {
                                             if unlockStep == .zoomToCenter {
-                                                return 1.6
+                                                return 1.85
                                             } else {
                                                 return 0.6
                                             }
@@ -378,20 +386,133 @@ struct ARArtworkView: View {
                     .zIndex(50)
                 }
 
+                // ── GREEN SCREEN FLASH ────────────────────────────────────────
+                Color(hex: "4CD964")
+                    .ignoresSafeArea()
+                    .opacity(greenFlashOpacity)
+                    .blendMode(.screen)
+                    .allowsHitTesting(false)
+                    .zIndex(55)
+
+                // ── CARD FOUND BURST ──────────────────────────────────────────
+                if showCardFoundFlash {
+                    CardFoundFlashView { showCardFoundFlash = false }
+                        .position(x: screenWidth / 2, y: screenHeight * 0.38)
+                        .allowsHitTesting(false)
+                        .zIndex(58)
+                }
+
                 // ── CATTURATA LABEL FOR UNLOCK ANIMATION ─────────────────────
                 if isAnimatingUnlock {
-                    VStack {
+                    VStack(spacing: 6) {
                         Spacer()
-                        Text("CATTURATA!")
-                            .font(.system(size: 24, weight: .black))
-                            .italic()
-                            .foregroundColor(.white)
-                            .shadow(color: Color(hex: "4CD964").opacity(0.8), radius: 6)
-                            .padding(.bottom, screenHeight * 0.18)
+                        VStack(spacing: 4) {
+                            Text("CATTURATA!")
+                                .font(.system(size: 28, weight: .black))
+                                .italic()
+                                .foregroundColor(.white)
+                                .shadow(color: Color(hex: "4CD964").opacity(0.9), radius: 12)
+                                .shadow(color: Color(hex: "4CD964").opacity(0.5), radius: 24)
+                            if let name = foundCardName {
+                                Text(CardDatabase.cleanedArtworkName(name))
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .italic()
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                        }
+                        .scaleEffect(catturataScale)
+                        .opacity(catturataOpacity)
+                        .padding(.bottom, screenHeight * 0.16)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .transition(.opacity)
                     .zIndex(60)
+                }
+
+                // ── QUIT EXPERIENCE MODAL DIALOG ─────────────────────────────
+                if showQuitDialog {
+                    ZStack {
+                        // Dimmed background
+                        Color.black.opacity(0.65)
+                            .ignoresSafeArea()
+                            .transition(.opacity)
+                        
+                        // Dialog Card
+                        VStack(spacing: 24) {
+                            Text("QUIT EXPERIENCE?")
+                                .font(.system(size: 26, weight: .black))
+                                .italic()
+                                .foregroundColor(Color(hex: "DD611B"))
+                                .multilineTextAlignment(.center)
+                                .padding(.top, 8)
+                            
+                            Text("Are you sure you want to quit the experience?\nYour progress **will be saved**")
+                                .font(.system(size: 15, weight: .semibold))
+                                .italic()
+                                .foregroundColor(.white.opacity(0.85))
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(4)
+                                .padding(.horizontal, 16)
+                            
+                            VStack(spacing: 14) {
+                                // DISCARD button
+                                Button(action: {
+                                    HapticManager.shared.triggerImpact(style: .medium)
+                                    withAnimation(.easeInOut(duration: 0.35)) {
+                                        showQuitDialog = false
+                                    }
+                                }) {
+                                    Text("DISCARD")
+                                        .font(.system(size: 18, weight: .black))
+                                        .italic()
+                                        .foregroundColor(.black)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 54)
+                                        .background(Capsule().fill(Color(hex: "E5E5EA")))
+                                }
+                                
+                                // CONFIRM button
+                                Button(action: {
+                                    HapticManager.shared.triggerImpact(style: .medium)
+                                    
+                                    // Salva tutte le carte trovate in questa sessione
+                                    for name in sessionFoundCards {
+                                        CardDatabase.addRevealedCard(name)
+                                    }
+                                    
+                                    // Trigger animation for the saved cards in Collection view
+                                    UserDefaults.standard.set(Array(sessionFoundCards), forKey: "recentlyCompletedPackCards")
+                                    CardDatabase.clearActivePackIfNeeded()
+                                    
+                                    withAnimation(.easeInOut(duration: 0.35)) {
+                                        showQuitDialog = false
+                                        navigateToCollection()
+                                    }
+                                }) {
+                                    Text("CONFIRM")
+                                        .font(.system(size: 18, weight: .black))
+                                        .italic()
+                                        .foregroundColor(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 54)
+                                        .background(Capsule().fill(Color(hex: "3A3A3C")))
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                        }
+                        .padding(28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 32)
+                                .fill(Color(hex: "1C1C1E"))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 32)
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
+                                )
+                        )
+                        .padding(.horizontal, 28)
+                        .shadow(color: Color.black.opacity(0.5), radius: 20, y: 10)
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                    }
+                    .zIndex(150)
                 }
             }
             .ignoresSafeArea()
@@ -493,23 +614,45 @@ struct ARArtworkView: View {
     
     private func startUnlockAnimation(for cardName: String) {
         HapticManager.shared.triggerImpact(style: .rigid)
+        SoundManager.shared.playSound(named: "opera_trovata")
 
         withAnimation(.easeInOut(duration: 0.3)) {
             foundCardName = cardName
             isAnimatingUnlock = true
         }
 
-        // Imposta la carta appena scannerizzata per essere animata in CollectionAlbumView
-        UserDefaults.standard.set([cardName], forKey: "recentlyCompletedPackCards")
+        sessionFoundCards.insert(cardName)
 
-        CardDatabase.addRevealedCard(cardName)
-        CardDatabase.clearActivePackIfNeeded()
-
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.65)) {
             unlockStep = .zoomToCenter
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+        // Green screen flash
+        withAnimation(.easeOut(duration: 0.05)) { greenFlashOpacity = 0.35 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            withAnimation(.easeIn(duration: 0.4)) { greenFlashOpacity = 0.0 }
+        }
+
+        // Burst di particelle + testo
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            showCardFoundFlash = true
+            HapticManager.shared.triggerImpact(style: .heavy)
+        }
+
+        // "CATTURATA!" pop in
+        catturataScale = 1.5
+        catturataOpacity = 0.0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.6)) {
+                catturataScale = 1.0
+                catturataOpacity = 1.0
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                catturataOpacity = 0.0
+            }
             withAnimation(.easeInOut(duration: 0.4)) {
                 unlockStep = .none
             }
@@ -521,12 +664,112 @@ struct ARArtworkView: View {
                 }
                 triggerUnlockAnimation = nil
 
-                // Naviga sempre alla collezione per mostrare l'animazione di inserimento della foderina
-                navigateToCollection()
+                // Controlla se abbiamo completato il pacchetto (tutte le 5 carte trovate/doppie/rivelate)
+                if let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
+                    let foundSet = revealedCards.union(duplicatesInPack).union(sessionFoundCards)
+                    let allFound = activePack.allSatisfy { foundSet.contains($0) }
+                    
+                    if allFound {
+                        // Salva tutte le carte trovate in questa sessione nel database definitivo
+                        for name in sessionFoundCards {
+                            CardDatabase.addRevealedCard(name)
+                        }
+                        
+                        // Imposta tutte le carte trovate per l'animazione di inserimento
+                        UserDefaults.standard.set(Array(sessionFoundCards), forKey: "recentlyCompletedPackCards")
+                        CardDatabase.clearActivePackIfNeeded()
+                        
+                        navigateToCollection()
+                    } else {
+                        // Seleziona la prossima carta non ancora trovata
+                        let remaining = activePack.filter { !foundSet.contains($0) }
+                        if let nextTarget = remaining.first {
+                            changeSelection(to: nextTarget)
+                        }
+                    }
+                }
             }
         }
     }
 
+}
+
+// MARK: - CardFoundFlashView — green burst when card is captured
+
+struct CardFoundFlashView: View {
+    var onComplete: () -> Void
+
+    @State private var ring1Scale: CGFloat = 0.1
+    @State private var ring1Opacity: Double = 1.0
+    @State private var ring2Scale: CGFloat = 0.1
+    @State private var ring2Opacity: Double = 0.75
+    @State private var ring3Scale: CGFloat = 0.1
+    @State private var ring3Opacity: Double = 0.5
+    @State private var sparkOpacity: Double = 0.0
+    @State private var sparkRadius: CGFloat = 0.2
+    @State private var radialScale: CGFloat = 0.4
+    @State private var radialOpacity: Double = 1.0
+
+    private let colors: [Color] = [
+        Color(hex: "4CD964"), Color.white,
+        Color(hex: "2EBD4A"), Color(hex: "AAFFBB"),
+    ]
+
+    var body: some View {
+        ZStack {
+            RadialGradient(
+                colors: [Color.white.opacity(0.85), Color(hex: "4CD964").opacity(0.55), Color.clear],
+                center: .center, startRadius: 0, endRadius: 60
+            )
+            .scaleEffect(radialScale)
+            .opacity(radialOpacity)
+            .blendMode(.screen)
+
+            Circle()
+                .stroke(LinearGradient(colors: [Color.white, Color(hex: "4CD964")], startPoint: .top, endPoint: .bottom), lineWidth: 4)
+                .frame(width: 70, height: 70)
+                .scaleEffect(ring1Scale).opacity(ring1Opacity)
+                .blur(radius: 2).blendMode(.screen)
+
+            Circle()
+                .stroke(Color(hex: "4CD964").opacity(0.65), lineWidth: 3)
+                .frame(width: 140, height: 140)
+                .scaleEffect(ring2Scale).opacity(ring2Opacity)
+                .blur(radius: 4).blendMode(.screen)
+
+            Circle()
+                .stroke(Color(hex: "4CD964").opacity(0.35), lineWidth: 2)
+                .frame(width: 220, height: 220)
+                .scaleEffect(ring3Scale).opacity(ring3Opacity)
+                .blur(radius: 7).blendMode(.screen)
+
+            ZStack {
+                ForEach(0..<12, id: \.self) { i in
+                    let angle = Double(i) * (.pi * 2.0 / 12.0)
+                    let size = CGFloat(4) + CGFloat(i % 3) * 2.0
+                    let rad = 110.0 * Double(sparkRadius)
+                    Circle()
+                        .fill(colors[i % colors.count])
+                        .frame(width: size, height: size)
+                        .offset(x: CGFloat(cos(angle) * rad), y: CGFloat(sin(angle) * rad))
+                }
+            }
+            .opacity(sparkOpacity).blur(radius: 1).blendMode(.screen)
+        }
+        .onAppear { run() }
+    }
+
+    func run() {
+        withAnimation(.easeOut(duration: 0.15)) { radialScale = 2.8; radialOpacity = 0.0 }
+        withAnimation(.easeOut(duration: 0.22)) { ring1Scale = 4.0; ring1Opacity = 0.0 }
+        withAnimation(.easeOut(duration: 0.3).delay(0.04)) { ring2Scale = 3.4; ring2Opacity = 0.0 }
+        withAnimation(.easeOut(duration: 0.4).delay(0.08)) { ring3Scale = 2.8; ring3Opacity = 0.0 }
+        withAnimation(.easeOut(duration: 0.3)) { sparkOpacity = 1.0; sparkRadius = 1.0 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            withAnimation(.easeOut(duration: 0.2)) { sparkOpacity = 0.0 }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) { onComplete() }
+    }
 }
 
 struct ScannerCardView: View {
