@@ -3,15 +3,15 @@ import Foundation
 struct Museum: Identifiable {
     let id: String
     let name: String
+    let packetImageName: String
 }
 
 struct MuseumConfig {
     static let shared = MuseumConfig()
-    
+
     let museums: [Museum] = [
-        Museum(id: "capodimonte", name: "Capodimonte"),
-        Museum(id: "uffizi", name: "Uffizi")
-        // In the future, you can easily add the Louvre or other museums here:
-        // Museum(id: "louvre", name: "Louvre")
+        Museum(id: "capodimonte", name: "Capodimonte", packetImageName: "capodimonte_pacchetto"),
+        Museum(id: "uffizi", name: "Uffizi", packetImageName: "uffizi_pacchetto")
+        // Museum(id: "louvre", name: "Louvre", packetImageName: "louvre_pacchetto")
     ]
 }

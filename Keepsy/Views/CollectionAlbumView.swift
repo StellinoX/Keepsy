@@ -25,6 +25,8 @@ struct CollectionAlbumView: View {
     @State private var revealedCards: Set<String> = []
     @State private var hasSyncedWithCloud = false
     @State private var inspectedCard: ArtworkCard? = nil
+    @State private var showExperienceCardModal = false
+    @State private var experienceCardFrame: CGRect = .zero
     @Namespace private var albumNamespace
     
     // Sticker placement sequence states
@@ -55,6 +57,7 @@ struct CollectionAlbumView: View {
     // usato per sovrapporre la copertina durante pull/drop
     @State private var pocketFrame: CGRect = .zero
     @State private var pocketOverlayOpacity: Double = 0
+    @State private var hideCellPocket: Bool = false   // true only during final descent (phase B)
 
     // Screen size captured from GeometryReader — available to animation functions
     @State private var screenSize: CGSize = .zero
@@ -75,71 +78,145 @@ struct CollectionAlbumView: View {
         return CardDatabase.allArtworkNames
     }
 
+    var isCollectionComplete: Bool {
+        guard !filteredArtworks.isEmpty else { return false }
+        return filteredArtworks.allSatisfy { revealedCards.contains($0) }
+    }
+
+    var experienceCardName: String {
+        let loc = (museumLocation ?? "capodimonte").lowercased()
+        return "\(loc)_experience"
+    }
+
     var destinationFrame: CGRect {
         let sw = screenSize.width
         let sh = screenSize.height
-        let w: CGFloat = 310
-        let h: CGFloat = 470
-        return CGRect(x: (sw - w) / 2, y: (sh - h) / 2 - 50, width: w, height: h)
+        let w: CGFloat = min(sw - 48, 300)
+        let h: CGFloat = w * (470.0 / 310.0)
+        let sheetPeek: CGFloat = 160
+        let cardTopY: CGFloat = max(140, (sh - h - sheetPeek) / 2 + 10)
+        return CGRect(x: (sw - w) / 2, y: cardTopY, width: w, height: h)
     }
     var body: some View {
         // GeometryReader cattura le dimensioni schermo — usate da tutte le animazioni
         GeometryReader { rootGeo in
-        // ZStack con coordinateSpace nominato — sia il GeometryReader che .position usano questo
+        let _ = { if screenSize == .zero { DispatchQueue.main.async { screenSize = rootGeo.size } } }()
         ZStack(alignment: .topLeading) {
             Color(red: 0.05, green: 0.05, blue: 0.1).ignoresSafeArea()
             GridBackground()
 
-            VStack(spacing: 16) {
-                if showCloseButton {
-                    Spacer().frame(height: 83)
-                } else {
-                    Spacer().frame(height: 40)
-                }
-
-                // ── EXPERIENCE CARD SECTION ──────────────────────────────────
+            // ── BACKGROUND LAYER: EXPERIENCE CARD ────────────────────────
+            VStack(spacing: 0) {
+                // Spacer for the top navigation bar area
+                Spacer().frame(height: showCloseButton ? 140 : 80)
+                
+                // ── EXPERIENCE CARD SECTION ──────────────────────────────
                 VStack(spacing: 12) {
-                    Text("EXPERIENCE CARD")
-                        .font(.system(size: 13, weight: .black)).italic()
-                        .foregroundColor(.white)
-                        .tracking(1.5)
-                    
-                    // Large "?" Indigo-Blue Card
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 24)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
+                    if isCollectionComplete {
+                        let goldBorder = LinearGradient(
+                            colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
+                                     Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                        ArtworkCardFrontView(
+                            name: experienceCardName,
+                            title: CardDatabase.cleanedArtworkName(experienceCardName),
+                            cardIndex: nil,
+                            width: 180,
+                            height: 270,
+                            isRevealed: true,
+                            goldBorder: goldBorder
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                        .opacity(animatingCardName == experienceCardName ? cellCardOpacity : 1.0)
+                        .shadow(color: Color(hex: "F1B40A").opacity(0.4), radius: 25, x: 0, y: 10)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear
+                                    .onAppear {
+                                        experienceCardFrame = geo.frame(in: .named("root"))
+                                    }
+                                    .onChange(of: geo.frame(in: .named("root"))) { _, newFrame in
+                                        experienceCardFrame = newFrame
+                                    }
+                            }
+                        )
+                        .onTapGesture {
+                            tapExperienceCard()
+                        }
+                    } else {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 24)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
                                 )
-                            )
-                        
-                        Text("?")
-                            .font(.system(size: 80, weight: .black))
-                            .foregroundColor(.white)
+                            
+                            Text("?")
+                                .font(.system(size: 80, weight: .black))
+                                .foregroundColor(.white)
+                        }
+                        .frame(width: 180, height: 270)
+                        .opacity(animatingCardName == experienceCardName ? cellCardOpacity : 1.0)
+                        .shadow(color: Color(hex: "5168C4").opacity(0.4), radius: 25, x: 0, y: 10)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear
+                                    .onAppear {
+                                        experienceCardFrame = geo.frame(in: .named("root"))
+                                    }
+                                    .onChange(of: geo.frame(in: .named("root"))) { _, newFrame in
+                                        experienceCardFrame = newFrame
+                                    }
+                            }
+                        )
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            tapExperienceCard()
+                        }
                     }
-                    .frame(width: 180, height: 270)
-                    .shadow(color: Color(hex: "5168C4").opacity(0.4), radius: 25, x: 0, y: 10)
                 }
-                .padding(.top, 10)
-
-                // ── ALBUM GRID CONTAINER ─────────────────────────────────────
-                ZStack {
-                    RoundedRectangle(cornerRadius: 33)
-                        .fill(Color(white: 0.12))
-                        .overlay(RoundedRectangle(cornerRadius: 33).stroke(
-                            LinearGradient(
-                                colors: [Color(hex: "B1B1B1"), Color(hex: "464646")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 2
-                        ))
-                        .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
-
-                    ScrollViewReader { proxy in
-                        ScrollView(showsIndicators: false) {
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+            
+            // ── FOREGROUND LAYER: MAIN SCROLL VIEW (THE SHEET/MODAL) ─────
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        // Spacer corresponding to the height of the Experience Card section
+                        ZStack(alignment: .top) {
+                            Color.clear
+                                .frame(height: showCloseButton ? 470 : 410)
+                                .allowsHitTesting(false)
+                            
+                            // Foreground interactive area for the Experience Card (both locked and unlocked)
+                            Color.clear
+                                .frame(width: 180, height: 270)
+                                .contentShape(Rectangle())
+                                .padding(.top, showCloseButton ? 140 : 80)
+                                .onTapGesture {
+                                    tapExperienceCard()
+                                }
+                        }
+                        
+                        // ── ALBUM GRID CONTAINER ─────────────────────────────────
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 33)
+                                .fill(Color(white: 0.12))
+                                .overlay(RoundedRectangle(cornerRadius: 33).stroke(
+                                    LinearGradient(
+                                        colors: [Color(hex: "B1B1B1"), Color(hex: "464646")],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 2
+                                ))
+                                .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
+                            
                             StickerGridView(
                                 artworks: filteredArtworks,
                                 foundCards: foundCards,
@@ -150,6 +227,7 @@ struct CollectionAlbumView: View {
                                 animatingCardName: animatingCardName,
                                 cellCardOpacity: cellCardOpacity,
                                 animationPhase: animationPhase,
+                                hideCellPocket: hideCellPocket,
                                 frameTracker: frameTracker,
                                 frameRefreshToken: frameRefreshToken,
                                 columns: columns
@@ -164,24 +242,24 @@ struct CollectionAlbumView: View {
                             .padding(.vertical, 24)
                             .padding(.horizontal, 16)
                         }
-                        .onAppear {
-                            // Run the sticker intro after a short delay to allow views to render and frames to compile
-                            if !recentlyCompletedPack.isEmpty {
-                                runCompletedPackStickerIntro(proxy: proxy)
-                            }
-                        }
-                        .onChange(of: stickerIntroActive) { _, newValue in
-                            // Trigger sticker intro when data is loaded from outer onAppear
-                            // (fixes race condition: inner onAppear fires before outer onAppear loads data)
-                            if newValue && !recentlyCompletedPack.isEmpty {
-                                runCompletedPackStickerIntro(proxy: proxy)
-                            }
-                        }
+                        .frame(width: 373)
+                        .padding(.bottom, 40)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 33))
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(width: 373)
-                .padding(.bottom, 20)
+                .onAppear {
+                    // Run the sticker intro after a short delay to allow views to render and frames to compile
+                    if !recentlyCompletedPack.isEmpty {
+                        runCompletedPackStickerIntro(proxy: proxy)
+                    }
+                }
+                .onChange(of: stickerIntroActive) { _, newValue in
+                    // Trigger sticker intro when data is loaded from outer onAppear
+                    // (fixes race condition: inner onAppear fires before outer onAppear loads data)
+                    if newValue && !recentlyCompletedPack.isEmpty {
+                        runCompletedPackStickerIntro(proxy: proxy)
+                    }
+                }
             }
 
             if showCloseButton {
@@ -189,18 +267,17 @@ struct CollectionAlbumView: View {
                     HapticManager.shared.triggerImpact(style: .light)
                     onClose?()
                 }) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 5) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(size: 14, weight: .bold))
                         Text("Back")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(size: 16, weight: .regular))
                     }
                     .foregroundColor(.white)
                     .frame(width: 85, height: 44)
                     .background(
                         Capsule().fill(Color(hex: "383838"))
                     )
-                    .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 4)
                 }
                 .position(x: 30 + 85/2, y: 83 + 44/2)
             }
@@ -218,9 +295,10 @@ struct CollectionAlbumView: View {
 
                 // Flying card — posizionata con .position nello spazio "root"
                 // Viene nascosta quando la CardInspectionView interattiva è aperta (.open) per evitare doppioni
-                if let name = animatingCardName, animationPhase != .idle && animationPhase != .open {
+                if let name = animatingCardName, animationPhase != .idle {
                     flyingCardView(for: name)
                         .id(name)
+                        .opacity(animationPhase == .open ? max(0, 1.0 - inspectionOpacity) : 1.0)
                 }
 
                 // Copertina bustina sovrapposta alla flying card durante pull/drop
@@ -250,6 +328,8 @@ struct CollectionAlbumView: View {
                     .opacity(inspectionOpacity)
                 }
             }
+
+
         }
         // Nome del coordinateSpace — sia GeometryReader che .position lo usano
         .coordinateSpace(name: "root")
@@ -287,23 +367,78 @@ struct CollectionAlbumView: View {
 
     @ViewBuilder
     func flyingCardView(for name: String) -> some View {
-        let isRevealed = CardDatabase.getRevealedCards().contains(name)
-        let scale = flyingFrame.width / 111.0
-        let cr = 12 * scale
+        if name.contains("_experience") && !isCollectionComplete {
+            let finalW: CGFloat = destinationFrame.width
+            let finalH: CGFloat = destinationFrame.height
+            let scale = flyingFrame.width / finalW
+            
+            ZStack {
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                
+                Text("?")
+                    .font(.system(size: 80, weight: .black))
+                    .foregroundColor(.white)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .scaleEffect(scale, anchor: .center)
+            .frame(width: flyingFrame.width, height: flyingFrame.height)
+            .opacity(flyingOpacity)
+            .position(x: flyingFrame.midX, y: flyingFrame.midY)
+        } else {
+            let isRevealed = CardDatabase.getRevealedCards().contains(name) || name.contains("_experience")
+            let index = CardDatabase.allArtworkNames.firstIndex(of: name)
+            let goldBorder = LinearGradient(
+                colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
+                         Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
 
-        ZStack {
-            ArtImageView(cardName: name, isRevealed: isRevealed)
-                .aspectRatio(contentMode: .fill)
-                .frame(width: flyingFrame.width, height: flyingFrame.height)
-                .clipped()
-                .cornerRadius(cr)
+            // La card finale è 300x457 — la scaliamo a qualsiasi dimensione con scaleEffect
+            let finalW: CGFloat = destinationFrame.width
+            let finalH: CGFloat = destinationFrame.height
+            let scale = flyingFrame.width / finalW
 
-            RoundedRectangle(cornerRadius: cr)
-                .stroke(Color(hex: "B1B1B1"), lineWidth: 2)
+            ArtworkCardFrontView(
+                name: name,
+                title: CardDatabase.cleanedArtworkName(name),
+                cardIndex: index,
+                width: finalW,
+                height: finalH,
+                isRevealed: isRevealed,
+                goldBorder: goldBorder
+            )
+            .scaleEffect(scale, anchor: .center)
+            .frame(width: flyingFrame.width, height: flyingFrame.height)
+            .opacity(flyingOpacity)
+            .position(x: flyingFrame.midX, y: flyingFrame.midY)
         }
-        .frame(width: flyingFrame.width, height: flyingFrame.height)
-        .opacity(flyingOpacity)
-        .position(x: flyingFrame.midX, y: flyingFrame.midY)  // stesso spazio "root"
+    }
+
+    private func tapExperienceCard() {
+        guard recentlyCompletedPack.isEmpty else { return }
+        guard animationPhase == .idle else { return }
+        sourceFrame = experienceCardFrame
+        pocketFrame = .zero
+        pulledSourceFrame = experienceCardFrame
+        
+        animatingCardName = experienceCardName
+        animationPhase = .zooming
+        flyingFrame = experienceCardFrame
+        flyingCornerRadius = 24
+        flyingOpacity = 1.0
+        overlayOpacity = 0.0
+        cellCardOpacity = 0.0
+        
+        HapticManager.shared.triggerImpact(style: .medium)
+        
+        startZoomAnimation()
     }
 
     // MARK: - Animazioni
@@ -317,20 +452,15 @@ struct CollectionAlbumView: View {
         cellCardOpacity = 0
         overlayOpacity = 0
         alignmentCheck()
-        pocketOverlayOpacity = 1.0   // la bustina copre la carta mentre esce
+        // The cell now always shows its own pocket_outline, so we don't need the
+        // floating overlay on top during pull — it would create a double PNG.
+        pocketOverlayOpacity = 0.0
 
         HapticManager.shared.triggerImpact(style: .medium)
 
-        // Fase 1: sale verso l'alto — la copertina bustina svanisce
-        // quando la carta ha percorso abbastanza da non stare più sotto la plastica
+        // Fase 1: sale verso l'alto
         withAnimation(.easeOut(duration: 0.28)) {
             flyingFrame = pulledSourceFrame
-        }
-        // La bustina svanisce nella seconda metà del pull (carta già uscita)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
-            withAnimation(.easeOut(duration: 0.14)) {
-                pocketOverlayOpacity = 0
-            }
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
@@ -345,20 +475,18 @@ struct CollectionAlbumView: View {
     func startZoomAnimation() {
         animationPhase = .zooming
 
-        // Fase 2: zoom al centro
-        withAnimation(.easeInOut(duration: 0.40)) {
+        withAnimation(.easeInOut(duration: 0.38)) {
             flyingFrame = destinationFrame
             flyingCornerRadius = 18
             overlayOpacity = 0.78
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.40) {
-            // La flying card rimane dov'è come scheletro.
-            // CardInspectionView appare sopra con un fade morbido — nessun salto visivo.
+        // Inizia il fade-in della inspection DOPO che lo zoom è finito (a 0.38s)
+        // così la flying card ha raggiunto la destinazione e il crossfade è invisibile
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
             animationPhase = .open
-            withAnimation(.easeInOut(duration: 0.18)) {
+            withAnimation(.easeInOut(duration: 0.12)) {
                 inspectionOpacity = 1.0
-                // flyingOpacity resta 1 — la inspection la copre perfettamente
             }
         }
     }
@@ -369,13 +497,12 @@ struct CollectionAlbumView: View {
 
         HapticManager.shared.triggerImpact(style: .light)
 
-        // La flying card è già a destinationFrame con flyingOpacity = 1 sotto la inspection.
-        // Fade out della inspection — la flying card riappare senza stacco.
+        // La flying card è sotto la inspection con opacity calcolata come (1 - inspectionOpacity).
+        // Fade out inspection → flying card riappare automaticamente grazie alla formula nell'overlay.
         flyingFrame = destinationFrame
         flyingCornerRadius = 18
         withAnimation(.easeInOut(duration: 0.15)) {
             inspectionOpacity = 0
-            // flyingOpacity già 1, nessun cambio
         }
 
         // Fase A parte dopo il crossfade
@@ -387,20 +514,31 @@ struct CollectionAlbumView: View {
             }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.40) {
-                // Fase B: scende nella bustina
-                // La plastica sovrapposta viene attivata istantaneamente al 100% prima della discesa!
-                pocketOverlayOpacity = 1.0
-                withAnimation(.easeIn(duration: 0.28)) {
-                    flyingFrame = sourceFrame
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                if pocketFrame == .zero {
                     flyingOpacity = 0
-                    pocketOverlayOpacity = 0
+                    animatingCardName = nil
+                    animationPhase = .idle
                     withAnimation(.easeIn(duration: 0.08)) {
                         cellCardOpacity = 1.0
                     }
-                    animatingCardName = nil
-                    animationPhase = .idle
+                } else {
+                    // Fase B: scende nella bustina
+                    // Nascondi il pocket della cella e attiva l'overlay prima della discesa
+                    hideCellPocket = true
+                    pocketOverlayOpacity = 1.0
+                    withAnimation(.easeIn(duration: 0.28)) {
+                        flyingFrame = sourceFrame
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                        flyingOpacity = 0
+                        pocketOverlayOpacity = 0
+                        hideCellPocket = false
+                        withAnimation(.easeIn(duration: 0.08)) {
+                            cellCardOpacity = 1.0
+                        }
+                        animatingCardName = nil
+                        animationPhase = .idle
+                    }
                 }
             }
         }
@@ -485,13 +623,14 @@ struct CollectionAlbumView: View {
             animationPhase = .pulling
             cellCardOpacity = 0.0
             overlayOpacity = 0.0
+            hideCellPocket = true
             flyingFrame = sourcePos
             flyingCornerRadius = 8
             flyingOpacity = 1.0
             
-            // Set the pocket overlay frame and make it static/visible instantly!
+            // Prepara il frame del pocket ma NON renderlo visibile — lo mostriamo solo nella Phase 3
             pocketFrame = finalPocketFrame
-            pocketOverlayOpacity = 1.0
+            pocketOverlayOpacity = 0.0
             
             HapticManager.shared.triggerImpact(style: .medium)
             
@@ -502,10 +641,10 @@ struct CollectionAlbumView: View {
             
             // Wait 0.55 seconds for this flight to finish
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                // Phase 3: Slide down inside the plastic pocket sleeve texture!
-                // The pocket overlay is already perfectly static and visible on the cell slot, so the card slides behind it!
+                // Phase 3: Mostra il pocket overlay ADESSO (fisso) e la carta scende dietro
+                pocketOverlayOpacity = 1.0
                 withAnimation(.easeOut(duration: 0.35)) {
-                    flyingFrame = finalSourceFrame // Card slides down into cell behind the static outline
+                    flyingFrame = finalSourceFrame
                 }
                 
                 // Wait 0.35 seconds for card to completely slide inside
@@ -520,6 +659,7 @@ struct CollectionAlbumView: View {
                     // Hide flying overlays and reveal cell card
                     flyingOpacity = 0.0
                     pocketOverlayOpacity = 0.0
+                    hideCellPocket = false
                     cellCardOpacity = 1.0
                     
                     // Reset animation states immediately for the current sticker!
@@ -550,6 +690,7 @@ struct AlbumCardCell: View {
     let hasSynced: Bool
     let cardOpacity: Double
     let isAnimating: Bool
+    let hidePocket: Bool   // true only during final descent so flying card lands cleanly
 
     private var remoteURL: URL? {
         if let urlString = CardDatabase.remoteArtworks[name]?.imageUrl {
@@ -574,7 +715,9 @@ struct AlbumCardCell: View {
                     )
                     .opacity(cardOpacity)
 
-                    if !isAnimating {
+                    // Hide pocket only during final descent (phase B) so the flying card
+                    // lands cleanly. During pull-up and zoom the pocket stays visible.
+                    if !(isAnimating && hidePocket) {
                         Image("pocket_outline")
                             .resizable()
                             .frame(width: 72, height: 94)
@@ -635,6 +778,7 @@ struct StickerGridView: View, Equatable {
     let animatingCardName: String?
     let cellCardOpacity: Double
     let animationPhase: CardAnimationPhase
+    let hideCellPocket: Bool
     let frameTracker: FrameTracker
     let frameRefreshToken: Int
     let columns: [GridItem]
@@ -650,6 +794,7 @@ struct StickerGridView: View, Equatable {
         lhs.animatingCardName == rhs.animatingCardName &&
         lhs.cellCardOpacity == rhs.cellCardOpacity &&
         lhs.animationPhase == rhs.animationPhase &&
+        lhs.hideCellPocket == rhs.hideCellPocket &&
         lhs.frameRefreshToken == rhs.frameRefreshToken
     }
 
@@ -663,7 +808,8 @@ struct StickerGridView: View, Equatable {
                     isRevealed: revealedCards.contains(name) && !recentlyCompletedPack.contains(name) ? true : animatedCompletedCards.contains(name),
                     hasSynced: hasSyncedWithCloud,
                     cardOpacity: (animatingCardName == name) ? cellCardOpacity : (recentlyCompletedPack.contains(name) && !animatedCompletedCards.contains(name) ? 0.0 : 1.0),
-                    isAnimating: animatingCardName == name
+                    isAnimating: animatingCardName == name,
+                    hidePocket: (animatingCardName == name) && hideCellPocket
                 )
                 .contentShape(Rectangle())
                 .background(

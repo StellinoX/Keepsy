@@ -9,10 +9,11 @@ struct PackOpeningView: View {
     @Binding var activeView: ContentView.ActiveView
     @StateObject private var locationManager = LocationManager()
     @State private var packState: PackState = .selecting
-    // Museum currently selected in the swipeable pack pager. Drives which museum's
+    // Museum currently selected in the swipeable packet pager. Drives which museum's
     // cards a newly opened pack draws from. Persisted to the "currentCity" UserDefaults
     // key on open, which ARArtworkView reads for tracking + collection routing.
     @State private var selectedMuseumId: String = MuseumConfig.shared.museums.first?.id ?? "capodimonte"
+    @State private var showCitySelector = false
 
     @State private var cards: [ArtworkCard] = []
     @State private var showCards = false
@@ -22,6 +23,7 @@ struct PackOpeningView: View {
     @State private var hasSyncedWithCloud = false
     @State private var flashOpacity: Double = 0.0
     @State private var showOpeningEffect = false
+    @State private var shakeOffset: CGFloat = 0
 
     // Animazione carte — una per carta
     @State private var cardOffsetX: [CGFloat] = [123, 0, -123, 61.5, -61.5]
@@ -70,17 +72,23 @@ struct PackOpeningView: View {
                     },
                     onTapActivePack: {
                         onTapActivePack()
+                    },
+                    onTapCity: {
+                        showCitySelector = true
                     }
                 )
             } else {
                 ZStack {
                     if packState == .tearing || packState == .opened {
                         SceneKitPacketView(
+                            museumId: selectedMuseumId,
+                            packetImageName: selectedMuseumId == "capodimonte" ? "capodimonte_pacchetto" : "uffizi_pacchetto",
                             onTearComplete: {
                                 showOpeningEffect = true
-                                withAnimation(.easeOut(duration: 0.06)) { flashOpacity = 1.0 }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                                    withAnimation(.easeIn(duration: 0.5)) { flashOpacity = 0.0 }
+                                triggerShake()
+                                withAnimation(.easeOut(duration: 0.03)) { flashOpacity = 1.0 }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+                                    withAnimation(.easeIn(duration: 0.55)) { flashOpacity = 0.0 }
                                 }
                             },
                             onOpen: {
@@ -144,6 +152,7 @@ struct PackOpeningView: View {
                                     .opacity(shimmerPhase > 0.001 ? 1 : 0)
                                     .blendMode(.overlay)
                                     .allowsHitTesting(false)
+
                             }
 
                             Spacer()
@@ -156,20 +165,15 @@ struct PackOpeningView: View {
                                         resetPack()
                                     }
                                 }) {
-                                    Text("NEXT")
-                                        .font(.system(.headline, design: .monospaced))
-                                        .bold()
+                                    Text("CATCH'EM")
+                                        .font(.custom("Helvetica-BoldOblique", size: 20))
                                         .foregroundColor(.black)
-                                        .frame(width: 240, height: 50)
+                                        .frame(width: 232, height: 54)
                                         .background(
-                                            Capsule()
-                                                .fill(LinearGradient(
-                                                    colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00")],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                ))
+                                            RoundedRectangle(cornerRadius: 30)
+                                                .fill(Color(hex: "D8D8D8"))
+                                                .shadow(color: .black.opacity(0.5), radius: 39, x: 0, y: 4)
                                         )
-                                        .shadow(color: Color(hex: "F1B40A").opacity(0.55), radius: 18, x: 0, y: 7)
                                 }
                                 .scaleEffect(nextButtonScale)
                                 .onAppear {
@@ -189,45 +193,7 @@ struct PackOpeningView: View {
                         .zIndex(20)
                     }
                 }
-            }
-
-            if packState == .opened && inspectedCard == nil {
-                VStack {
-                    HStack {
-                        Button(action: {
-                            HapticManager.shared.triggerImpact(style: .light)
-                            withAnimation(.easeInOut(duration: 0.35)) {
-                                resetPack()
-                            }
-                        }) {
-                            HStack(spacing: 5) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 14, weight: .bold))
-                                Text("Back")
-                                    .font(.system(size: 14, weight: .bold))
-                            }
-                            .foregroundColor(.white)
-                            .frame(width: 85, height: 44)
-                            .background(
-                                Capsule().fill(
-                                    LinearGradient(
-                                        colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                            )
-                            .shadow(color: Color(hex: "E36D13").opacity(0.3), radius: 8, x: 0, y: 4)
-                        }
-                        .padding(.top, 61)
-                        .padding(.leading, 30)
-                        
-                        Spacer()
-                    }
-                    Spacer()
-                }
-                .ignoresSafeArea()
-                .zIndex(150)
+                .offset(x: shakeOffset)
             }
 
             if let card = inspectedCard {
@@ -240,6 +206,33 @@ struct PackOpeningView: View {
                 .transition(.opacity)
                 .zIndex(100)
             }
+
+            if packState == .opened && inspectedCard == nil {
+                Button(action: {
+                    HapticManager.shared.triggerImpact(style: .light)
+                    withAnimation(.easeInOut(duration: 0.35)) {
+                        resetPack()
+                    }
+                }) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .bold))
+                        Text("Back")
+                            .font(.system(size: 16, weight: .regular))
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: 85, height: 44)
+                    .background(
+                        Capsule().fill(Color(hex: "383838"))
+                    )
+                }
+                .position(x: 30 + 85/2, y: 83 + 44/2)
+                .zIndex(150)
+            }
+        }
+        .ignoresSafeArea()
+        .fullScreenCover(isPresented: $showCitySelector) {
+            CitySelectorView(selectedMuseumId: $selectedMuseumId)
         }
         .task {
             await CardDatabase.syncWithCloud()
@@ -248,21 +241,38 @@ struct PackOpeningView: View {
         .onChange(of: hasSyncedWithCloud) { _, synced in
             if synced && packState == .opened { loadActivePack() }
         }
+        .onChange(of: selectedMuseumId) { _, newValue in
+            UserDefaults.standard.set(newValue, forKey: "lastSelectedMuseumId")
+        }
         .onAppear {
             // Open the pager on the active pack's museum, if one is in progress.
             if CardDatabase.hasActivePack(),
                let activeMuseum = UserDefaults.standard.string(forKey: "currentCity") {
                 selectedMuseumId = activeMuseum
+            } else if let lastSelected = UserDefaults.standard.string(forKey: "lastSelectedMuseumId") {
+                selectedMuseumId = lastSelected
             }
             loadActivePack()
+        }
+    }
+
+    // MARK: - Shake
+
+    func triggerShake() {
+        let pattern: [(CGFloat, Double)] = [
+            (-14, 0.00), (14, 0.055), (-10, 0.11), (10, 0.165),
+            (-5, 0.22), (5, 0.275), (0, 0.33)
+        ]
+        for (offset, delay) in pattern {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                withAnimation(.easeInOut(duration: 0.05)) { shakeOffset = offset }
+            }
         }
     }
 
     // MARK: - Animazione ingresso carte
 
     func animateCardsIn() {
-        // Cards start at center-screen (offset counters their natural grid positions),
-        // scaled down and randomly rotated — each bursts to its grid slot one by one.
         let startOffsets: [(x: CGFloat, y: CGFloat)] = [
             (123, 94), (0, 94), (-123, 94), (61.5, -94), (-61.5, -94)
         ]
@@ -276,7 +286,6 @@ struct PackOpeningView: View {
             cardRotation[i] = startRotations[i]
         }
 
-        // Interleaved order: top-left, bottom-left, top-center, bottom-right, top-right
         let revealOrder: [Int] = [0, 3, 1, 4, 2]
         let stagger = 0.14
         let baseDelay = 0.12
@@ -301,7 +310,6 @@ struct PackOpeningView: View {
             }
         }
 
-        // Shimmer sweep starts after the last card settles
         let shimmerStart = baseDelay + Double(revealOrder.count - 1) * stagger + 0.46
         DispatchQueue.main.asyncAfter(deadline: .now() + shimmerStart) {
             withAnimation(.easeInOut(duration: 0.65)) {
@@ -330,10 +338,15 @@ struct PackOpeningView: View {
         // Traccia doppie PRIMA di aggiungere a foundCards, altrimenti tutte risultano doppie.
         // Scrivi SEMPRE (anche vuoto) per non ereditare doppie stale dal pack precedente.
         let duplicates = CardDatabase.trackDuplicates(in: selectedArtworks)
-        UserDefaults.standard.set(duplicates, forKey: "activePackDuplicates")
+        UserDefaults.standard.set(duplicates, forKey: "activePackDuplicates_\(selectedMuseumId)")
 
         CardDatabase.addFoundCards(selectedArtworks)
-        UserDefaults.standard.set(selectedArtworks, forKey: "activePackCards")
+        UserDefaults.standard.set(selectedArtworks, forKey: "activePackCards_\(selectedMuseumId)")
+        
+        // Start background download for these specific 5 cards to ensure they are ready ASAP
+        Task(priority: .userInitiated) {
+            await CardDatabase.downloadImages(for: selectedArtworks)
+        }
         
         self.packState = .opened
         self.showCards = true
@@ -363,6 +376,7 @@ struct PackOpeningView: View {
     }
 
     func onTapActivePack() {
+        UserDefaults.standard.set(selectedMuseumId, forKey: "currentCity")
         loadActivePack()
         packState = .opened
         showCards = true
@@ -377,6 +391,7 @@ struct PackOpeningView: View {
         inspectedCard = nil
         flashOpacity = 0.0
         showOpeningEffect = false
+        shakeOffset = 0
         shimmerPhase = 0
         nextButtonScale = 0
 
@@ -388,20 +403,24 @@ struct PackOpeningView: View {
     }
 }
 
-// MARK: - SingleScrollPackView, PackExpansionRow, LightBeamView
-// (invariati rispetto all'originale)
+// MARK: - SingleScrollPackView
 
 struct SingleScrollPackView: View {
     let currentCity: String
     @Binding var selectedMuseumId: String
     let onStart: () -> Void
     let onTapActivePack: () -> Void
+    let onTapCity: () -> Void
 
     @State private var revealedCards: Set<String> = []
     @State private var activeLocation: LocationContainer? = nil
-    @State private var savedTearMask: UIImage?
+    @State private var carouselDragOffset: CGFloat = 0
 
     private var museums: [Museum] { MuseumConfig.shared.museums }
+
+    private var selectedIndex: Int {
+        museums.firstIndex(where: { $0.id == selectedMuseumId }) ?? 0
+    }
 
     // The museum whose pack is currently opened (awaiting AR scan), if any.
     // Falls back to the first museum so a pack opened before museum separation
@@ -411,55 +430,109 @@ struct SingleScrollPackView: View {
         return UserDefaults.standard.string(forKey: "currentCity") ?? museums.first?.id
     }
 
+    private var displayedCity: String {
+        if selectedMuseumId == "uffizi" {
+            return "FLORENCE"
+        } else if selectedMuseumId == "capodimonte" {
+            return "NAPLES"
+        } else {
+            let city = currentCity.uppercased()
+            if city == "NAPOLI" { return "NAPLES" }
+            if city == "FIRENZE" { return "FLORENCE" }
+            return city.isEmpty ? "NAPLES" : city
+        }
+    }
+
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
                 locationChip
-                    .padding(.top, 105)
-                    .padding(.bottom, 16)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        onTapCity()
+                    }
+                    .padding(.top, 130)
+                    .padding(.bottom, 20)
 
-                // Pacchetti divisi per museo — scorri orizzontalmente
-                TabView(selection: $selectedMuseumId) {
-                    ForEach(museums) { museum in
+                // Pacchetti divisi per museo — scorri orizzontalmente in stile Pokemon Pocket
+                ZStack {
+                    ForEach(Array(museums.enumerated()), id: \.element.id) { index, museum in
+                        let diff = CGFloat(index - selectedIndex)
+                        
+                        // Il pacchetto centrale è in scala 1.25, quelli adiacenti sono più piccoli e sfumati
+                        let isSelected = index == selectedIndex
+                        let scale: CGFloat = isSelected ? 1.25 : 0.88
+                        let opacity: Double = isSelected ? 1.0 : 0.65
+                        
+                        // Rotazione stile Pokemon: pacchetto sinistro ruotato a sx (-5°), destro a dx (+5°)
+                        let rotation: Double = isSelected ? 0 : (diff > 0 ? 5 : -5)
+                        
+                        // Offset: più stretto per far vedere chiaramente i pacchetti laterali come da Sketch
+                        let xOffset = diff * 190 + carouselDragOffset
+                        
                         MuseumPackPage(
                             museum: museum,
-                            isActiveMuseum: activePackMuseum == museum.id,
-                            savedTearMask: savedTearMask,
                             revealedCards: revealedCards,
-                            onTapActivePack: onTapActivePack
+                            onTapActivePack: onTapActivePack,
+                            onTapStart: onStart
                         )
-                        .tag(museum.id)
+                        .frame(width: 380, height: 515)
+                        .scaleEffect(scale)
+                        .opacity(opacity)
+                        .rotationEffect(.degrees(rotation))
+                        .offset(x: xOffset)
+                        .zIndex(isSelected ? 10 : 1)
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 440)
-
-                // Indicatori pagina tra i pacchetti e il bottone
-                if museums.count > 1 {
-                    HStack(spacing: 7) {
-                        ForEach(museums) { museum in
-                            Circle()
-                                .fill(museum.id == selectedMuseumId ? Color.white : Color.white.opacity(0.3))
-                                .frame(width: 7, height: 7)
-                                .animation(.easeInOut(duration: 0.2), value: selectedMuseumId)
+                .frame(height: 400)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 15)
+                        .onChanged { gesture in
+                            // Traccia solo trascinamenti prevalentemente orizzontali per non bloccare lo scroll verticale della ScrollView
+                            if abs(gesture.translation.width) > abs(gesture.translation.height) {
+                                carouselDragOffset = gesture.translation.width
+                            }
                         }
-                    }
-                    .padding(.bottom, 14)
-                }
+                        .onEnded { gesture in
+                            let velocity = gesture.predictedEndTranslation.width
+                            let threshold: CGFloat = 50
+                            
+                            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                                if abs(gesture.translation.width) > abs(gesture.translation.height) {
+                                    if gesture.translation.width < -threshold || velocity < -200 {
+                                        // Swipe a sinistra -> pacchetto successivo
+                                        let nextIndex = min(selectedIndex + 1, museums.count - 1)
+                                        selectedMuseumId = museums[nextIndex].id
+                                    } else if gesture.translation.width > threshold || velocity > 200 {
+                                        // Swipe a destra -> pacchetto precedente
+                                        let prevIndex = max(selectedIndex - 1, 0)
+                                        selectedMuseumId = museums[prevIndex].id
+                                    }
+                                }
+                                carouselDragOffset = 0
+                            }
+                        }
+                )
 
                 // Bottone statico: cambia stato in base al museo selezionato, non scorre
-                let isSelectedActive = activePackMuseum == selectedMuseumId
+                let isSelectedActive = CardDatabase.hasActivePack(for: selectedMuseumId)
                 Button(action: isSelectedActive ? onTapActivePack : onStart) {
-                    Text(isSelectedActive ? "VEDI CARTE" : "START")
-                        .font(.system(size: 16, weight: .black)).italic()
+                    Text(isSelectedActive ? "CONTINUE" : "START")
+                        .font(.custom("Helvetica-BoldOblique", size: 15))
                         .foregroundColor(.black)
-                        .frame(width: isSelectedActive ? 160 : 134, height: 44)
+                        .frame(width: isSelectedActive ? 130 : 110, height: 38)
                         .background(
-                            Capsule()
-                                .fill(isSelectedActive ? Color.orange : Color(hex: "D8D8D8"))
-                                .shadow(color: .black.opacity(0.5), radius: 39, x: 0, y: 4)
+                            RoundedRectangle(cornerRadius: 19)
+                                .fill(LinearGradient(
+                                    colors: [.white, Color(hex: "EAEAEA")],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ))
+                                .shadow(color: .black.opacity(0.55), radius: 39, x: 0, y: 4)
                         )
                 }
+                .padding(.top, 25)
                 .padding(.bottom, 36)
                 .animation(.easeInOut(duration: 0.2), value: selectedMuseumId)
 
@@ -468,6 +541,7 @@ struct SingleScrollPackView: View {
                     ForEach(museums) { museum in
                         let info = progressFor(museum.id)
                         PackExpansionRow(
+                            museumId: museum.id,
                             title: museum.name,
                             progress: info.progress,
                             onTap: { activeLocation = LocationContainer(name: museum.id) }
@@ -481,9 +555,6 @@ struct SingleScrollPackView: View {
         .ignoresSafeArea(edges: .top)
         .onAppear {
             revealedCards = CardDatabase.getRevealedCards()
-            if let data = UserDefaults.standard.data(forKey: "activePackTearMask") {
-                savedTearMask = UIImage(data: data)
-            }
         }
         .fullScreenCover(item: $activeLocation) { container in
             CollectionAlbumView(museumLocation: container.name, showCloseButton: true) { activeLocation = nil }
@@ -497,11 +568,12 @@ struct SingleScrollPackView: View {
                     .fill(LinearGradient(colors: [Color(white: 0.8), Color(white: 0.4)], startPoint: .topLeading, endPoint: .bottomTrailing))
                     .frame(width: 20, height: 20)
                     .shadow(color: .black.opacity(0.45), radius: 8, x: 0, y: 4)
-                Image(systemName: "location.fill")
+                Image(systemName: "location.north.fill")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundColor(.white)
+                    .rotationEffect(.degrees(45))
             }
-            Text(currentCity)
+            Text(displayedCity)
                 .font(.system(size: 11, weight: .black))
                 .italic()
                 .foregroundColor(.white)
@@ -510,7 +582,7 @@ struct SingleScrollPackView: View {
         .padding(.trailing, 10)
         .frame(width: 109, height: 30)
         .background(Capsule().fill(LinearGradient(colors: [Color(white: 0.18), Color(white: 0.12)], startPoint: .top, endPoint: .bottom)))
-        .overlay(Capsule().stroke(Color.white.opacity(0.12), lineWidth: 1))
+        .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 2))
     }
 
     func progressFor(_ museumId: String) -> (progress: Double, found: Int, total: Int) {
@@ -524,38 +596,61 @@ struct SingleScrollPackView: View {
 
 struct MuseumPackPage: View {
     let museum: Museum
-    let isActiveMuseum: Bool
-    let savedTearMask: UIImage?
     let revealedCards: Set<String>
     let onTapActivePack: () -> Void
+    let onTapStart: () -> Void
+
+    @State private var savedTearMask: UIImage? = nil
+
+    private var packetImage: String {
+        museum.packetImageName
+    }
 
     private var activePack: [String]? {
-        guard isActiveMuseum, let pack = CardDatabase.getActivePack(), !pack.isEmpty else { return nil }
+        guard CardDatabase.hasActivePack(for: museum.id),
+              let pack = CardDatabase.getActivePack(for: museum.id),
+              !pack.isEmpty else { return nil }
         return pack
     }
 
     var body: some View {
         VStack(spacing: 0) {
             if let activePack = activePack {
+                // Pack strappato con carta che spunta — serve SceneKit
                 let firstCardName = activePack[0]
-                SceneKitPacketView(interactive: false, isTorn: true, firstCardName: firstCardName,
+                SceneKitPacketView(interactive: false, isTorn: true,
+                                   museumId: museum.id,
+                                   packetImageName: packetImage,
+                                   firstCardName: firstCardName,
                                    isFirstCardRevealed: revealedCards.contains(firstCardName),
                                    tearMaskImage: savedTearMask)
-                    .frame(width: 290, height: 427)
+                    .frame(width: 380, height: 515)
                     .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
                     .contentShape(Rectangle())
                     .onTapGesture { onTapActivePack() }
             } else {
-                SceneKitPacketView(interactive: false)
-                    .frame(width: 290, height: 427)
+                // Pack sigillato — usiamo SceneKit in 3D per avere esattamente le stesse dimensioni, prospettiva ed ombra del pack aperto!
+                SceneKitPacketView(interactive: false, isTorn: false,
+                                   museumId: museum.id,
+                                   packetImageName: packetImage)
+                    .frame(width: 380, height: 515)
                     .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onTapStart() }
             }
         }
         .padding(.top, 4)
+        .onAppear {
+            if let data = UserDefaults.standard.data(forKey: "activePackTearMask_\(museum.id)")
+                ?? UserDefaults.standard.data(forKey: "activePackTearMask") {
+                savedTearMask = UIImage(data: data)
+            }
+        }
     }
 }
 
 struct PackExpansionRow: View {
+    let museumId: String
     let title: String
     let progress: Double
     let onTap: () -> Void
@@ -563,23 +658,27 @@ struct PackExpansionRow: View {
     var percentText: String { "\(Int(round(progress * 100)))%" }
 
     var body: some View {
-        Button(action: onTap) {
+        let imageName = MuseumConfig.shared.museums.first(where: { $0.id == museumId })?.packetImageName ?? "uffizi_pacchetto"
+        return Button(action: onTap) {
             HStack(spacing: 0) {
                 // Left side: Zoomed, fanned, and clipped packets
                 ZStack {
-                    SceneKitPacketView(interactive: false)
-                        .frame(width: 140, height: 210)
-                        .rotationEffect(.degrees(-9))
-                        .offset(x: -18, y: 10)
+                    Image(imageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 110, height: 165)
+                        .rotationEffect(.degrees(-10))
+                        .offset(x: -15, y: 12)
                     
-                    SceneKitPacketView(interactive: false)
-                        .frame(width: 140, height: 210)
-                        .rotationEffect(.degrees(9))
-                        .offset(x: 18, y: 20)
+                    Image(imageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 110, height: 165)
+                        .rotationEffect(.degrees(10))
+                        .offset(x: 15, y: 22)
                 }
                 .frame(width: 140, height: 194)
-                .scaleEffect(1.2)
-                .offset(x: 12, y: 10)
+                .offset(x: 8, y: 0)
                 
                 Spacer()
                 
@@ -621,21 +720,96 @@ struct PackExpansionRow: View {
             .frame(width: 344, height: 194)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(hex: "121214")) // Elegant premium dark background
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(
-                                isComplete ?
-                                    LinearGradient(colors: [Color(hex: "F2CA03"), Color(hex: "C7A245")], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                                    LinearGradient(colors: [Color(hex: "B1B1B1"), Color(hex: "464646")], startPoint: .topLeading, endPoint: .bottomTrailing),
-                                lineWidth: 2
-                            )
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: "2C2C2E"), Color(hex: "121214")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(
+                        isComplete ?
+                            LinearGradient(colors: [Color(hex: "F2CA03"), Color(hex: "C7A245")], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                            LinearGradient(colors: [Color(hex: "B1B1B1"), Color(hex: "464646")], startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 2
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: 16)) // Clip packets to card shape
-            .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 6)
+            .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - PacketFoilImageView — asset 2D con effetto metallico (nessun SceneKit)
+
+struct PacketFoilImageView: View {
+    let imageName: String
+    var maxHeight: CGFloat = 225
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            let phase = CGFloat(sin(time * 0.72)) * 0.82
+
+            Image(imageName)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxHeight: maxHeight)
+                .overlay(
+                    GeometryReader { geo in
+                        let w = geo.size.width
+                        let h = geo.size.height
+
+                        ZStack {
+                            LinearGradient(
+                                colors: [
+                                    .clear,
+                                    .white.opacity(0.04),
+                                    Color(red: 0.78, green: 0.82, blue: 0.86).opacity(0.10),
+                                    .white.opacity(0.05),
+                                    .clear
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            .blendMode(.screen)
+
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            .clear,
+                                            .white.opacity(0.03),
+                                            .white.opacity(0.22),
+                                            Color(red: 0.72, green: 0.76, blue: 0.80).opacity(0.14),
+                                            .white.opacity(0.03),
+                                            .clear
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .frame(width: w * 0.34, height: h * 1.35)
+                                .rotationEffect(.degrees(18))
+                                .offset(x: phase * w)
+                                .blur(radius: 9)
+                                .blendMode(.screen)
+                                .opacity(0.55)
+                        }
+                    }
+                    .allowsHitTesting(false)
+                )
+                .mask(
+                    Image(imageName)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxHeight: maxHeight)
+                )
+        }
     }
 }
 

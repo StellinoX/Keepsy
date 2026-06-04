@@ -29,10 +29,27 @@ struct ContentView: View {
             }
         }
         .task {
-            // Se desideri caricare automaticamente tutte le 52 opere e immagini in CloudKit,
-            // scommenta la riga qui sotto, avvia l'app sul Simulatore e controlla la console di Xcode!
-            // Una volta completato il caricamento, puoi ricommentare questa riga.
-            // await CloudKitSeeder.seedDatabase()
+            // Sincronizza i metadati da Firebase Firestore in background all'avvio
+            await CardDatabase.syncWithCloud()
+            
+            // Prefetch/Scarica tutte le immagini delle opere per averle già in locale in background
+            await prefetchAllImages()
+        }
+    }
+    
+    private func prefetchAllImages() async {
+        let museums = ["capodimonte", "uffizi"]
+        var allMissing: [String] = []
+        
+        for museum in museums {
+            let artworks = CardDatabase.artworksFor(location: museum)
+            let downloaded = CardDatabase.downloadedArtworkNames(for: museum)
+            let missing = artworks.filter { !downloaded.contains($0) }
+            allMissing.append(contentsOf: missing)
+        }
+        
+        if !allMissing.isEmpty {
+            await CardDatabase.downloadImages(for: allMissing)
         }
     }
 }

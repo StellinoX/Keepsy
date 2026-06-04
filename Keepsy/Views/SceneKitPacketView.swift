@@ -6,6 +6,10 @@ fileprivate var cachedCardBackTexture: UIImage?
 @available(iOS 14.0, *)
 fileprivate func createCardBackTexture() -> UIImage {
     if let cached = cachedCardBackTexture { return cached }
+    if let retroImage = UIImage(named: "retro") {
+        cachedCardBackTexture = retroImage
+        return retroImage
+    }
     let size = CGSize(width: 540, height: 780)
     let format = UIGraphicsImageRendererFormat()
     format.scale = 2.0
@@ -113,57 +117,36 @@ fileprivate func createTornMask() -> UIImage {
     return result
 }
 
-@available(iOS 14.0, *)
+@available(iOS 16.0, *)
+@MainActor
 fileprivate func createCardFrontTexture(name: String) -> UIImage {
-    let size = CGSize(width: 540, height: 818) // matches aspect ratio 111x168
-    let format = UIGraphicsImageRendererFormat()
-    format.scale = 2.0
-    let renderer = UIGraphicsImageRenderer(size: size, format: format)
+    let title = CardDatabase.cleanedArtworkName(name)
+    let index = CardDatabase.allArtworkNames.firstIndex(of: name)
+    let isRevealed = CardDatabase.getRevealedCards().contains(name)
+    let borderGrad = CardDatabase.borderGradientFor(name: name)
     
-    return renderer.image { ctx in
-        let context = ctx.cgContext
-        
-        // 1. Draw gradient background
-        let rectPath = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 40)
-        context.addPath(rectPath.cgPath)
-        context.clip()
-        
-        let uiColors = CardDatabase.colorsFor(name: name)
-        let colors = uiColors.map { $0.cgColor }
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let gradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: [0.0, 1.0])!
-        context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: size.height), options: [])
-        context.resetClip()
-        
-        // 2. Draw border
-        rectPath.lineWidth = 12
-        UIColor(white: 1.0, alpha: 0.15).setStroke()
-        rectPath.stroke()
-        
-        // 3. Draw artwork image
-        let imgWidth: CGFloat = 491
-        let imgHeight: CGFloat = 608
-        let imgRect = CGRect(x: (size.width - imgWidth)/2, y: 24, width: imgWidth, height: imgHeight)
-        
-        let img = CardDatabase.localImage(for: name)
-        
-        if let imageToDraw = img {
-            let imagePath = UIBezierPath(roundedRect: imgRect, cornerRadius: 36)
-            context.saveGState()
-            imagePath.addClip()
-            context.interpolationQuality = .high
-            imageToDraw.draw(in: imgRect)
-            context.restoreGState()
-        } else {
-            if let logoImg = UIImage(named: "CardBackLogo") {
-                let logoPath = UIBezierPath(roundedRect: imgRect, cornerRadius: 36)
-                context.saveGState()
-                logoPath.addClip()
-                logoImg.draw(in: imgRect)
-                context.restoreGState()
-            }
+    // Ensure the image is loaded into the memory cache first so ImageRenderer draws it
+    if CardDatabase.imageCache.object(forKey: name as NSString) == nil {
+        if let image = CardDatabase.localImage(for: name) {
+            CardDatabase.imageCache.setObject(image, forKey: name as NSString)
         }
     }
+    
+    let cardView = ArtworkCardFrontView(
+        name: name,
+        title: title,
+        cardIndex: index,
+        width: 540,
+        height: 818,
+        isRevealed: isRevealed,
+        goldBorder: borderGrad,
+        showCheckmark: false
+    )
+    
+    let renderer = ImageRenderer(content: cardView)
+    renderer.scale = 2.0
+    
+    return renderer.uiImage ?? UIImage()
 }
 
 fileprivate var cachedHorizontalFlareTexture: UIImage?
@@ -299,13 +282,17 @@ public struct SceneKitPacketView: UIViewRepresentable {
     var onTearComplete: (() -> Void)?
     var interactive: Bool
     var isTorn: Bool
+    var museumId: String?
+    var packetImageName: String?
     var firstCardName: String?
     var isFirstCardRevealed: Bool
     var tearMaskImage: UIImage?
     
-    public init(interactive: Bool = true, isTorn: Bool = false, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, onTearComplete: (() -> Void)? = nil, onOpen: (() -> Void)? = nil) {
+    public init(interactive: Bool = true, isTorn: Bool = false, museumId: String? = nil, packetImageName: String? = nil, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, onTearComplete: (() -> Void)? = nil, onOpen: (() -> Void)? = nil) {
         self.interactive = interactive
         self.isTorn = isTorn
+        self.museumId = museumId
+        self.packetImageName = packetImageName
         self.firstCardName = firstCardName
         self.isFirstCardRevealed = isFirstCardRevealed
         self.tearMaskImage = tearMaskImage
@@ -337,6 +324,7 @@ public struct SceneKitPacketView: UIViewRepresentable {
     
     public func updateUIView(_ uiView: SCNView, context: Context) {
         // Applica i cambiamenti di isTorn e della maschera se la vista SwiftUI viene aggiornata senza essere ricreata
+        context.coordinator.firstCardName = firstCardName
         SCNTransaction.begin()
         SCNTransaction.animationDuration = 0.2
         if isTorn {
@@ -351,7 +339,14 @@ public struct SceneKitPacketView: UIViewRepresentable {
             context.coordinator.backFlapNode.isHidden = true
             context.coordinator.topSealNode.isHidden = true
             
-            context.coordinator.deckContainer.position = SCNVector3(0, 1.2, -0.05)
+            if !interactive {
+                context.coordinator.deckContainer.position = SCNVector3(0, 0.95, -0.05)
+                context.coordinator.deckContainer.scale = SCNVector3(0.75, 0.75, 0.75)
+            } else {
+                context.coordinator.deckContainer.position = SCNVector3(0, 1.2, -0.05)
+                context.coordinator.deckContainer.scale = SCNVector3(1.0, 1.0, 1.0)
+            }
+            context.coordinator.deckContainer.isHidden = false
             context.coordinator.tiltContainerNode.eulerAngles = SCNVector3(0, 0, 0)
         } else {
             context.coordinator.maskProp.contents = UIColor.black
@@ -366,19 +361,29 @@ public struct SceneKitPacketView: UIViewRepresentable {
             context.coordinator.topSealNode.isHidden = false
             
             context.coordinator.deckContainer.position = SCNVector3(0, 0, -0.12)
+            if !interactive {
+                context.coordinator.deckContainer.scale = SCNVector3(0.8, 0.8, 0.8)
+            } else {
+                context.coordinator.deckContainer.scale = SCNVector3(1.0, 1.0, 1.0)
+            }
+            context.coordinator.deckContainer.isHidden = true
             context.coordinator.tiltContainerNode.eulerAngles = SCNVector3(0, 0, -0.06)
         }
         SCNTransaction.commit()
     }
     
     public func makeCoordinator() -> PacketCoordinator {
-        return PacketCoordinator(isTorn: isTorn, firstCardName: firstCardName, isFirstCardRevealed: isFirstCardRevealed, tearMaskImage: tearMaskImage, onTearComplete: onTearComplete, onOpen: onOpen)
+        return PacketCoordinator(interactive: interactive, isTorn: isTorn, museumId: museumId, packetImageName: packetImageName, firstCardName: firstCardName, isFirstCardRevealed: isFirstCardRevealed, tearMaskImage: tearMaskImage, onTearComplete: onTearComplete, onOpen: onOpen)
     }
 }
 
+@MainActor
 public class PacketCoordinator: NSObject {
     var scene: SCNScene
     weak var scnView: SCNView?
+    var interactive: Bool
+    var museumId: String?
+    var firstCardName: String?
     
     let bodyNode: SCNNode
     let flapNode: SCNNode
@@ -405,8 +410,32 @@ public class PacketCoordinator: NSObject {
     var onTearComplete: (() -> Void)?
     var lastMaskImage: UIImage?
     var lastHapticFingerX: Float = -10.0
+    var packetImageName: String?
     
-    public init(isTorn: Bool = false, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, onTearComplete: (() -> Void)? = nil, onOpen: (() -> Void)? = nil) {
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    @objc private func artworkImageDownloaded(_ notification: Notification) {
+        guard let firstCardName = self.firstCardName,
+              let name = notification.userInfo?["internalName"] as? String,
+              name == firstCardName else { return }
+        
+        if #available(iOS 16.0, *) {
+            SCNTransaction.begin()
+            SCNTransaction.animationDuration = 0.25
+            if self.cardNodes.count > 0 {
+                self.cardNodes[0].geometry?.firstMaterial?.diffuse.contents = createCardFrontTexture(name: firstCardName)
+            }
+            SCNTransaction.commit()
+        }
+    }
+    
+    public init(interactive: Bool = true, isTorn: Bool = false, museumId: String? = nil, packetImageName: String? = nil, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, onTearComplete: (() -> Void)? = nil, onOpen: (() -> Void)? = nil) {
+        self.interactive = interactive
+        self.museumId = museumId
+        self.packetImageName = packetImageName
+        self.firstCardName = firstCardName
         self.onTearComplete = onTearComplete
         self.onOpen = onOpen
         scene = SCNScene()
@@ -463,7 +492,8 @@ public class PacketCoordinator: NSObject {
         // Material (Dark Foil PBR)
         let mat = SCNMaterial()
         mat.lightingModel = .physicallyBased
-        if let userImg = UIImage(named: "Apri_pacchetto_Copy_14_3x") ?? UIImage(named: "content") ?? UIImage(named: "packet") {
+        let finalImageName = packetImageName ?? "packet"
+        if let userImg = UIImage(named: finalImageName) ?? UIImage(named: "Apri_pacchetto_Copy_14_3x") ?? UIImage(named: "uffizi_pacchetto") ?? UIImage(named: "packet") {
             mat.diffuse.contents = userImg
         } else {
             mat.diffuse.contents = UIColor(white: 0.12, alpha: 1.0)
@@ -576,7 +606,7 @@ public class PacketCoordinator: NSObject {
         float mFrag = maskTex.sample(maskSamplerFrag, in.rawUV).r;
         
         // Smooth Anti-Aliasing (Blend the edge instead of hard discard)
-        float alpha = smoothstep(0.53, 0.47, mFrag);
+        float alpha = smoothstep(0.53, 0.47, mFrag) * _surface.diffuse.a;
         if (alpha <= 0.01) { discard_fragment(); }
         _surface.transparent.a = alpha;
         """ + foilShader + """
@@ -596,7 +626,7 @@ public class PacketCoordinator: NSObject {
         float mFrag = maskTex.sample(maskSamplerFrag, in.rawUV).r;
         
         // Smooth Anti-Aliasing (Blend the edge instead of hard discard)
-        float alpha = smoothstep(0.47, 0.53, mFrag);
+        float alpha = smoothstep(0.47, 0.53, mFrag) * _surface.diffuse.a;
         if (alpha <= 0.01) { discard_fragment(); }
         _surface.transparent.a = alpha;
         """ + foilShader + """
@@ -670,7 +700,7 @@ public class PacketCoordinator: NSObject {
         constexpr sampler maskSamplerFrag(coord::normalized, address::clamp_to_edge, filter::linear);
         float mFrag = maskTex.sample(maskSamplerFrag, in.rawUV).r;
         
-        float alpha = smoothstep(0.53, 0.47, mFrag);
+        float alpha = smoothstep(0.53, 0.47, mFrag) * _surface.diffuse.a;
         if (alpha <= 0.01) { discard_fragment(); }
         _surface.transparent.a = alpha;
         """
@@ -684,7 +714,7 @@ public class PacketCoordinator: NSObject {
         constexpr sampler maskSamplerFrag(coord::normalized, address::clamp_to_edge, filter::linear);
         float mFrag = maskTex.sample(maskSamplerFrag, in.rawUV).r;
         
-        float alpha = smoothstep(0.47, 0.53, mFrag);
+        float alpha = smoothstep(0.47, 0.53, mFrag) * _surface.diffuse.a;
         if (alpha <= 0.01) { discard_fragment(); }
         _surface.transparent.a = alpha;
         """
@@ -708,7 +738,13 @@ public class PacketCoordinator: NSObject {
         // Also applies reverse-curl geometry so the packet opens like a physical pouch!
         let backMat = SCNMaterial()
         backMat.lightingModel = .physicallyBased
-        backMat.diffuse.contents = UIColor(white: 0.1, alpha: 1.0)
+        if let userImg = UIImage(named: finalImageName) ?? UIImage(named: "Apri_pacchetto_Copy_14_3x") ?? UIImage(named: "uffizi_pacchetto") ?? UIImage(named: "packet") {
+            backMat.diffuse.contents = userImg
+            // Multiply with dark gray to make the back dark/metallic like the inside of a pouch
+            backMat.multiply.contents = UIColor(white: 0.15, alpha: 1.0)
+        } else {
+            backMat.diffuse.contents = UIColor(white: 0.1, alpha: 1.0)
+        }
         backMat.metalness.contents = 0.8
         backMat.roughness.contents = 0.5
         backMat.isDoubleSided = true
@@ -724,8 +760,8 @@ public class PacketCoordinator: NSObject {
         backFlapNode = SCNNode(geometry: backGeo.copy() as? SCNGeometry)
         
         // Place behind the card
-        backBodyNode.position = SCNVector3(0, 0, -0.25)
-        backFlapNode.position = SCNVector3(0, 0, -0.25)
+        backBodyNode.position = SCNVector3(0, 0, -0.05)
+        backFlapNode.position = SCNVector3(0, 0, -0.05)
         
         bottomGroupNode.addChildNode(backBodyNode)
         topGroupNode.addChildNode(backFlapNode)
@@ -737,7 +773,7 @@ public class PacketCoordinator: NSObject {
         sideMatDark.metalness.contents = 0.8
         sideMatDark.roughness.contents = 0.5
         
-        let sealGeo = SCNPlane(width: 5.7, height: 0.25)
+        let sealGeo = SCNPlane(width: 5.29, height: 0.25)
         sealGeo.materials = [sideMatDark]
         
         topSealNode = SCNNode(geometry: sealGeo)
@@ -771,6 +807,10 @@ public class PacketCoordinator: NSObject {
         
         deckContainer = SCNNode()
         deckContainer.position = SCNVector3(0, 0, -0.12) // Between front and back
+        deckContainer.isHidden = !isTorn // Hidden by default if not torn yet to prevent showing from underneath
+        if !interactive {
+            deckContainer.scale = SCNVector3(0.75, 0.75, 0.75)
+        }
         tiltContainerNode.addChildNode(deckContainer)
         
         for i in 0..<5 {
@@ -813,7 +853,11 @@ public class PacketCoordinator: NSObject {
             backBodyNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
             
             // Move deck container up so it sticks out of the packet
-            deckContainer.position = SCNVector3(0, 1.2, -0.05)
+            if !interactive {
+                deckContainer.position = SCNVector3(0, 0.95, -0.05)
+            } else {
+                deckContainer.position = SCNVector3(0, 1.2, -0.05)
+            }
             
             // Remove Z-tilt rotation when the packet is already torn, keeping it centered and straight
             tiltContainerNode.eulerAngles = SCNVector3(0, 0, 0)
@@ -830,6 +874,13 @@ public class PacketCoordinator: NSObject {
         }
         
         super.init()
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(artworkImageDownloaded(_:)),
+            name: NSNotification.Name("ArtworkImageDownloaded"),
+            object: nil
+        )
     }
     
     @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
@@ -884,7 +935,7 @@ public class PacketCoordinator: NSObject {
         guard !touchPoints.isEmpty, let view = scnView else { return }
         
         // PERFORMANCE FIX: Dropped resolution to 256x256 (16x faster generation!).
-        // Because the Metal Fragment Shader uses bilinear filtering (filter::linear) 
+        // Because the Metal Fragment Shader uses bilinear filtering (filter::linear)
         // and evaluates smoothstep per-pixel, the final cut will still look infinitely sharp and HD!
         let texSize = CGSize(width: 256, height: 256)
         let renderer = UIGraphicsImageRenderer(size: texSize)
@@ -975,10 +1026,12 @@ public class PacketCoordinator: NSObject {
         // If cut spans across at least 35% of the screen width
         if dx > view.bounds.width * 0.35 {
             let maskToSave = self.lastMaskImage
+            let city = self.museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+            let key = "activePackTearMask_\(city)"
             DispatchQueue.global(qos: .utility).async {
                 if let lastMask = maskToSave, let pngData = lastMask.pngData() {
                     print("DEBUG: Tear mask successfully saved to UserDefaults, size: \(pngData.count) bytes")
-                    UserDefaults.standard.set(pngData, forKey: "activePackTearMask")
+                    UserDefaults.standard.set(pngData, forKey: key)
                 } else {
                     print("DEBUG: Tear mask failed to convert to pngData or lastMask is nil")
                 }
@@ -1018,6 +1071,9 @@ public class PacketCoordinator: NSObject {
     private func animateOpen() {
         // Keep rendering active during animation to prevent dropped frames.
         scnView?.rendersContinuously = true
+        
+        // Show the deck cards since we are now opening the packet
+        deckContainer.isHidden = false
 
         // === FLARE ===
         flareNode.opacity = 0.0
@@ -1065,21 +1121,19 @@ public class PacketCoordinator: NSObject {
         bodyDownAction.timingMode = .easeIn
         bottomGroupNode.runAction(bodyDownAction)
 
-        // === DECK: slide up, then present forward — single smooth motion ===
+        // === DECK: slide up out of the falling packet and present — single smooth motion ===
         let wait = SCNAction.wait(duration: 0.1)
 
-        // Linear timing on slideUp eliminates deceleration at the top,
-        // so the transition into presentGroup has no double-pause.
-        let slideUp = SCNAction.moveBy(x: 0, y: 5.5, z: 0.0, duration: 0.45)
-        slideUp.timingMode = .linear
+        // Slide up slightly and bring closer to camera (no scaling down) - stay centered at y: 0.0 to match SwiftUI cards final placement
+        let slideUp = SCNAction.move(to: SCNVector3(0, 0.0, 0.8), duration: 0.8)
+        slideUp.timingMode = .easeOut
+        
+        let straighten = SCNAction.rotateTo(x: 0, y: 0, z: 0.06, duration: 0.8)
+        straighten.timingMode = .easeOut
+        
+        let presentGroup = SCNAction.group([slideUp, straighten])
 
-        let moveForward = SCNAction.moveBy(x: 0, y: -5.5, z: 1.0, duration: 0.6)
-        let scaleDown = SCNAction.scale(to: 0.44, duration: 0.6)
-        let straighten = SCNAction.rotateTo(x: 0, y: 0, z: 0.06, duration: 0.6)
-        let presentGroup = SCNAction.group([moveForward, straighten, scaleDown])
-        presentGroup.timingMode = .easeOut
-
-        deckContainer.runAction(SCNAction.sequence([wait, slideUp, presentGroup]))
+        deckContainer.runAction(SCNAction.sequence([wait, presentGroup]))
 
         // Notify after deck reaches center.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.25) {

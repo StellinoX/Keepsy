@@ -30,6 +30,31 @@ struct CardDatabase {
               let decoded = try? JSONDecoder().decode([String: NetworkArtwork].self, from: data) else {
             return [:]
         }
+        
+        // Diagnostic migration: if the cache has old keys like "Giulio_Clovio", clear it
+        if decoded.keys.contains("Giulio_Clovio") || decoded.keys.contains("Flagellation") {
+            UserDefaults.standard.removeObject(forKey: cacheKey)
+            UserDefaults.standard.removeObject(forKey: mapCacheKey)
+            
+            // Also clean up all active packs to prevent crash/inconsistency
+            for museum in MuseumConfig.shared.museums {
+                UserDefaults.standard.removeObject(forKey: "activePackCards_\(museum.id)")
+                UserDefaults.standard.removeObject(forKey: "activePackTearMask_\(museum.id)")
+                UserDefaults.standard.removeObject(forKey: "activePackDuplicates_\(museum.id)")
+            }
+            UserDefaults.standard.removeObject(forKey: "activePackCards")
+            UserDefaults.standard.removeObject(forKey: "activePackTearMask")
+            UserDefaults.standard.removeObject(forKey: "activePackDuplicates")
+            
+            // Clean up old FoundCards/RevealedCards if they contain old keys
+            if let found = UserDefaults.standard.stringArray(forKey: "FoundCards"),
+               found.contains(where: { $0 == "Giulio_Clovio" || $0 == "Flagellation" }) {
+                UserDefaults.standard.removeObject(forKey: "FoundCards")
+                UserDefaults.standard.removeObject(forKey: "RevealedCards")
+                UserDefaults.standard.removeObject(forKey: "DuplicateCardCounts")
+            }
+            return [:]
+        }
         return decoded
     }
     
@@ -70,11 +95,9 @@ struct CardDatabase {
                 museumMap[museum.id] = ids.sorted()
             }
             
-            DispatchQueue.main.async {
-                remoteArtworks = allArtworks
-                artworksByMuseum = museumMap
-                saveToCache(allArtworks, map: museumMap)
-            }
+            remoteArtworks = allArtworks
+            artworksByMuseum = museumMap
+            saveToCache(allArtworks, map: museumMap)
             
             lastSyncTime = Date()
             // print("Successfully synced all museums from cloud APIs")
@@ -201,28 +224,65 @@ struct CardDatabase {
         await syncWithCloud()
         
         let dir = artworksDirectoryURL
+        let artworksToDownload = artworks.filter { name in
+            guard let art = remoteArtworks[name], !art.imageUrl.isEmpty else { return false }
+            let destinationURL = dir.appendingPathComponent("\(name).jpg")
+            if FileManager.default.fileExists(atPath: destinationURL.path) {
+                let size = (try? FileManager.default.attributesOfItem(atPath: destinationURL.path)[.size] as? Int) ?? 0
+                if size > 10000 { return false }
+            }
+            return true
+        }
+        
+        guard !artworksToDownload.isEmpty else { return }
+        
+        // Limit concurrency to 3 simultaneous downloads to avoid saturating network
+        let maxConcurrentDownloads = 3
+        var index = 0
+        
         await withTaskGroup(of: Void.self) { group in
-            for name in artworks {
-                guard let art = remoteArtworks[name] else { continue }
-                let urlString = art.imageUrl
-                guard !urlString.isEmpty else { continue }
+            // Start the first batch of workers
+            for _ in 0..<min(maxConcurrentDownloads, artworksToDownload.count) {
+                let name = artworksToDownload[index]
+                index += 1
                 group.addTask {
-                    let destinationURL = dir.appendingPathComponent("\(name).jpg")
-                    if FileManager.default.fileExists(atPath: destinationURL.path) {
-                        let size = (try? FileManager.default.attributesOfItem(atPath: destinationURL.path)[.size] as? Int) ?? 0
-                        if size > 10000 { return }
-                    }
-                    
-                    guard let url = URL(string: urlString) else { return }
-                    do {
-                        let (data, _) = try await URLSession.shared.data(from: url)
-                        try data.write(to: destinationURL, options: .atomic)
-                        print("✅ Downloaded \(name) during AR preparation")
-                    } catch {
-                        print("❌ Failed download for \(name) during AR preparation: \(error.localizedDescription)")
+                    await downloadSingleImage(name: name, dir: dir)
+                }
+            }
+            
+            // As each download completes, start a new one until all are done
+            while await group.next() != nil {
+                if index < artworksToDownload.count {
+                    let name = artworksToDownload[index]
+                    index += 1
+                    group.addTask {
+                        await downloadSingleImage(name: name, dir: dir)
                     }
                 }
             }
+        }
+    }
+    
+    private static func downloadSingleImage(name: String, dir: URL) async {
+        guard let art = remoteArtworks[name] else { return }
+        let urlString = art.imageUrl
+        guard let url = URL(string: urlString) else { return }
+        let destinationURL = dir.appendingPathComponent("\(name).jpg")
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            try data.write(to: destinationURL, options: .atomic)
+            print("✅ Downloaded \(name) during AR preparation")
+            
+            // Post notification on main thread so UI updates immediately
+            await MainActor.run {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("ArtworkImageDownloaded"),
+                    object: nil,
+                    userInfo: ["internalName": name]
+                )
+            }
+        } catch {
+            print("❌ Failed download for \(name) during AR preparation: \(error.localizedDescription)")
         }
     }
 
@@ -279,7 +339,18 @@ struct CardDatabase {
     }
     
     static func artworksFor(location: String) -> [String] {
-        return artworksByMuseum[location.lowercased()] ?? Array(remoteArtworks.keys).sorted()
+        let loc = location.lowercased()
+        if let list = artworksByMuseum[loc], !list.isEmpty {
+            return list
+        }
+        if let list = fallbackMuseumMap[loc], !list.isEmpty {
+            return list
+        }
+        let filtered = remoteArtworks.values.filter { $0.museumId?.lowercased() == loc }
+        if !filtered.isEmpty {
+            return filtered.map { $0.internalName }.sorted()
+        }
+        return Array(remoteArtworks.keys).sorted()
     }
     
     /// Returns only artworks whose image file is already saved to disk AND is valid (>10KB). Safe to use for ARKit.
@@ -352,22 +423,31 @@ struct CardDatabase {
         return colors[hash % colors.count]
     }
     
-    static func getActivePack() -> [String]? {
-        return UserDefaults.standard.stringArray(forKey: "activePackCards")
+    static func getActivePack(for museumId: String? = nil) -> [String]? {
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        return UserDefaults.standard.stringArray(forKey: "activePackCards_\(city)")
+            ?? UserDefaults.standard.stringArray(forKey: "activePackCards")
     }
     
-    static func hasActivePack() -> Bool {
-        guard let active = getActivePack(), !active.isEmpty else {
+    static func hasActivePack(for museumId: String? = nil) -> Bool {
+        guard let active = getActivePack(for: museumId), !active.isEmpty else {
             return false
         }
         return true  // Le doppie restano nel pacchetto, non filtrarle
     }
     
-    static func clearActivePackIfNeeded() {
-        if let active = getActivePack(), !active.isEmpty {
+    static func clearActivePackIfNeeded(for museumId: String? = nil) {
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        if let active = getActivePack(for: city), !active.isEmpty {
             let revealed = getRevealedCards()
-            let dupes = Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
+            let dupes = Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
+                            ?? UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
             if active.allSatisfy({ revealed.contains($0) || dupes.contains($0) }) {
+                UserDefaults.standard.removeObject(forKey: "activePackCards_\(city)")
+                UserDefaults.standard.removeObject(forKey: "activePackTearMask_\(city)")
+                UserDefaults.standard.removeObject(forKey: "activePackDuplicates_\(city)")
+                
+                // Clean up legacy keys too
                 UserDefaults.standard.removeObject(forKey: "activePackCards")
                 UserDefaults.standard.removeObject(forKey: "activePackTearMask")
                 UserDefaults.standard.removeObject(forKey: "activePackDuplicates")
@@ -414,16 +494,20 @@ struct CardDatabase {
     /// Restituisce le carte del pacchetto attivo che erano doppie all'apertura.
     /// Legge la lista salvata UNA volta in trackDuplicates (prima di addFoundCards),
     /// NON ricalcola live — altrimenti tutte risultano doppie (addFoundCards aggiunge tutto il pack).
-    static func getDuplicatesInActivePack() -> Set<String> {
-        guard getActivePack() != nil else { return [] }
-        return Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
+    static func getDuplicatesInActivePack(for museumId: String? = nil) -> Set<String> {
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        guard getActivePack(for: city) != nil else { return [] }
+        return Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
+                   ?? UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
     }
     
     /// True se TUTTE le carte del pacchetto attivo sono già state rivelate (tutte doppie)
-    static func isActivePackAllDuplicates() -> Bool {
-        guard let pack = getActivePack(), !pack.isEmpty else { return false }
+    static func isActivePackAllDuplicates(for museumId: String? = nil) -> Bool {
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        guard let pack = getActivePack(for: city), !pack.isEmpty else { return false }
         let revealed = getRevealedCards()
-        let dupes = Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
+        let dupes = Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
+                        ?? UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
         return pack.allSatisfy { revealed.contains($0) || dupes.contains($0) }
     }
     
@@ -459,6 +543,116 @@ struct CardDatabase {
         }
         return []
     }
+
+    static let fallbackMuseumMap: [String: [String]] = [
+        "uffizi": [
+            "andrea-madonna-of-the-harpies",
+            "angelico-the-coronation-of-the-virgin",
+            "bellini-sacred-allegory",
+            "botticelli-calumny-of-apelles",
+            "botticelli-fortitude",
+            "botticelli-madonna-of-the-magnificat",
+            "botticelli-madonna-of-the-pomegranate-madonna-della-melagran",
+            "botticelli-pallas-and-the-centaur",
+            "botticelli-primavera",
+            "botticelli-the-birth-of-venus",
+            "bronzino-eleonora-di-toledo-with-her-son-giovanni-de-medici",
+            "bronzino-portrait-of-lucrezia-panciatichi",
+            "caravaggio-bacchus",
+            "caravaggio-head-of-medusa",
+            "caravaggio-the-sacrifice-of-isaac",
+            "cimabue-the-madonna-in-majesty-maesta",
+            "correggio-rest-on-the-flight-into-egypt-with-st-francis",
+            "duccio-rucellai-madonna",
+            "durer-adoration-of-the-magi",
+            "gentile-adoration-of-the-magi",
+            "gentileschi-st-catherine-of-alexandria",
+            "giotto-ognissanti-madonna-madonna-in-maesta",
+            "goes-sts-anthony-and-thomas-with-tommaso-portinari",
+            "greco-sts-john-the-evangelist-and-francis",
+            "leonardo-adoration-of-the-magi",
+            "leonardo-annunciation",
+            "lippi-madonna-and-child-with-two-angels",
+            "lorenzo-the-coronation-of-the-virgin",
+            "mantegna-the-adoration-of-the-magi",
+            "michelangelo-the-holy-family-with-the-infant-st-john-the-bap",
+            "parmigianino-madonna-dal-collo-lungo-madonna-with-long-neck",
+            "perugino-pieta",
+            "piero-portrait-of-federico-da-montefeltro",
+            "piero-triumph-of-battista-sforza",
+            "pollaiuolo-hercules-and-antaeus",
+            "pontormo-supper-at-emmaus",
+            "raffaello-madonna-del-cardellino",
+            "raffaello-pope-leo-x-with-cardinals-giulio-de-medici-and-lui",
+            "raffaello-portraits-of-agnolo-and-maddalena-doni",
+            "raffaello-self-portrait",
+            "rembrandt-self-portrait-as-a-young-man",
+            "rubens-self-portrait",
+            "simone-annunciation-and-two-saints",
+            "tintoretto-self-portrait-with-a-book",
+            "tiziano-flora",
+            "tiziano-venus-of-urbino",
+            "uccello-bernardino-della-ciarda-thrown-off-his-horse",
+            "veronese-holy-family-with-st-catherine-and-the-infant-st-joh",
+            "verrocchio-the-baptism-of-christ",
+            "weyden-entombment-of-christ"
+        ],
+        "capodimonte": [
+            "1 - Q 36 Masaccio_Crocifissione_ph.L.Romano_0779",
+            "10 - Girolamo Mazzoli Bedoli_Santa Chiara_ph.Luciano Romano_0620",
+            "11 - Tiziano Vecellio_Danae_Capodimonte_ph.L.Romano_0722",
+            "12 - Q 365 Annibale Carracci_Ercole al bivio_Capodimonte_ph.L.Romano_2280",
+            "13 - Annibale Carracci_Piet\u{00E0}_Capodimonte_ph.L.Romano_2265",
+            "14 - Caravaggio_Flagellazione di Cristo_Capodimonte_ph.L.Romano_10780",
+            "15 - Guido Reni_Atalanta e Ippomene_ph.L.Romano_70271",
+            "16 - Artemisia Gentileschi_Giuditta e Oloferne_ph.L.Romano_12119",
+            "17 - Q_622",
+            "18 - Francesco Guarino_S. Agata (part.)_ph.L.Romano_10804",
+            "19 - Jusepe de Ribera_San Girolamo e l'angelo del Giudizio_10904",
+            "2 - Giovanni Bellini_Trasfigurazione_ph.L.Romano_0738",
+            "20 - Jusepe de Ribera_Sileno ebbro_ph.l.Romano_10797",
+            "21 - Jusepe de Ribera_Apollo e Marsia_1637_ph.L.Romano_10849",
+            "22 - Luca Giordano-Apollo e Marsia_Capodimonte_ph.L.Romano_10824",
+            "23 - Mattia Preti_San Nicola di Bari_Capodimonte_ph.L.Romano_7315",
+            "24 - Mattia Preti_San Sebastiano_10861",
+            "25 - Luca Giordano_Madonna del Baldacchino_Capodimonte_ph.L.Romano_7326",
+            "26 - Q_294",
+            "27 - DSC_4408a",
+            "28 - Pierre-Jacques Volaire_Eruzione del Vesuvio dal ponte della Maddalena_ph.L.Romano_3002",
+            "29 - Tiziano Vecellio_Ritratto di Paolo III con i nipoti_ph.L.Romano_2131",
+            "3 - Colantonio_San Girolamo nello studio_Capodimonte_ph.L.Romano_2359",
+            "30 - Q 145 Raffaello Sanzio_Ritratto del cardinale Alessandro Farnese_Capodimonte_ph.L.Romano_3030",
+            "31 - Q 191 El Greco_Ritratto di Giulio Clovio-2636",
+            "32 - Antonio Joli_Ferdinando IV a cavallo con la corte_ph.L.Romano_Capodimonte_11010",
+            "33 - Museo di Capodimonte_Andy Warhol_Vesuvius_ph.L.Romano_0054",
+            "34 - 5501 EK Polittico S.Vincenzo Ferrer e storie",
+            "35 - Q 60 Andrea Mantegna_Ritratto di Francesco Gonzaga_ph.L.Romano_0767",
+            "36 - Q_130",
+            "37 - SOTTOCONSEGNA S Domenico Tiziano Vecellio_Annunciazione_Capodimonte_ph.L.Romano_7268",
+            "38 - Q_1110",
+            "39 - Q699 Finson Annunciazione C033-25",
+            "4 - Jacopo de'Barbari attr._Ritratto di Luca Pacioli_ph.L.Romano_3954",
+            "40 - Q_375",
+            "41 - Q 192 El Greco_El Soplon-2603",
+            "42 - Sebastiano del Piombo_Ritratto di Clemente VII_ph.L.Romano_0999",
+            "43 - Q_373",
+            "44 - Bernardo Cavallino_La Cantatrice_ph.L.Romano_10817",
+            "45 - Bernardo Cavallino_Santa Cecilia in estasi_ph.Luciano Romano__6811",
+            "46 - Q 106 Correggio_Sposalizio mistico di Santa Caterina_Capodimonte_ph.L.Romano_7235",
+            "47 - SOTTOCONSEGNA PALAZZO REALE PR 319 Annibale Carracci_Sposalizio mistico di Santa Caterina_Capodimonte_ph.L.Romano_2297",
+            "48 - Mattia Preti_Giuditta e Oloferne_ph.Luciano Romano_8691",
+            "49 - Q_309",
+            "5 - Lorenzo Lotto_Ritratto  di Bernardo de Rossi_0750",
+            "50 - Q_254",
+            "51 - Q_263",
+            "52 - Q_1719",
+            "53 - Q_1086",
+            "6 - Q 112 Rosso Fiorentino_Ritratto di giovane seduto con tappeto_ph.Luciano Romano_8414567",
+            "7 - Parmigianino_Ritratto di Galeazzo Sanvitale_Capodimonte_ph.L.Romano_10948",
+            "8 - Q 108 Parmigianino Antea_ph.L.Romano_10938",
+            "9 - Parmigianino_Lucrezia_Capodimonte_ph.L.Romano__3676"
+        ]
+    ]
 }
 
 // Spostata qui da PackOpeningView per renderla accessibile in tutta l'app

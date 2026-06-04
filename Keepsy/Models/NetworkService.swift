@@ -15,6 +15,7 @@ struct NetworkArtwork: Codable {
     let date: String?
     let technique: String?
     let dimensions: String?
+    let museumId: String?
 }
 
 class NetworkService {
@@ -59,20 +60,12 @@ class NetworkService {
                 inventoryNumber: data["inventoryNumber"] as? String,
                 date: data["date"] as? String,
                 technique: data["technique"] as? String,
-                dimensions: data["dimensions"] as? String
+                dimensions: data["dimensions"] as? String,
+                museumId: museumId
             ))
 
             if !imageUrl.isEmpty && !internalName.isEmpty {
                 pendingDownloads.append((url: imageUrl, name: internalName))
-            }
-        }
-
-        // Return artworks immediately, download images concurrently in background
-        Task(priority: .background) {
-            await withTaskGroup(of: Void.self) { group in
-                for item in pendingDownloads {
-                    group.addTask { await self.downloadImageIfNeeded(from: item.url, name: item.name) }
-                }
             }
         }
 

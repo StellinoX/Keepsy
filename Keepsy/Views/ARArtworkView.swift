@@ -7,6 +7,7 @@ struct ARArtworkView: View {
     @State private var isTargetUnlocked: Bool = false
     @State private var diagnosticMessage: String = "Avvio ARKit..."
     @State private var selectedTargetCard: String? = nil
+    @State private var dragOffset: CGFloat = 0
 
     @State private var imagesReady: Bool = false
     @State private var downloadProgress: String = "Scaricamento immagini..."
@@ -36,7 +37,7 @@ struct ARArtworkView: View {
             let screenHeight = geometry.size.height
             let safeTop = geometry.safeAreaInsets.top
             let cardWidth: CGFloat = screenWidth * 0.44
-            let cardHeight: CGFloat = cardWidth * 1.5
+            let cardHeight: CGFloat = cardWidth * (168.0 / 111.0)
             let cardCorner = cardWidth * 12.0 / 111.0
 
             ZStack {
@@ -79,83 +80,74 @@ struct ARArtworkView: View {
 
                 if CardDatabase.hasActivePack(), let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
                     let displayCards: [String] = {
-                        let filtered = activePack.filter { $0 != foundCardName }
                         guard let selected = selectedTargetCard else {
-                            return filtered
+                            return activePack.filter { $0 != foundCardName }
                         }
-                        
                         let revealed = CardDatabase.getRevealedCards()
                         let dupes = CardDatabase.getDuplicatesInActivePack()
                         let foundSet = revealed.union(dupes)
-                        
-                        // Separa il selezionato
-                        let remaining = filtered.filter { $0 != selected }
-                        let foundRemaining = remaining.filter { foundSet.contains($0) }
-                        let notFoundRemaining = remaining.filter { !foundSet.contains($0) }
-                        
-                        var slot0: String? = nil
-                        var slot1: String? = nil
-                        var slot3: String? = nil
-                        var slot4: String? = nil
-                        
-                        var foundPool = foundRemaining
-                        var notFoundPool = notFoundRemaining
-                        
-                        // 1. Metti le opere trovate negli slot esterni (0 e 4)
-                        if !foundPool.isEmpty { slot0 = foundPool.removeFirst() }
-                        if !foundPool.isEmpty { slot4 = foundPool.removeFirst() }
-                        
-                        // 2. Se avanzano, mettile negli slot interni (1 e 3)
-                        if !foundPool.isEmpty { slot1 = foundPool.removeFirst() }
-                        if !foundPool.isEmpty { slot3 = foundPool.removeFirst() }
-                        
-                        // 3. Riempi gli slot rimasti vuoti con le opere non trovate
-                        if slot0 == nil && !notFoundPool.isEmpty { slot0 = notFoundPool.removeFirst() }
-                        if slot4 == nil && !notFoundPool.isEmpty { slot4 = notFoundPool.removeFirst() }
-                        if slot1 == nil && !notFoundPool.isEmpty { slot1 = notFoundPool.removeFirst() }
-                        if slot3 == nil && !notFoundPool.isEmpty { slot3 = notFoundPool.removeFirst() }
-                        
-                        return [slot0 ?? "", slot1 ?? "", selected, slot3 ?? "", slot4 ?? ""].filter { !$0.isEmpty }
+
+                        // Solo le carte NON ancora trovate (esclusa quella in animazione)
+                        let notFound = activePack
+                            .filter { $0 != foundCardName }
+                            .filter { !foundSet.contains($0) }
+
+                        // Metti la selezionata al centro
+                        var ordered = notFound.filter { $0 != selected }
+                        let centerIndex = ordered.count / 2
+                        ordered.insert(selected, at: min(centerIndex, ordered.count))
+                        return ordered
                     }()
 
-                    VStack(spacing: 0) {
-                        // TOP PILL: back button left, artwork name centered
-                        HStack(spacing: 0) {
-                            Button(action: {
-                                HapticManager.shared.triggerImpact(style: .light)
-                                withAnimation(.easeInOut(duration: 0.35)) {
-                                    activeView = .opening
-                                }
-                            }) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.75))
-                                    .frame(width: 32, height: 32)
-                            }
+                    // Carte già trovate (vanno in basso separatamente)
+                    let foundCards: [String] = {
+                        let revealed = CardDatabase.getRevealedCards()
+                        let dupes = CardDatabase.getDuplicatesInActivePack()
+                        let foundSet = revealed.union(dupes)
+                        return activePack.filter { $0 != foundCardName && foundSet.contains($0) }
+                    }()
 
-                            Spacer()
-
-                            Text(isAnimatingUnlock ? "✨ OPERA TROVATA! ✨" : cleanedArtworkName(selectedTargetCard ?? ""))
-                                .font(.system(size: 14, weight: .black))
-                                .italic()
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-
-                            Spacer()
-
-                            Color.clear.frame(width: 32, height: 32)
+                    // Floating Back Button (standard position)
+                    Button(action: {
+                        HapticManager.shared.triggerImpact(style: .light)
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            activeView = .opening
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 11)
-                        .background(
-                            Capsule()
-                                .fill(isAnimatingUnlock ? Color(hex: "4CD964").opacity(0.85) : Color.black.opacity(0.65))
-                        )
-                        .padding(.horizontal, 24)
-                        .padding(.top, safeTop + 10)
-                        .animation(.easeInOut(duration: 0.3), value: isAnimatingUnlock)
+                    }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("Back")
+                                .font(.system(size: 16, weight: .regular))
+                        }
+                        .foregroundColor(.white)
+                        .frame(width: 85, height: 44)
+                        .background(Capsule().fill(Color(hex: "383838")))
+                    }
+                    .position(x: 30 + 85/2, y: 83 + 44/2)
+                    .zIndex(60)
 
+                    // Centered title Capsule (standard position top) - only shown when unlocked/found
+                    if isAnimatingUnlock {
+                        Text("✨ OPERA TROVATA! ✨")
+                            .font(.system(size: 14, weight: .black))
+                            .italic()
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 11)
+                            .background(
+                                Capsule()
+                                    .fill(Color(hex: "4CD964").opacity(0.85))
+                            )
+                            .position(x: screenWidth / 2, y: 83 + 44/2)
+                            .animation(.easeInOut(duration: 0.3), value: isAnimatingUnlock)
+                            .zIndex(55)
+                    }
+
+                    VStack(spacing: 0) {
                         Spacer()
+                            .allowsHitTesting(false)
 
                         // Server error manual fallback
                         let currentCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
@@ -188,6 +180,24 @@ struct ARArtworkView: View {
                         // CARD FAN
                         if !displayCards.isEmpty {
                             ZStack(alignment: .bottom) {
+                                // Carte già trovate — fisse ai lati, stessa baseline
+                                if !isAnimatingUnlock {
+                                    ForEach(Array(foundCards.prefix(2).enumerated()), id: \.element) { i, cardName in
+                                        let xPos: CGFloat = i == 0 ? -(screenWidth * 0.36) : (screenWidth * 0.36)
+                                        ScannerCardView(name: cardName, width: cardWidth * 0.52, height: cardHeight * 0.52)
+                                            .overlay(alignment: .topTrailing) {
+                                                ZStack {
+                                                    Circle().fill(Color(hex: "4CD964")).frame(width: 18, height: 18)
+                                                    Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundColor(.white)
+                                                }
+                                                .offset(x: 4, y: -4)
+                                            }
+                                            .opacity(0.65)
+                                            .offset(x: xPos, y: 0)
+                                            .zIndex(1)
+                                            .allowsHitTesting(false)
+                                    }
+                                }
                                 ForEach(Array(displayCards.enumerated()), id: \.element) { index, cardName in
                                     let isSelected = cardName == selectedTargetCard
                                     let selectedIndex = displayCards.firstIndex(of: selectedTargetCard ?? "") ?? 2
@@ -196,7 +206,9 @@ struct ARArtworkView: View {
                                     // Determina se questa specifica carta si sta sbloccando
                                     let isThisCardUnlocking = isAnimatingUnlock && cardName == foundCardName
                                     
-                                    // Spostamento orizzontale
+                                    // Spostamento orizzontale in tempo reale basato sul trascinamento del dito (segno + per far scorrere nella direzione del dito)
+                                    let visualDiff = isThisCardUnlocking ? 0.0 : diff + (dragOffset / (cardWidth * 0.52))
+                                    
                                     let xOffset: CGFloat = {
                                         if isAnimatingUnlock {
                                             if isThisCardUnlocking {
@@ -206,55 +218,65 @@ struct ARArtworkView: View {
                                                 return diff * cardWidth * 1.8
                                             }
                                         } else {
-                                            return diff * cardWidth * 0.58
+                                            return visualDiff * cardWidth * 0.52
                                         }
                                     }()
                                     
-                                    // Spostamento verticale (la carta si alza verso il centro dello schermo)
+                                    // Spostamento verticale (curvatura del rullo)
                                     let yOffset: CGFloat = {
                                         if isThisCardUnlocking {
                                             return -screenHeight * 0.28
                                         } else {
-                                            return 0
+                                            return abs(visualDiff) * 16.0
                                         }
                                     }()
                                     
-                                    // Scala
+                                    // Scala: se selezionata zooma, altrimenti mantiene la scala fissa del ventaglio
                                     let scale: CGFloat = {
                                         if isThisCardUnlocking {
                                             if unlockStep == .zoomToCenter {
                                                 return 1.6
                                             } else {
-                                                return 0.6 // rimpicciolisce prima di sparire
+                                                return 0.6
                                             }
                                         } else {
                                             if isAnimatingUnlock {
-                                                return 0.0 // nascondi le altre
+                                                return 0.0
                                             } else {
-                                                return isSelected ? 1.15 : (abs(diff) == 1 ? 0.75 : 0.52)
+                                                let absDiff = abs(visualDiff)
+                                                if absDiff <= 1.0 {
+                                                    return 1.15 - (absDiff * (1.15 - 0.78))
+                                                } else if absDiff <= 2.0 {
+                                                    return 0.78 - ((absDiff - 1.0) * (0.78 - 0.55))
+                                                } else {
+                                                    return max(0.38, 0.55 - ((absDiff - 2.0) * (0.55 - 0.38)))
+                                                }
                                             }
                                         }
                                     }()
                                     
-                                    // Opacità
+                                    // Opacità dinamica
                                     let opacity: Double = {
                                         if isThisCardUnlocking {
                                             return unlockStep == .zoomToCenter ? 1.0 : 0.0
                                         } else {
-                                            return isAnimatingUnlock ? 0.0 : 1.0
+                                            if isAnimatingUnlock {
+                                                return 0.0
+                                            } else {
+                                                let absDiff = abs(visualDiff)
+                                                if absDiff <= 1.5 {
+                                                    return 1.0
+                                                } else {
+                                                    return Double(max(0.0, 1.0 - (absDiff - 1.5) * 1.0))
+                                                }
+                                            }
                                         }
                                     }()
                                     
-                                    let rotation: Double = 0.0
-
+                                    let rotationZ = isThisCardUnlocking ? 0.0 : Double(visualDiff) * 4.0
+                                    let rotationY = isThisCardUnlocking ? 0.0 : Double(-visualDiff) * 28.0
+ 
                                     ScannerCardView(name: cardName, width: cardWidth, height: cardHeight)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: cardCorner)
-                                                .stroke(
-                                                    isThisCardUnlocking ? Color(hex: "4CD964") : (isSelected ? Color.white : Color(hex: "F1B40A").opacity(0.35)),
-                                                    lineWidth: isThisCardUnlocking ? 4 : (isSelected ? 3 : 1.5)
-                                                )
-                                        )
                                         .overlay(alignment: .topTrailing) {
                                             if isThisCardUnlocking {
                                                 ZStack {
@@ -284,34 +306,68 @@ struct ARArtworkView: View {
                                             color: isThisCardUnlocking ? Color(hex: "4CD964").opacity(0.7) : (isSelected ? .white.opacity(0.25) : .black.opacity(0.5)),
                                             radius: isThisCardUnlocking ? 28 : (isSelected ? 18 : 6)
                                         )
-                                        .rotationEffect(.degrees(rotation))
-                                        .scaleEffect(scale, anchor: .bottom)
-                                        .offset(x: xOffset, y: yOffset)
-                                        .opacity(opacity)
-                                        .zIndex(isThisCardUnlocking ? 100 : (isSelected ? 10 : Double(5 - abs(Int(diff)))))
-                                        .animation(.spring(response: 0.55, dampingFraction: 0.72), value: isAnimatingUnlock)
-                                        .animation(.spring(response: 0.55, dampingFraction: 0.72), value: unlockStep)
-                                        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: selectedTargetCard)
+                                        .contentShape(Rectangle())
                                         .onTapGesture {
-                                            guard !isAnimatingUnlock else { return }
+                                            guard !isAnimatingUnlock, opacity > 0 else { return }
                                             HapticManager.shared.triggerImpact(style: .medium)
                                             changeSelection(to: cardName)
                                         }
+                                        .allowsHitTesting(!isAnimatingUnlock && opacity > 0)
+                                        .rotation3DEffect(
+                                            .degrees(rotationY),
+                                            axis: (x: 0.0, y: 1.0, z: 0.0),
+                                            anchor: .center,
+                                            anchorZ: 0.0,
+                                            perspective: 0.45
+                                        )
+                                        .rotationEffect(.degrees(rotationZ))
+                                        .scaleEffect(scale, anchor: .bottom)
+                                        .offset(x: xOffset, y: yOffset)
+                                        .opacity(opacity)
+                                        .zIndex(isThisCardUnlocking ? 100 : (isSelected ? 20 : Double(10 - abs(Int(diff)))))
+                                        .animation(.spring(response: 0.35, dampingFraction: 0.72), value: isAnimatingUnlock)
+                                        .animation(.spring(response: 0.35, dampingFraction: 0.72), value: unlockStep)
+                                        .animation(.spring(response: 0.35, dampingFraction: 0.72), value: selectedTargetCard)
                                 }
                             }
-                            .frame(width: screenWidth, height: cardHeight * 1.15, alignment: .bottom)
-                            .background(Color.black.opacity(0.001))
-                            .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                            .frame(width: screenWidth, height: cardHeight * 1.25, alignment: .bottom)
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 5, coordinateSpace: .local)
+                                    .onChanged { value in
+                                        guard !isAnimatingUnlock else { return }
+                                        dragOffset = value.translation.width
+                                    }
                                     .onEnded { value in
                                         guard !isAnimatingUnlock else { return }
-                                        if value.translation.width > 40 {
-                                            HapticManager.shared.triggerSelection()
-                                            selectPreviousCard(remainingCards: displayCards)
-                                        } else if value.translation.width < -40 {
-                                            HapticManager.shared.triggerSelection()
-                                            selectNextCard(remainingCards: displayCards)
+                                        let swipeThreshold: CGFloat = 30
+                                        let cardStep = cardWidth * 0.52
+                                        
+                                        // Invert sign: dragging right (positive translation) moves content right, selecting previous card (negative steps)
+                                        let rawSteps = -value.translation.width / cardStep
+                                        var steps = Int(rawSteps.rounded())
+                                        
+                                        if steps == 0 {
+                                            if value.predictedEndTranslation.width > swipeThreshold {
+                                                steps = -1
+                                            } else if value.predictedEndTranslation.width < -swipeThreshold {
+                                                steps = 1
+                                            }
+                                        }
+                                        
+                                        // Update selection and reset dragOffset atomically in the same animation block to prevent jumps!
+                                        withAnimation(.spring(response: 0.42, dampingFraction: 0.76)) {
+                                            if steps != 0 {
+                                                HapticManager.shared.triggerSelection()
+                                                if let current = selectedTargetCard,
+                                                   let currentIndex = displayCards.firstIndex(of: current),
+                                                   !displayCards.isEmpty {
+                                                    let newIndex = (currentIndex + steps % displayCards.count + displayCards.count) % displayCards.count
+                                                    selectedTargetCard = displayCards[newIndex]
+                                                    isTargetUnlocked = revealedCards.contains(displayCards[newIndex]) || duplicatesInPack.contains(displayCards[newIndex])
+                                                    detectedArtwork = isTargetUnlocked ? "" : "Trova l'opera per sbloccarla!"
+                                                }
+                                            }
+                                            dragOffset = 0
                                         }
                                     }
                             )
@@ -418,21 +474,21 @@ struct ARArtworkView: View {
         }
     }
     
-    // Scrolling left / right between fanned card hand
+    // Scrolling left / right between fanned card hand (revolver infinite wrap-around)
     private func selectNextCard(remainingCards: [String]) {
         guard let current = selectedTargetCard,
-              let currentIndex = remainingCards.firstIndex(of: current) else { return }
-        if currentIndex < remainingCards.count - 1 {
-            changeSelection(to: remainingCards[currentIndex + 1])
-        }
+              let currentIndex = remainingCards.firstIndex(of: current),
+              !remainingCards.isEmpty else { return }
+        let nextIndex = (currentIndex + 1) % remainingCards.count
+        changeSelection(to: remainingCards[nextIndex])
     }
     
     private func selectPreviousCard(remainingCards: [String]) {
         guard let current = selectedTargetCard,
-              let currentIndex = remainingCards.firstIndex(of: current) else { return }
-        if currentIndex > 0 {
-            changeSelection(to: remainingCards[currentIndex - 1])
-        }
+              let currentIndex = remainingCards.firstIndex(of: current),
+              !remainingCards.isEmpty else { return }
+        let prevIndex = (currentIndex - 1 + remainingCards.count) % remainingCards.count
+        changeSelection(to: remainingCards[prevIndex])
     }
     
     private func startUnlockAnimation(for cardName: String) {
@@ -660,7 +716,7 @@ class ARViewCoordinator: NSObject, ARSCNViewDelegate {
     weak var arView: ARSCNView?
     private let updateQueue = DispatchQueue(label: "ar.update.queue", qos: .userInitiated)
 
-    init(parent: ARViewContainer) { 
+    init(parent: ARViewContainer) {
         self.parent = parent
         super.init()
         self.targetName = parent.targetName

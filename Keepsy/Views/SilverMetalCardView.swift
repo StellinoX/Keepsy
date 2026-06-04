@@ -31,6 +31,8 @@ struct SilverMetalCardView<Content: View>: View {
         self.content = content
     }
 
+    private var cr: CGFloat { width * (3.0 / 111.0) }
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1 / 30)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
@@ -39,11 +41,11 @@ struct SilverMetalCardView<Content: View>: View {
             ZStack {
                 content()
                     .frame(width: width, height: height)
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
+                    .clipShape(RoundedRectangle(cornerRadius: cr))
 
                 if isEnabled {
                     SilverMetalOverlay(phase: phase, tiltX: tiltX, tiltY: tiltY)
-                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                        .clipShape(RoundedRectangle(cornerRadius: cr))
                         .allowsHitTesting(false)
                 }
             }
