@@ -164,8 +164,8 @@ struct CitySelectorView: View {
                             .padding(.horizontal, 18)
                         }
                         
-                        // Thin divider between items
-                        if idx < filteredCities.count - 1 {
+                        // Thin divider only after the first (localized) city item
+                        if idx == 0 && filteredCities.count > 1 {
                             Divider()
                                 .background(Color.white.opacity(0.12))
                                 .padding(.horizontal, 18)

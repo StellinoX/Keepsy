@@ -16,7 +16,12 @@ struct CardInspectionView: View {
     @State private var verticalDragOffset: CGFloat = 0
 
     // Mini-sheet drag per album mode
-    @State private var miniSheetExpanded: Bool = false
+    enum SheetState {
+        case collapsed
+        case medium
+        case expanded
+    }
+    @State private var sheetState: SheetState = .collapsed
     @State private var miniSheetDrag: CGFloat = 0
     // Tap carta → dettaglio completo
     @State private var showFullDetail: Bool = false
@@ -183,9 +188,16 @@ struct CardInspectionView: View {
 
                     // ── MINI-SHEET IN BASSO ──────────────────────────────────
                     let collapsedY = screenHeight - sheetPeekHeight
-                    let expandedY  = screenHeight * 0.42
-                    let sheetY     = miniSheetExpanded ? expandedY : collapsedY
-                    let sheetHeight: CGFloat = screenHeight * 0.62
+                    let mediumY    = screenHeight * 0.42
+                    let expandedY  = screenHeight * 0.10
+                    let sheetY: CGFloat = {
+                        switch sheetState {
+                        case .collapsed: return collapsedY
+                        case .medium:    return mediumY
+                        case .expanded:  return expandedY
+                        }
+                    }()
+                    let sheetHeight: CGFloat = screenHeight * 0.90
 
                     VStack(spacing: 0) {
                         // Handle
@@ -224,7 +236,7 @@ struct CardInspectionView: View {
                             .padding(.horizontal, 24)
                             .padding(.bottom, 40)
                         }
-                        .scrollDisabled(!miniSheetExpanded)
+                        .scrollDisabled(sheetState != .expanded)
                     }
                     .frame(width: geometry.size.width, height: sheetHeight)
                     .background(
@@ -257,10 +269,16 @@ struct CardInspectionView: View {
                                 withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
                                     miniSheetDrag = 0
                                     if drag < -60 {
-                                        miniSheetExpanded = true
+                                        if sheetState == .collapsed {
+                                            sheetState = .medium
+                                        } else if sheetState == .medium {
+                                            sheetState = .expanded
+                                        }
                                     } else if drag > 60 {
-                                        if miniSheetExpanded {
-                                            miniSheetExpanded = false
+                                        if sheetState == .expanded {
+                                            sheetState = .medium
+                                        } else if sheetState == .medium {
+                                            sheetState = .collapsed
                                         } else {
                                             closeAction()
                                         }
@@ -402,6 +420,7 @@ struct CardInspectionView: View {
     
     private func closeAction() {
         HapticManager.shared.triggerImpact(style: .light)
+        sheetState = .collapsed
         if isZoomingFromAlbum {
             // In album mode the parent (CollectionAlbumView.startCloseAnimation) owns the
             // entire close sequence — crossfade of inspectionOpacity, then flying-card
@@ -480,7 +499,6 @@ struct CardFullDetailView: View {
                         colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
-                    let isAlreadyOwned = CardDatabase.getDuplicatesInActivePack().contains(card.name) || CardDatabase.getRevealedCards().contains(card.name)
                     ArtworkCardFrontView(
                         name: card.name,
                         title: card.title,
@@ -489,7 +507,7 @@ struct CardFullDetailView: View {
                         height: 470,
                         isRevealed: isRevealed,
                         goldBorder: goldBorder,
-                        showCheckmark: isAlreadyOwned
+                        showCheckmark: false
                     )
                         .opacity(isFrontShowing ? 1 : 0)
                 }

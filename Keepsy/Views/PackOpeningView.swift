@@ -24,6 +24,8 @@ struct PackOpeningView: View {
     @State private var flashOpacity: Double = 0.0
     @State private var showOpeningEffect = false
     @State private var shakeOffset: CGFloat = 0
+    @State private var showTearHint = false
+    @State private var packIdleSway: Double = 0
 
     // Animazione carte — una per carta
     @State private var cardOffsetX: [CGFloat] = [123, 0, -123, 61.5, -61.5]
@@ -79,22 +81,35 @@ struct PackOpeningView: View {
             } else {
                 ZStack {
                     if packState == .tearing || packState == .opened {
-                        SceneKitPacketView(
-                            museumId: selectedMuseumId,
-                            packetImageName: selectedMuseumId == "capodimonte" ? "capodimonte_pacchetto" : "uffizi_pacchetto",
-                            onTearComplete: {
-                                showOpeningEffect = true
-                                triggerShake()
-                                withAnimation(.easeOut(duration: 0.02)) { flashOpacity = 0.8 }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-                                    withAnimation(.easeIn(duration: 0.28)) { flashOpacity = 0.0 }
+                        ZStack {
+                            SceneKitPacketView(
+                                museumId: selectedMuseumId,
+                                packetImageName: selectedMuseumId == "capodimonte" ? "capodimonte_pacchetto" : "uffizi_pacchetto",
+                                onTearComplete: {
+                                    showOpeningEffect = true
+                                    triggerShake()
+                                    withAnimation(.easeOut(duration: 0.02)) { flashOpacity = 0.8 }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                                        withAnimation(.easeIn(duration: 0.28)) { flashOpacity = 0.0 }
+                                    }
+                                    if !UserDefaults.standard.bool(forKey: "hasPlayedSanSebastianoSound") {
+                                        SoundManager.shared.playSound(named: "san sebastiano")
+                                        UserDefaults.standard.set(true, forKey: "hasPlayedSanSebastianoSound")
+                                    }
+                                },
+                                onOpen: {
+                                    completeOpening()
                                 }
-                            },
-                            onOpen: {
-                                completeOpening()
+                            )
+                            .ignoresSafeArea()
+
+                            if packState == .tearing && showTearHint && !showOpeningEffect {
+                                PackTearHintView()
+                                    .allowsHitTesting(false)
+                                    .transition(.opacity)
                             }
-                        )
-                        .ignoresSafeArea()
+                        }
+                        .rotationEffect(.degrees(packIdleSway), anchor: .bottom)
                         .opacity(packState == .opened ? 0 : 1)
                         .animation(.easeInOut(duration: 0.3), value: packState)
                         .zIndex(10)
@@ -239,6 +254,31 @@ struct PackOpeningView: View {
         }
         .onChange(of: hasSyncedWithCloud) { _, synced in
             if synced && packState == .opened { loadActivePack() }
+        }
+        .onChange(of: packState) { _, newState in
+            if newState == .tearing {
+                showTearHint = false
+                packIdleSway = 0
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    guard packState == .tearing, !showOpeningEffect else { return }
+                    withAnimation(.easeInOut(duration: 0.95).repeatForever(autoreverses: true)) {
+                        packIdleSway = 1.5
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
+                    guard packState == .tearing, !showOpeningEffect else { return }
+                    withAnimation(.easeIn(duration: 0.4)) { showTearHint = true }
+                }
+            } else {
+                withAnimation(.easeOut(duration: 0.2)) { showTearHint = false }
+                packIdleSway = 0
+            }
+        }
+        .onChange(of: showOpeningEffect) { _, firing in
+            if firing {
+                withAnimation(.easeOut(duration: 0.15)) { showTearHint = false }
+                packIdleSway = 0
+            }
         }
         .onChange(of: selectedMuseumId) { _, newValue in
             UserDefaults.standard.set(newValue, forKey: "lastSelectedMuseumId")
@@ -403,6 +443,8 @@ struct PackOpeningView: View {
         flashOpacity = 0.0
         showOpeningEffect = false
         shakeOffset = 0
+        showTearHint = false
+        packIdleSway = 0
         shimmerPhase = 0
         nextButtonScale = 0
 
@@ -458,12 +500,28 @@ struct SingleScrollPackView: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
+                // Header (Hello, Keeper) — scrolls with content
+                VStack(alignment: .leading, spacing: -4) {
+                    Text("Hello,")
+                        .font(.system(size: 24, weight: .light))
+                        .foregroundColor(.white)
+                    Text("Keeper")
+                        .font(.custom("Helvetica-BoldOblique", size: 38))
+                        .italic()
+                        .bold()
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.top, 95)
+                .padding(.bottom, 20)
+
                 locationChip
                     .contentShape(Rectangle())
                     .onTapGesture {
                         onTapCity()
                     }
-                    .padding(.top, 130)
+                    .padding(.top, 0)
                     .padding(.bottom, 20)
 
                 // Pacchetti divisi per museo — scorri orizzontalmente in stile Pokemon Pocket
@@ -679,16 +737,16 @@ struct PackExpansionRow: View {
                     Image(imageName)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 110, height: 165)
+                        .frame(width: 130, height: 195)
                         .rotationEffect(.degrees(-10))
-                        .offset(x: -15, y: 12)
+                        .offset(x: -20, y: 8)
                     
                     Image(imageName)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 110, height: 165)
+                        .frame(width: 130, height: 195)
                         .rotationEffect(.degrees(10))
-                        .offset(x: 15, y: 22)
+                        .offset(x: 15, y: 18)
                 }
                 .frame(width: 140, height: 194)
                 .offset(x: 8, y: 0)
@@ -1049,6 +1107,66 @@ struct PackOpeningFlashView: View {
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
             onComplete()
+        }
+    }
+}
+
+// MARK: - PackTearHintView — striscia luminosa + frecce per guidare l'apertura
+
+struct PackTearHintView: View {
+    @State private var shimmerX: CGFloat = -180
+    @State private var glowOpacity: Double = 0.2
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer().frame(height: UIScreen.main.bounds.height * 0.31)
+
+            VStack(spacing: 10) {
+                // Striscia luminosa con sweep
+                ZStack {
+                    // Glow halo dietro la riga
+                    Rectangle()
+                        .fill(Color.white.opacity(0.18))
+                        .frame(maxWidth: .infinity, maxHeight: 8)
+                        .blur(radius: 4)
+                        .opacity(glowOpacity)
+
+                    // Riga principale bold
+                    Rectangle()
+                        .fill(LinearGradient(
+                            colors: [.clear, .white.opacity(0.55), .white.opacity(0.95), .white.opacity(0.55), .clear],
+                            startPoint: .leading, endPoint: .trailing
+                        ))
+                        .frame(maxWidth: .infinity, maxHeight: 3)
+                        .opacity(glowOpacity)
+
+                    // Sweep luminoso
+                    Rectangle()
+                        .fill(LinearGradient(
+                            colors: [.clear, .white, .white, .clear],
+                            startPoint: .leading, endPoint: .trailing
+                        ))
+                        .frame(width: 110, height: 3)
+                        .blur(radius: 1)
+                        .offset(x: shimmerX)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 8)
+                .clipped()
+                .padding(.horizontal, 24)
+
+            }
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                shimmerX = 180
+            }
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                glowOpacity = 0.9
+            }
         }
     }
 }
