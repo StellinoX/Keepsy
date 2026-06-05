@@ -176,7 +176,7 @@ struct ArtworkCardFrontView: View {
                     HStack {
                         Spacer()
 
-                        let numStr = String(format: "%03d", idx + 1)
+                        let numStr = String(format: "%02d", idx + 1)
                         Text(numStr)
                             .font(.system(size: 4.2 * scale, weight: .black, design: .default).italic())
                             .overlay(

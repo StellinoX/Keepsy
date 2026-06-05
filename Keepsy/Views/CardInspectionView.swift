@@ -288,6 +288,26 @@ struct CardInspectionView: View {
                     )
                 }
 
+                // Top blur bar behind the back button to cover scrolled content
+                if animateContent && !showFullDetail {
+                    VStack(spacing: 0) {
+                        Color.clear
+                            .frame(height: 130)
+                            .background(.ultraThinMaterial)
+                            .environment(\.colorScheme, .dark)
+                            .overlay(
+                                LinearGradient(
+                                    colors: [Color.black.opacity(0.4), Color.clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                        Spacer()
+                    }
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                }
+
                 // Back button
                 if animateContent && !showFullDetail {
                     Button(action: { closeAction() }) {
@@ -379,6 +399,26 @@ struct CardInspectionView: View {
                             }
                         }
                 )
+
+                // Top blur bar behind the back button (bustina mode)
+                if animateContent {
+                    VStack(spacing: 0) {
+                        Color.clear
+                            .frame(height: 130)
+                            .background(.ultraThinMaterial)
+                            .environment(\.colorScheme, .dark)
+                            .overlay(
+                                LinearGradient(
+                                    colors: [Color.black.opacity(0.4), Color.clear],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                        Spacer()
+                    }
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                }
 
                 // Back button (bustina mode)
                 if animateContent {

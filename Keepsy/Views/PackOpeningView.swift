@@ -25,14 +25,14 @@ struct PackOpeningView: View {
     @State private var showOpeningEffect = false
     @State private var shakeOffset: CGFloat = 0
     @State private var showTearHint = false
-    @State private var packIdleSway: Double = 0
+    @State private var packSwayX: CGFloat = 0
 
     // Animazione carte — una per carta
     @State private var cardOffsetX: [CGFloat] = [123, 0, -123, 61.5, -61.5]
     @State private var cardOffsetY: [CGFloat] = [94, 94, 94, -94, -94]
     @State private var cardScale: [CGFloat] = Array(repeating: 1.0, count: 5)
     @State private var cardOpacity: [Double] = Array(repeating: 0, count: 5)
-    @State private var cardRotation: [Double] = [-4, 2, -2, 3, 0]
+    @State private var cardRotation: [Double] = Array(repeating: 0, count: 5)
     @State private var shimmerPhase: CGFloat = 0
     @State private var nextButtonScale: CGFloat = 0
 
@@ -80,11 +80,11 @@ struct PackOpeningView: View {
                 )
             } else {
                 ZStack {
-                    if packState == .tearing || packState == .opened {
+                    if packState == .tearing {
                         ZStack {
                             SceneKitPacketView(
                                 museumId: selectedMuseumId,
-                                packetImageName: selectedMuseumId == "capodimonte" ? "capodimonte_pacchetto" : "uffizi_pacchetto",
+                                packetImageName: MuseumConfig.shared.museums.first(where: { $0.id == selectedMuseumId })?.packetImageName ?? "uffizi_pacchetto",
                                 onTearComplete: {
                                     showOpeningEffect = true
                                     triggerShake()
@@ -109,9 +109,9 @@ struct PackOpeningView: View {
                                     .transition(.opacity)
                             }
                         }
-                        .rotationEffect(.degrees(packIdleSway), anchor: .bottom)
-                        .opacity(packState == .opened ? 0 : 1)
-                        .animation(.easeInOut(duration: 0.3), value: packState)
+                        .ignoresSafeArea()
+                        .offset(x: packSwayX)
+                        .transition(.identity)
                         .zIndex(10)
                     }
 
@@ -179,7 +179,7 @@ struct PackOpeningView: View {
                                         resetPack()
                                     }
                                 }) {
-                                    Text("CATCH'EM")
+                                    Text("KEEP'EM")
                                         .font(.custom("Helvetica-BoldOblique", size: 20))
                                         .foregroundColor(.black)
                                         .frame(width: 232, height: 54)
@@ -253,16 +253,16 @@ struct PackOpeningView: View {
             hasSyncedWithCloud = true
         }
         .onChange(of: hasSyncedWithCloud) { _, synced in
-            if synced && packState == .opened { loadActivePack() }
+            if synced && packState == .opened && cards.isEmpty { loadActivePack() }
         }
         .onChange(of: packState) { _, newState in
             if newState == .tearing {
                 showTearHint = false
-                packIdleSway = 0
+                packSwayX = 0
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     guard packState == .tearing, !showOpeningEffect else { return }
-                    withAnimation(.easeInOut(duration: 0.95).repeatForever(autoreverses: true)) {
-                        packIdleSway = 1.5
+                    withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                        packSwayX = 9
                     }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
@@ -271,13 +271,13 @@ struct PackOpeningView: View {
                 }
             } else {
                 withAnimation(.easeOut(duration: 0.2)) { showTearHint = false }
-                packIdleSway = 0
+                packSwayX = 0
             }
         }
         .onChange(of: showOpeningEffect) { _, firing in
             if firing {
                 withAnimation(.easeOut(duration: 0.15)) { showTearHint = false }
-                packIdleSway = 0
+                packSwayX = 0
             }
         }
         .onChange(of: selectedMuseumId) { _, newValue in
@@ -312,17 +312,14 @@ struct PackOpeningView: View {
     // MARK: - Animazione ingresso carte
 
     func animateCardsIn() {
-        let startOffsets: [(x: CGFloat, y: CGFloat)] = [
-            (123, 94), (0, 94), (-123, 94), (61.5, -94), (-61.5, -94)
-        ]
-        let startRotations: [Double] = [-38, 22, -30, 35, -18]
+        let finalRotations: [Double] = Array(repeating: 0, count: 5)
 
         for i in 0..<5 {
-            cardOffsetX[i] = startOffsets[i].x
-            cardOffsetY[i] = startOffsets[i].y
-            cardScale[i] = 0.25
+            cardOffsetX[i] = 0
+            cardOffsetY[i] = 0
+            cardScale[i] = 0.6
             cardOpacity[i] = 0
-            cardRotation[i] = startRotations[i]
+            cardRotation[i] = finalRotations[i]
         }
 
         let revealOrder: [Int] = [0, 3, 1, 4, 2]
@@ -335,11 +332,8 @@ struct PackOpeningView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 HapticManager.shared.triggerImpact(style: seq == 0 ? .heavy : .medium)
                 withAnimation(.spring(response: 0.46, dampingFraction: 0.6)) {
-                    cardOffsetX[i] = 0
-                    cardOffsetY[i] = 0
                     cardScale[i] = 1.08
                     cardOpacity[i] = 1.0
-                    cardRotation[i] = 0
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
@@ -360,7 +354,7 @@ struct PackOpeningView: View {
     // MARK: - Logic
 
     func completeOpening() {
-        // Persist the opened museum so AR tracking + collection routing target it.
+        guard packState == .tearing else { return }
         UserDefaults.standard.set(selectedMuseumId, forKey: "currentCity")
 
         let revealed = CardDatabase.getRevealedCards()
@@ -399,6 +393,15 @@ struct PackOpeningView: View {
             await CardDatabase.downloadImages(for: selectedArtworks)
         }
         
+        let finalRotations: [Double] = Array(repeating: 0, count: 5)
+        for i in 0..<5 {
+            cardOffsetX[i] = 0
+            cardOffsetY[i] = 0
+            cardScale[i] = 0.6
+            cardOpacity[i] = 0
+            cardRotation[i] = finalRotations[i]
+        }
+
         self.packState = .opened
         self.showCards = true
 
@@ -414,12 +417,13 @@ struct PackOpeningView: View {
                 ArtworkCard(name: name, imageName: name, gradient: CardDatabase.gradientFor(name: name), isFlipped: true)
             }
             // Carte già viste: mostrale subito senza animazione
+            let finalRotations: [Double] = Array(repeating: 0, count: 5)
             for i in 0..<5 {
                 cardOffsetX[i] = 0
                 cardOffsetY[i] = 0
                 cardScale[i] = 1.0
                 cardOpacity[i] = 1.0
-                cardRotation[i] = 0
+                cardRotation[i] = finalRotations[i]
             }
         } else {
             self.cards = []
@@ -444,15 +448,15 @@ struct PackOpeningView: View {
         showOpeningEffect = false
         shakeOffset = 0
         showTearHint = false
-        packIdleSway = 0
+        packSwayX = 0
         shimmerPhase = 0
         nextButtonScale = 0
 
-        cardOffsetX = [123, 0, -123, 61.5, -61.5]
-        cardOffsetY = [94, 94, 94, -94, -94]
-        cardScale = Array(repeating: 1.0, count: 5)
+        cardOffsetX = Array(repeating: 0, count: 5)
+        cardOffsetY = Array(repeating: 0, count: 5)
+        cardScale = Array(repeating: 0.6, count: 5)
         cardOpacity = Array(repeating: 0, count: 5)
-        cardRotation = [-4, 2, -2, 3, 0]
+        cardRotation = Array(repeating: 0, count: 5)
     }
 }
 
@@ -467,7 +471,9 @@ struct SingleScrollPackView: View {
     let onTapCity: () -> Void
 
     @State private var revealedCards: Set<String> = []
-    @State private var carouselDragOffset: CGFloat = 0
+    @State private var scrollPosition: CGFloat = 0.0
+    @State private var baseScrollPosition: CGFloat = 0.0
+    @State private var isDragging: Bool = false
 
     private var museums: [Museum] { MuseumConfig.shared.museums }
 
@@ -503,12 +509,10 @@ struct SingleScrollPackView: View {
                 // Header (Hello, Keeper) — scrolls with content
                 VStack(alignment: .leading, spacing: -4) {
                     Text("Hello,")
-                        .font(.system(size: 24, weight: .light))
+                        .font(.custom("Helvetica-Light", size: 24))
                         .foregroundColor(.white)
                     Text("Keeper")
                         .font(.custom("Helvetica-BoldOblique", size: 38))
-                        .italic()
-                        .bold()
                         .foregroundColor(.white)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -524,21 +528,39 @@ struct SingleScrollPackView: View {
                     .padding(.top, 0)
                     .padding(.bottom, 20)
 
-                // Pacchetti divisi per museo — scorri orizzontalmente in stile Pokemon Pocket
+                // Pacchetti divisi per museo — scorri orizzontalmente in stile Pokemon Pocket (Infinito Circular/Pacman style)
                 ZStack {
                     ForEach(Array(museums.enumerated()), id: \.element.id) { index, museum in
-                        let diff = CGFloat(index - selectedIndex)
+                        let diff = circularDifference(index: index, scrollPosition: scrollPosition, count: museums.count)
+                        let absDiff = abs(diff)
                         
-                        // Il pacchetto centrale è in scala 1.25, quelli adiacenti sono più piccoli e sfumati
-                        let isSelected = index == selectedIndex
-                        let scale: CGFloat = isSelected ? 1.25 : 0.88
-                        let opacity: Double = isSelected ? 1.0 : 0.65
+                        // Continuous layout calculations for smooth Pokemon Pocket style scrolling
+                        let scale: CGFloat = 1.25 - min(absDiff, 1.0) * (1.25 - 0.88)
                         
-                        // Rotazione stile Pokemon: pacchetto sinistro ruotato a sx (-5°), destro a dx (+5°)
-                        let rotation: Double = isSelected ? 0 : (diff > 0 ? 5 : -5)
+                        let opacity: Double = {
+                            if absDiff > 1.1 {
+                                return 0.0
+                            } else if absDiff <= 1.0 {
+                                return 1.0 - absDiff * (1.0 - 0.65)
+                            } else {
+                                let t = (absDiff - 1.0) / 0.1
+                                return 0.65 * (1.0 - t)
+                            }
+                        }()
                         
-                        // Offset: più stretto per far vedere chiaramente i pacchetti laterali come da Sketch
-                        let xOffset = diff * 190 + carouselDragOffset
+                        let rotation: Double = {
+                            let maxRot: Double = 5.0
+                            if diff > 1.0 {
+                                return maxRot
+                            } else if diff < -1.0 {
+                                return -maxRot
+                            } else {
+                                return Double(diff) * maxRot
+                            }
+                        }()
+                        
+                        let xOffset = diff * 190
+                        let zIndexValue = 10.0 - absDiff
                         
                         MuseumPackPage(
                             museum: museum,
@@ -551,7 +573,7 @@ struct SingleScrollPackView: View {
                         .opacity(opacity)
                         .rotationEffect(.degrees(rotation))
                         .offset(x: xOffset)
-                        .zIndex(isSelected ? 10 : 1)
+                        .zIndex(zIndexValue)
                     }
                 }
                 .frame(height: 400)
@@ -559,28 +581,45 @@ struct SingleScrollPackView: View {
                 .gesture(
                     DragGesture(minimumDistance: 15)
                         .onChanged { gesture in
-                            // Traccia solo trascinamenti prevalentemente orizzontali per non bloccare lo scroll verticale della ScrollView
                             if abs(gesture.translation.width) > abs(gesture.translation.height) {
-                                carouselDragOffset = gesture.translation.width
+                                if !isDragging {
+                                    isDragging = true
+                                    baseScrollPosition = scrollPosition
+                                }
+                                scrollPosition = baseScrollPosition - gesture.translation.width / 190
                             }
                         }
                         .onEnded { gesture in
+                            isDragging = false
                             let velocity = gesture.predictedEndTranslation.width
                             let threshold: CGFloat = 50
                             
-                            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                                if abs(gesture.translation.width) > abs(gesture.translation.height) {
-                                    if gesture.translation.width < -threshold || velocity < -200 {
-                                        // Swipe a sinistra -> pacchetto successivo
-                                        let nextIndex = min(selectedIndex + 1, museums.count - 1)
-                                        selectedMuseumId = museums[nextIndex].id
-                                    } else if gesture.translation.width > threshold || velocity > 200 {
-                                        // Swipe a destra -> pacchetto precedente
-                                        let prevIndex = max(selectedIndex - 1, 0)
-                                        selectedMuseumId = museums[prevIndex].id
-                                    }
+                            var indexChange = 0
+                            if abs(gesture.translation.width) > abs(gesture.translation.height) {
+                                if gesture.translation.width < -threshold || velocity < -200 {
+                                    indexChange = 1
+                                } else if gesture.translation.width > threshold || velocity > 200 {
+                                    indexChange = -1
                                 }
-                                carouselDragOffset = 0
+                            }
+                            
+                            let count = museums.count
+                            let targetIndex = (selectedIndex + indexChange + count) % count
+                            let targetScrollPosition = CGFloat(selectedIndex + indexChange)
+                            
+                            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                                scrollPosition = targetScrollPosition
+                                selectedMuseumId = museums[targetIndex].id
+                            }
+                            
+                            // Normalize scroll position post-animation to keep coordinates within clean range [0, count)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
+                                var transaction = Transaction()
+                                transaction.disablesAnimations = true
+                                withTransaction(transaction) {
+                                    scrollPosition = CGFloat(targetIndex)
+                                    baseScrollPosition = scrollPosition
+                                }
                             }
                         }
                 )
@@ -629,11 +668,26 @@ struct SingleScrollPackView: View {
         .ignoresSafeArea(edges: .top)
         .onAppear {
             revealedCards = CardDatabase.getRevealedCards()
+            if let index = museums.firstIndex(where: { $0.id == selectedMuseumId }) {
+                scrollPosition = CGFloat(index)
+                baseScrollPosition = CGFloat(index)
+            }
+        }
+        .onChange(of: selectedMuseumId) { _, newValue in
+            if let index = museums.firstIndex(where: { $0.id == newValue }) {
+                let targetPos = CGFloat(index)
+                let diff = circularDifference(index: index, scrollPosition: scrollPosition, count: museums.count)
+                if abs(diff) > 0.01 {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                        scrollPosition = targetPos
+                    }
+                }
+            }
         }
     }
 
     private var locationChip: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 0) {
             ZStack {
                 Circle()
                     .fill(LinearGradient(colors: [Color(white: 0.8), Color(white: 0.4)], startPoint: .topLeading, endPoint: .bottomTrailing))
@@ -644,13 +698,15 @@ struct SingleScrollPackView: View {
                     .foregroundColor(.white)
                     .rotationEffect(.degrees(45))
             }
+            .frame(width: 20, height: 20)
+            .padding(.leading, 6)
+            
             Text(displayedCity)
-                .font(.system(size: 11, weight: .black))
-                .italic()
+                .font(.custom("Helvetica-BoldOblique", size: 11))
                 .foregroundColor(.white)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.trailing, 10)
         }
-        .padding(.leading, 5)
-        .padding(.trailing, 10)
         .frame(width: 109, height: 30)
         .background(Capsule().fill(LinearGradient(colors: [Color(white: 0.18), Color(white: 0.12)], startPoint: .top, endPoint: .bottom)))
         .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 2))
@@ -660,6 +716,19 @@ struct SingleScrollPackView: View {
         let artworks = CardDatabase.artworksFor(location: museumId)
         let found = artworks.filter { revealedCards.contains($0) }.count
         return (artworks.isEmpty ? 0 : Double(found) / Double(artworks.count), found, artworks.count)
+    }
+
+    private func circularDifference(index: Int, scrollPosition: CGFloat, count: Int) -> CGFloat {
+        let c = CGFloat(count)
+        let rawDiff = CGFloat(index) - scrollPosition
+        var diff = rawDiff.truncatingRemainder(dividingBy: c)
+        let half = c / 2
+        if diff > half {
+            diff -= c
+        } else if diff <= -half {
+            diff += c
+        }
+        return diff
     }
 }
 

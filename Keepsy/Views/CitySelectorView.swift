@@ -17,10 +17,10 @@ struct CitySelectorView: View {
     }
     
     private let cities = [
-        CityItem(name: "Naples",   flag: "🇮🇹", museumsCountText: "1 Museum", museumId: "capodimonte"),
-        CityItem(name: "Florence", flag: "🇮🇹", museumsCountText: "1 Museum", museumId: "uffizi"),
-        CityItem(name: "Madrid",   flag: "🇪🇸", museumsCountText: "1 Museum", museumId: "prado"),
-        CityItem(name: "New York", flag: "🇺🇸", museumsCountText: "1 Museum", museumId: "moma"),
+        CityItem(name: "Naples",   flag: "🇮🇹", museumsCountText: "1 Museums", museumId: "capodimonte"),
+        CityItem(name: "Florence", flag: "🇮🇹", museumsCountText: "1 Museums", museumId: "uffizi"),
+        CityItem(name: "Madrid",   flag: "🇪🇸", museumsCountText: "1 Museums", museumId: "prado"),
+        CityItem(name: "New York", flag: "🇺🇸", museumsCountText: "1 Museums", museumId: "moma"),
     ]
     
     var body: some View {
@@ -75,10 +75,9 @@ struct CitySelectorView: View {
                         )
                         .lineSpacing(4)
                     
-                    Text("Always updating.")
-                        .font(.system(size: 14, weight: .regular))
-                        .italic()
-                        .foregroundColor(.gray)
+                    Text("Always updating...")
+                        .font(.custom("Helvetica-Oblique", size: 12))
+                        .foregroundColor(.white.opacity(0.6))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
@@ -90,9 +89,9 @@ struct CitySelectorView: View {
                         .foregroundColor(.gray)
                         .font(.system(size: 18))
                     
-                    TextField("Your city", text: $searchText)
+                    TextField("", text: $searchText, prompt: Text("Your city").foregroundColor(.white.opacity(0.5)))
                         .foregroundColor(.white)
-                        .font(.system(size: 16))
+                        .font(.custom("Helvetica", size: 16))
                 }
                 .padding(.horizontal, 16)
                 .frame(width: 366, height: 55)
@@ -127,13 +126,12 @@ struct CitySelectorView: View {
                             HStack(spacing: 0) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("\(city.name) \(city.flag)")
-                                        .font(.system(size: 18, weight: .bold))
-                                        .italic()
+                                        .font(.custom("Helvetica-Bold", size: 18))
                                         .foregroundColor(.white)
                                     
                                     Text(city.museumsCountText)
-                                        .font(.system(size: 13, weight: .regular))
-                                        .foregroundColor(.gray)
+                                        .font(.custom("Helvetica-Oblique", size: 11))
+                                        .foregroundColor(.white.opacity(0.5))
                                 }
                                 
                                 Spacer()

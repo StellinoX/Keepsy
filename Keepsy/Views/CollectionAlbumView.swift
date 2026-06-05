@@ -63,6 +63,21 @@ struct CollectionAlbumView: View {
     @State private var screenSize: CGSize = .zero
 
     let pullDistance: CGFloat = 120
+    @State private var scrollOffset: CGFloat = 0
+
+    var pinY: CGFloat {
+        showCloseButton ? 140 : 80
+    }
+
+    var defaultY: CGFloat {
+        showCloseButton ? 470 : 410
+    }
+
+    var offsetY: CGFloat {
+        let currentY = defaultY + scrollOffset
+        let targetY = pinY
+        return currentY < targetY ? targetY - currentY : 0
+    }
 
     var headerTitle: String {
         if let loc = museumLocation, let museum = MuseumConfig.shared.museums.first(where: { $0.id == loc.lowercased() }) {
@@ -191,6 +206,17 @@ struct CollectionAlbumView: View {
                         ZStack(alignment: .top) {
                             Color.clear
                                 .frame(height: showCloseButton ? 470 : 410)
+                                .background(
+                                    GeometryReader { geo in
+                                        Color.clear
+                                            .onAppear {
+                                                scrollOffset = geo.frame(in: .named("root")).minY
+                                            }
+                                            .onChange(of: geo.frame(in: .named("root")).minY) { _, newValue in
+                                                scrollOffset = newValue
+                                            }
+                                    }
+                                )
                                 .allowsHitTesting(false)
                             
                             // Foreground interactive area for the Experience Card (both locked and unlocked)
@@ -204,7 +230,7 @@ struct CollectionAlbumView: View {
                         }
                         
                         // ── ALBUM GRID CONTAINER ─────────────────────────────────
-                        ZStack {
+                        ZStack(alignment: .top) {
                             RoundedRectangle(cornerRadius: 33)
                                 .fill(Color(white: 0.12))
                                 .overlay(RoundedRectangle(cornerRadius: 33).stroke(
@@ -216,6 +242,7 @@ struct CollectionAlbumView: View {
                                     lineWidth: 2
                                 ))
                                 .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
+                                .offset(y: offsetY)
                             
                             StickerGridView(
                                 artworks: filteredArtworks,
@@ -241,6 +268,10 @@ struct CollectionAlbumView: View {
                             .equatable()
                             .padding(.vertical, 24)
                             .padding(.horizontal, 16)
+                            .mask(
+                                Rectangle()
+                                    .padding(.top, offsetY)
+                            )
                         }
                         .frame(width: 373)
                         .padding(.bottom, 40)
@@ -287,11 +318,16 @@ struct CollectionAlbumView: View {
             // Flying card e overlay dentro lo stesso ZStack "root"
             // così .position usa le stesse coordinate del GeometryReader
             if animationPhase != .idle {
-                // Sfondo scuro
-                Color.black
-                    .opacity(overlayOpacity)
-                    .ignoresSafeArea()
-                    .onTapGesture { startCloseAnimation() }
+                // Sfondo scuro e sfocato
+                ZStack {
+                    Color.black.opacity(0.45 * overlayOpacity)
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .environment(\.colorScheme, .dark)
+                        .opacity(overlayOpacity)
+                }
+                .ignoresSafeArea()
+                .onTapGesture { startCloseAnimation() }
 
                 // Flying card — posizionata con .position nello spazio "root"
                 // Viene nascosta quando la CardInspectionView interattiva è aperta (.open) per evitare doppioni
@@ -729,7 +765,7 @@ struct AlbumCardCell: View {
             } else {
                 ZStack(alignment: .bottom) {
                     ZStack(alignment: .center) {
-                        Text(String(format: "%03d", index + 1))
+                        Text(String(format: "%02d", index + 1))
                             .font(.custom("Helvetica-BoldOblique", size: 17))
                             .foregroundStyle(
                                 LinearGradient(

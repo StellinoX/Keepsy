@@ -402,6 +402,8 @@ public struct SceneKitPacketView: UIViewRepresentable {
         view.allowsCameraControl = false
         view.autoenablesDefaultLighting = false
         view.backgroundColor = UIColor.clear // Make background clear to show gradient underneath
+        view.isOpaque = false
+        view.clipsToBounds = true
         view.isUserInteractionEnabled = interactive
         view.rendersContinuously = false
         view.antialiasingMode = .multisampling2X
@@ -456,7 +458,7 @@ public struct SceneKitPacketView: UIViewRepresentable {
             context.coordinator.backFlapNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
             
             context.coordinator.topGroupNode.isHidden = false
-            context.coordinator.backFlapNode.isHidden = false
+            context.coordinator.backFlapNode.isHidden = true  // resta nascosto — niente nero
             context.coordinator.topSealNode.isHidden = false
             
             context.coordinator.deckContainer.position = SCNVector3(0, 0, -0.06)
@@ -511,6 +513,7 @@ public class PacketCoordinator: NSObject {
     var lastHapticFingerX: Float = -10.0
     var packetImageName: String?
     var isAnimatingOrTorn: Bool = false
+    var hasFinishedTear: Bool = false
     
     deinit {
         NotificationCenter.default.removeObserver(self)
@@ -560,7 +563,7 @@ public class PacketCoordinator: NSObject {
         dirLight.light = SCNLight()
         dirLight.light?.type = .directional
         dirLight.light?.intensity = 800
-        dirLight.light?.castsShadow = true
+        dirLight.light?.castsShadow = false
         dirLight.position = SCNVector3(x: 2, y: 8, z: 10)
         dirLight.look(at: SCNVector3Zero)
         scene.rootNode.addChildNode(dirLight)
@@ -859,9 +862,11 @@ public class PacketCoordinator: NSObject {
         backGeo.heightSegmentCount = 100
         backGeo.materials = [backMat]
         
-        // Initialize the back nodes with independent geometry copies
+        // Back faces nascosti — lo strappo rivela lo sfondo dell'app, non l'interno scuro
         backBodyNode = SCNNode(geometry: backGeo.copy() as? SCNGeometry)
         backFlapNode = SCNNode(geometry: backGeo.copy() as? SCNGeometry)
+        backBodyNode.isHidden = true
+        backFlapNode.isHidden = true
         
         // Place behind the card
         backBodyNode.position = SCNVector3(0, 0, -0.12)
@@ -989,6 +994,7 @@ public class PacketCoordinator: NSObject {
     
     @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
         guard let view = scnView else { return }
+        guard !hasFinishedTear else { return }
         let location = gesture.location(in: view)
         
         switch gesture.state {
@@ -1130,6 +1136,7 @@ public class PacketCoordinator: NSObject {
         
         // If cut spans across at least 35% of the screen width
         if dx > view.bounds.width * 0.35 {
+            self.hasFinishedTear = true
             let maskToSave = self.lastMaskImage
             let city = self.museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
             let key = "activePackTearMask_\(city)"
@@ -1178,8 +1185,7 @@ public class PacketCoordinator: NSObject {
         // Keep rendering active during animation to prevent dropped frames.
         scnView?.rendersContinuously = true
         
-        // Show the deck cards since we are now opening the packet
-        deckContainer.isHidden = false
+        // Il deck resta nascosto — le carte appaiono via SwiftUI
 
         // === FLARE ===
         flareNode.opacity = 0.0
@@ -1222,26 +1228,16 @@ public class PacketCoordinator: NSObject {
         topGroupNode.runAction(SCNAction.group([flyUp, topRotate, topScale]))
 
         // === BOTTOM GROUP: falls DOWN and keeps its Z position so it stays in front of the cards ===
-        let bodyDownAction = SCNAction.moveBy(x: 0, y: -18.0, z: 0.0, duration: 1.3)
+        let bodyDownAction = SCNAction.moveBy(x: 0, y: -18.0, z: 0.0, duration: 0.9)
         bodyDownAction.timingMode = .easeIn
         bottomGroupNode.runAction(bodyDownAction)
 
-        // === DECK: slide up out of the falling packet and present — single smooth motion ===
-        let wait = SCNAction.wait(duration: 1.0)
+        // === DECK: rimane nascosto — la transizione alle carte SwiftUI gestisce la visualizzazione ===
+        // Non mostriamo il deck 3D per evitare il nero visibile tra deck e pacchetto.
+        // deckContainer resta hidden.
 
-        // Slide forward to camera (Z: 2.2) and straighten (cards stay vertically stationary at Y: 0.0)
-        let slideForward = SCNAction.move(to: SCNVector3(0, 0.0, 2.2), duration: 0.5)
-        slideForward.timingMode = .easeOut
-        
-        let straighten = SCNAction.rotateTo(x: 0, y: 0, z: 0.06, duration: 0.5)
-        straighten.timingMode = .easeOut
-        
-        let presentGroup = SCNAction.group([slideForward, straighten])
-
-        deckContainer.runAction(SCNAction.sequence([wait, presentGroup]))
-
-        // Notify after deck reaches center.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+        // Notifica dopo che il pacchetto si è aperto — transizione rapida alle carte SwiftUI
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
             self.onOpen?()
         }
 

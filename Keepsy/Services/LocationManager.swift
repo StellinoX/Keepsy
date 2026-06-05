@@ -13,6 +13,9 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var currentCity: String = "NAPLES"
     @Published var isInNaples: Bool = true
+    @Published var lastKnownLocation: CLLocation? = nil
+    
+    private var isHighAccuracyMode = false
     
     override init() {
         super.init()
@@ -28,6 +31,29 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
     
+    func startHighAccuracyTracking() {
+        isHighAccuracyMode = true
+        manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.startUpdatingLocation()
+    }
+    
+    func stopTracking() {
+        isHighAccuracyMode = false
+        manager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
+        manager.stopUpdatingLocation()
+    }
+    
+    func distanceTo(museum: Museum) -> CLLocationDistance? {
+        guard let userLoc = lastKnownLocation else { return nil }
+        let museumLoc = CLLocation(latitude: museum.latitude, longitude: museum.longitude)
+        return userLoc.distance(from: museumLoc)
+    }
+    
+    func isUserNear(museum: Museum) -> Bool {
+        guard let dist = distanceTo(museum: museum) else { return false }
+        return dist <= museum.geofenceRadius
+    }
+    
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         DispatchQueue.main.async {
             self.authorizationStatus = manager.authorizationStatus
@@ -40,8 +66,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         
-        // Stop updating location to save battery once we have it
-        manager.stopUpdatingLocation()
+        DispatchQueue.main.async {
+            self.lastKnownLocation = location
+        }
+        
+        if !isHighAccuracyMode {
+            manager.stopUpdatingLocation()
+        }
         
         if #available(iOS 26.0, *) {
             Task {
