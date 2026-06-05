@@ -888,7 +888,9 @@ struct ARViewContainer: UIViewRepresentable {
         }
         
         guard !targetArtworks.isEmpty else {
-            onDiagnosticMessageUpdated("Nessuna foto scaricata! (\(totalKnown) totali sul server). Apri prima la collezione.")
+            DispatchQueue.main.async {
+                onDiagnosticMessageUpdated("Nessuna foto scaricata! (\(totalKnown) totali sul server). Apri prima la collezione.")
+            }
             arView.session.run(configuration)
             return arView
         }
@@ -933,8 +935,10 @@ struct ARViewContainer: UIViewRepresentable {
                 if let imageAnchor = anchor as? ARImageAnchor,
                    let name = imageAnchor.referenceImage.name,
                    name == targetName {
-                    onArtworkDetected(name)
-                    onDiagnosticMessageUpdated("Trovato: \(name)!")
+                    DispatchQueue.main.async {
+                        onArtworkDetected(name)
+                        onDiagnosticMessageUpdated("Trovato: \(name)!")
+                    }
                 }
             }
         }

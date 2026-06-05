@@ -11,7 +11,8 @@ struct MuseumConfig {
 
     let museums: [Museum] = [
         Museum(id: "capodimonte", name: "Capodimonte", packetImageName: "capodimonte_pacchetto"),
-        Museum(id: "uffizi", name: "Uffizi", packetImageName: "uffizi_pacchetto")
-        // Museum(id: "louvre", name: "Louvre", packetImageName: "louvre_pacchetto")
+        Museum(id: "uffizi",      name: "Uffizi",      packetImageName: "uffizi_pacchetto"),
+        Museum(id: "prado",       name: "Prado",       packetImageName: "prado_pacchetto"),
+        Museum(id: "moma",        name: "MoMA",        packetImageName: "moma_pacchetto"),
     ]
 }

@@ -17,8 +17,10 @@ struct CitySelectorView: View {
     }
     
     private let cities = [
-        CityItem(name: "Naples", flag: "🇮🇹", museumsCountText: "1 Museums", museumId: "capodimonte"),
-        CityItem(name: "Florence", flag: "🇮🇹", museumsCountText: "1 Museums", museumId: "uffizi")
+        CityItem(name: "Naples",   flag: "🇮🇹", museumsCountText: "1 Museum", museumId: "capodimonte"),
+        CityItem(name: "Florence", flag: "🇮🇹", museumsCountText: "1 Museum", museumId: "uffizi"),
+        CityItem(name: "Madrid",   flag: "🇪🇸", museumsCountText: "1 Museum", museumId: "prado"),
+        CityItem(name: "New York", flag: "🇺🇸", museumsCountText: "1 Museum", museumId: "moma"),
     ]
     
     var body: some View {
@@ -215,12 +217,7 @@ struct CitySelectorView: View {
         }
         .ignoresSafeArea()
         .onAppear {
-            // Set initial selection from current museum binding
-            if selectedMuseumId == "uffizi" {
-                selectedCity = "Florence"
-            } else {
-                selectedCity = "Naples"
-            }
+            selectedCity = cities.first(where: { $0.museumId == selectedMuseumId })?.name ?? "Naples"
         }
     }
 }

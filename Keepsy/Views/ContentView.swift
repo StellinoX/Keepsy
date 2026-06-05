@@ -43,7 +43,7 @@ struct ContentView: View {
     }
     
     private func prefetchAllImages() async {
-        let museums = ["capodimonte", "uffizi"]
+        let museums = MuseumConfig.shared.museums.map { $0.id }
         var allMissing: [String] = []
         
         for museum in museums {

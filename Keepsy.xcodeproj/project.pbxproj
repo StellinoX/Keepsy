@@ -12,7 +12,6 @@
 
 /* Begin PBXFileReference section */
 		813692EB2FCE4032001CD99F /* Keepsy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Keepsy.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		813692EC2FCE4032001CD99F /* KeepsyAdmin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KeepsyAdmin.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -24,13 +23,6 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		714CF50F2FC88D5500E93EA6 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		8157FDA72FB47BCD00D69127 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -47,32 +39,12 @@
 			children = (
 				8157FDAC2FB47BCD00D69127 /* Keepsy */,
 				813692EB2FCE4032001CD99F /* Keepsy.app */,
-				813692EC2FCE4032001CD99F /* KeepsyAdmin.app */,
 			);
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		714CF5112FC88D5500E93EA6 /* KeepsyAdmin */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 714CF51A2FC88D5600E93EA6 /* Build configuration list for PBXNativeTarget "KeepsyAdmin" */;
-			buildPhases = (
-				714CF50E2FC88D5500E93EA6 /* Sources */,
-				714CF50F2FC88D5500E93EA6 /* Frameworks */,
-				714CF5102FC88D5500E93EA6 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = KeepsyAdmin;
-			packageProductDependencies = (
-			);
-			productName = KeepsyAdmin;
-			productReference = 813692EC2FCE4032001CD99F /* KeepsyAdmin.app */;
-			productType = "com.apple.product-type.application";
-		};
 		8157FDA92FB47BCD00D69127 /* Keepsy */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 8157FDB52FB47BCD00D69127 /* Build configuration list for PBXNativeTarget "Keepsy" */;
@@ -106,9 +78,6 @@
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
-					714CF5112FC88D5500E93EA6 = {
-						CreatedOnToolsVersion = 26.5;
-					};
 					8157FDA92FB47BCD00D69127 = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
@@ -132,19 +101,11 @@
 			projectRoot = "";
 			targets = (
 				8157FDA92FB47BCD00D69127 /* Keepsy */,
-				714CF5112FC88D5500E93EA6 /* KeepsyAdmin */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		714CF5102FC88D5500E93EA6 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		8157FDA82FB47BCD00D69127 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -155,13 +116,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		714CF50E2FC88D5500E93EA6 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		8157FDA62FB47BCD00D69127 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -172,74 +126,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		714CF51B2FC88D5600E93EA6 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = KeepsyAdmin/KeepsyAdmin.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 22SPWA3XU9;
-				ENABLE_APP_SANDBOX = NO;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "camillacacace.prova-capodimonte";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		714CF51C2FC88D5600E93EA6 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = KeepsyAdmin/KeepsyAdmin.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 22SPWA3XU9;
-				ENABLE_APP_SANDBOX = NO;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.5;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "camillacacace.prova-capodimonte";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				SDKROOT = macosx;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 		8157FDB32FB47BCD00D69127 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -371,7 +257,7 @@
 				CODE_SIGN_ENTITLEMENTS = Keepsy/Keepsy.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 82XQ6P528Q;
+				DEVELOPMENT_TEAM = 22SPWA3XU9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Uso la fotocamera per riconoscere le opere d'arte del museo.";
@@ -386,7 +272,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "camillacacace.keepsy-prova";
+				PRODUCT_BUNDLE_IDENTIFIER = "camillacacace.prova-capodimonte";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -406,7 +292,7 @@
 				CODE_SIGN_ENTITLEMENTS = Keepsy/Keepsy.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 82XQ6P528Q;
+				DEVELOPMENT_TEAM = 22SPWA3XU9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Uso la fotocamera per riconoscere le opere d'arte del museo.";
@@ -421,7 +307,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "camillacacace.keepsy-prova";
+				PRODUCT_BUNDLE_IDENTIFIER = "camillacacace.prova-capodimonte";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -436,15 +322,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		714CF51A2FC88D5600E93EA6 /* Build configuration list for PBXNativeTarget "KeepsyAdmin" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				714CF51B2FC88D5600E93EA6 /* Debug */,
-				714CF51C2FC88D5600E93EA6 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		8157FDA52FB47BCD00D69127 /* Build configuration list for PBXProject "Keepsy" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

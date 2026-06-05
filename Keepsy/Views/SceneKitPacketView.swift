@@ -6,17 +6,15 @@ fileprivate var cachedCardBackTexture: UIImage?
 @available(iOS 14.0, *)
 fileprivate func createCardBackTexture() -> UIImage {
     if let cached = cachedCardBackTexture { return cached }
-    if let retroImage = UIImage(named: "retro") {
-        cachedCardBackTexture = retroImage
-        return retroImage
-    }
-    let size = CGSize(width: 540, height: 780)
+    
+    let size = CGSize(width: 540, height: 818)
     let format = UIGraphicsImageRendererFormat()
     format.scale = 2.0
     let renderer = UIGraphicsImageRenderer(size: size, format: format)
 
     let result = renderer.image { ctx in
         let context = ctx.cgContext
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
         let cornerRadius: CGFloat = 58 // matches SwiftUI cr = 12/111 * 540
 
         // 1. Clip to rounded rect
@@ -24,30 +22,48 @@ fileprivate func createCardBackTexture() -> UIImage {
         context.addPath(clipPath.cgPath)
         context.clip()
 
-        // 2. Gradient fill matching SwiftUI cardBackGradient (#2D1C76 to #432B3F)
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let gradientColors = [
-            UIColor(red: 0x2D / 255.0, green: 0x1C / 255.0, blue: 0x76 / 255.0, alpha: 1.0).cgColor,
-            UIColor(red: 0x43 / 255.0, green: 0x2B / 255.0, blue: 0x3F / 255.0, alpha: 1.0).cgColor
-        ]
-        let gradient = CGGradient(colorsSpace: colorSpace, colors: gradientColors as CFArray, locations: [0.0, 1.0])!
-        context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: size.height), options: [])
+        if let retroImage = UIImage(named: "retro") {
+            let cropInset: CGFloat = 40
+            let targetSize = CGSize(width: size.width + cropInset * 2, height: size.height + cropInset * 2)
+            let imgW = retroImage.size.width
+            let imgH = retroImage.size.height
+            let aspect = imgW / imgH
+            let targetAspect = targetSize.width / targetSize.height
+            
+            var drawRect = CGRect.zero
+            if aspect > targetAspect {
+                let drawW = targetSize.height * aspect
+                drawRect = CGRect(x: (targetSize.width - drawW) / 2 - cropInset, y: -cropInset, width: drawW, height: targetSize.height)
+            } else {
+                let drawH = targetSize.width / aspect
+                drawRect = CGRect(x: -cropInset, y: (targetSize.height - drawH) / 2 - cropInset, width: targetSize.width, height: drawH)
+            }
+            retroImage.draw(in: drawRect)
+        } else {
+            // 2. Gradient fill matching SwiftUI cardBackGradient (#2D1C76 to #432B3F)
+            let gradientColors = [
+                UIColor(red: 0x2D / 255.0, green: 0x1C / 255.0, blue: 0x76 / 255.0, alpha: 1.0).cgColor,
+                UIColor(red: 0x43 / 255.0, green: 0x2B / 255.0, blue: 0x3F / 255.0, alpha: 1.0).cgColor
+            ]
+            let gradient = CGGradient(colorsSpace: colorSpace, colors: gradientColors as CFArray, locations: [0.0, 1.0])!
+            context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: size.height), options: [])
 
-        // 3. LogoKeepsy centered (same visual as SwiftUI cardBack)
-        if let logo = UIImage(named: "LogoKeepsy") {
-            let logoSize: CGFloat = 262
-            let logoRect = CGRect(
-                x: (size.width - logoSize) / 2,
-                y: (size.height - logoSize) / 2,
-                width: logoSize,
-                height: logoSize
-            )
-            logo.draw(in: logoRect)
+            // 3. LogoKeepsy centered (same visual as SwiftUI cardBack)
+            if let logo = UIImage(named: "LogoKeepsy") {
+                let logoSize: CGFloat = 262
+                let logoRect = CGRect(
+                    x: (size.width - logoSize) / 2,
+                    y: (size.height - logoSize) / 2,
+                    width: logoSize,
+                    height: logoSize
+                )
+                logo.draw(in: logoRect)
+            }
         }
 
         context.resetClip()
 
-        // 4. Gold gradient border matching SwiftUI goldBorder
+        // 4. Gold gradient border matching SwiftUI goldBorder (always drawn on top of either gradient or cropped retro)
         let goldColors: [CGColor] = [
             UIColor(red: 0xF5/255.0, green: 0xE4/255.0, blue: 0x80/255.0, alpha: 1.0).cgColor,
             UIColor(red: 0xF1/255.0, green: 0xB4/255.0, blue: 0x0A/255.0, alpha: 1.0).cgColor,
@@ -150,47 +166,90 @@ fileprivate func createCardFrontTexture(name: String) -> UIImage {
     return renderer.uiImage ?? UIImage()
 }
 
+fileprivate var cachedSparkTexture: UIImage?
+
+@available(iOS 14.0, *)
+fileprivate func createSparkTexture() -> UIImage {
+    if let cached = cachedSparkTexture { return cached }
+    let size = CGSize(width: 32, height: 32)
+    let renderer = UIGraphicsImageRenderer(size: size)
+    let result = renderer.image { ctx in
+        let context = ctx.cgContext
+        context.clear(CGRect(origin: .zero, size: size))
+        
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let colors = [
+            UIColor.white.cgColor,
+            UIColor(white: 1.0, alpha: 0.85).cgColor,
+            UIColor(white: 1.0, alpha: 0.0).cgColor
+        ] as CFArray
+        let locations: [CGFloat] = [0.0, 0.25, 1.0]
+        let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: locations)!
+        
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        context.drawRadialGradient(gradient, startCenter: center, startRadius: 0, endCenter: center, endRadius: size.width / 2, options: [])
+    }
+    cachedSparkTexture = result
+    return result
+}
+
 fileprivate var cachedHorizontalFlareTexture: UIImage?
 
 @available(iOS 14.0, *)
 fileprivate func createHorizontalFlareTexture() -> UIImage {
     if let cached = cachedHorizontalFlareTexture { return cached }
-    let size = CGSize(width: 512, height: 128)
+    let size = CGSize(width: 1024, height: 256)
     let renderer = UIGraphicsImageRenderer(size: size)
     
     let result = renderer.image { ctx in
         let context = ctx.cgContext
         context.clear(CGRect(origin: .zero, size: size))
         
-        let colors = [
-            UIColor.clear.cgColor,
-            UIColor(red: 0.3, green: 0.6, blue: 1.0, alpha: 0.35).cgColor, // Cyan
-            UIColor(red: 1.0, green: 0.85, blue: 0.4, alpha: 0.55).cgColor, // Gold/Yellow
-            UIColor(red: 0.3, green: 0.6, blue: 1.0, alpha: 0.35).cgColor, // Cyan
-            UIColor.clear.cgColor
-        ]
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let glowGradient = CGGradient(colorsSpace: colorSpace, colors: colors as CFArray, locations: [0.0, 0.3, 0.5, 0.7, 1.0])!
         
-        let glowRect = CGRect(x: 0, y: 16, width: size.width, height: 96)
+        // 1. Soft background horizontal glow (sleeker and narrower)
         context.saveGState()
-        context.clip(to: glowRect)
-        context.drawLinearGradient(glowGradient, start: CGPoint(x: 0, y: glowRect.minY), end: CGPoint(x: 0, y: glowRect.maxY), options: [])
+        context.translateBy(x: size.width / 2, y: size.height / 2)
+        context.scaleBy(x: 8.0, y: 1.0) // stretch horizontally even more
+        
+        let glowColors = [
+            UIColor(red: 1.0, green: 0.92, blue: 0.7, alpha: 0.4).cgColor,
+            UIColor(red: 0.2, green: 0.5, blue: 1.0, alpha: 0.18).cgColor,
+            UIColor(red: 0.05, green: 0.2, blue: 0.7, alpha: 0.0).cgColor
+        ] as CFArray
+        let glowGrad = CGGradient(colorsSpace: colorSpace, colors: glowColors, locations: [0.0, 0.35, 1.0])!
+        
+        // End radius is only 40 pixels (only ~15% of total height, ensuring 100% fade at borders)
+        context.drawRadialGradient(glowGrad, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 40.0, options: [])
         context.restoreGState()
+        
+        // 2. Intense horizontal core line (ultra thin needle)
+        context.saveGState()
+        context.translateBy(x: size.width / 2, y: size.height / 2)
+        context.scaleBy(x: 16.0, y: 1.0) // massive horizontal stretch
         
         let coreColors = [
-            UIColor.clear.cgColor,
             UIColor.white.cgColor,
-            UIColor.white.cgColor,
+            UIColor(white: 1.0, alpha: 0.85).cgColor,
+            UIColor(red: 0.4, green: 0.7, blue: 1.0, alpha: 0.2).cgColor,
             UIColor.clear.cgColor
-        ]
-        let coreGradient = CGGradient(colorsSpace: colorSpace, colors: coreColors as CFArray, locations: [0.0, 0.25, 0.75, 1.0])!
+        ] as CFArray
+        let coreGrad = CGGradient(colorsSpace: colorSpace, colors: coreColors, locations: [0.0, 0.1, 0.5, 1.0])!
         
-        let coreRect = CGRect(x: 0, y: 56, width: size.width, height: 16)
-        context.saveGState()
-        context.clip(to: coreRect)
-        context.drawLinearGradient(coreGradient, start: CGPoint(x: 0, y: coreRect.minY), end: CGPoint(x: 0, y: coreRect.maxY), options: [])
+        // End radius is only 5.0 pixels (very thin core)
+        context.drawRadialGradient(coreGrad, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 5.0, options: [])
         context.restoreGState()
+        
+        // 3. Central hot spot spark orb (small, bright center point)
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        let orbColors = [
+            UIColor.white.cgColor,
+            UIColor(red: 1.0, green: 0.95, blue: 0.8, alpha: 0.8).cgColor,
+            UIColor(red: 0.3, green: 0.7, blue: 1.0, alpha: 0.0).cgColor
+        ] as CFArray
+        let orbGrad = CGGradient(colorsSpace: colorSpace, colors: orbColors, locations: [0.0, 0.2, 1.0])!
+        // End radius is 18.0 pixels (small spotlight)
+        context.drawRadialGradient(orbGrad, startCenter: center, startRadius: 0, endCenter: center, endRadius: 18.0, options: [])
     }
     cachedHorizontalFlareTexture = result
     return result
@@ -200,23 +259,28 @@ fileprivate func createHorizontalFlareTexture() -> UIImage {
 fileprivate func createTearParticleSystem() -> SCNParticleSystem {
     let ps = SCNParticleSystem()
     ps.loops = false
-    ps.birthRate = 500
+    ps.birthRate = 650
     ps.emissionDuration = 0.22
-    ps.particleLifeSpan = 0.65
-    ps.particleLifeSpanVariation = 0.2
+    ps.particleLifeSpan = 0.75
+    ps.particleLifeSpanVariation = 0.25
     
-    // Emitter Shape: Horizontal bar matching packet tear width
     let emitterShape = SCNBox(width: 5.5, height: 0.1, length: 0.1, chamferRadius: 0.0)
     ps.emitterShape = emitterShape
-    ps.emittingDirection = SCNVector3(0, 0, 1) // Shoot out towards camera
+    ps.emittingDirection = SCNVector3(0, 0, 1)
     ps.spreadingAngle = 35.0
-    ps.particleVelocity = 3.5
-    ps.particleVelocityVariation = 1.5
+    ps.particleVelocity = 4.5
+    ps.particleVelocityVariation = 2.5
+    ps.dampingFactor = 1.2
+    ps.acceleration = SCNVector3(0, -6.0, 0) // pulls down like gravity
     
-    ps.particleSize = 0.07
-    ps.particleSizeVariation = 0.03
-    ps.particleColor = UIColor(red: 1.0, green: 0.82, blue: 0.4, alpha: 1.0) // Gold
-    ps.particleColorVariation = SCNVector4(0.08, 0.08, 0.15, 0.0)
+    ps.particleSize = 0.12
+    ps.particleSizeVariation = 0.06
+    ps.particleImage = createSparkTexture()
+    
+    // Add particle spin for shimmering twinkle
+    ps.particleAngleVariation = CGFloat.pi * 2
+    ps.particleAngularVelocity = 3.0
+    ps.particleAngularVelocityVariation = 1.5
     
     let sizeController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "size"))
     if let sizeAnim = sizeController.animation as? CAKeyframeAnimation {
@@ -230,9 +294,21 @@ fileprivate func createTearParticleSystem() -> SCNParticleSystem {
         opacityAnim.keyTimes = [0.0, 0.6, 1.0]
     }
     
+    let colorController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "color"))
+    if let colorAnim = colorController.animation as? CAKeyframeAnimation {
+        colorAnim.values = [
+            UIColor.white.cgColor,
+            UIColor(red: 1.0, green: 0.85, blue: 0.3, alpha: 1.0).cgColor,
+            UIColor(red: 0.9, green: 0.45, blue: 0.1, alpha: 0.7).cgColor,
+            UIColor(red: 0.4, green: 0.1, blue: 0.05, alpha: 0.0).cgColor
+        ]
+        colorAnim.keyTimes = [0.0, 0.2, 0.7, 1.0]
+    }
+    
     ps.propertyControllers = [
         .size: sizeController,
-        .opacity: opacityController
+        .opacity: opacityController,
+        .color: colorController
     ]
     
     ps.blendMode = .additive
@@ -243,23 +319,28 @@ fileprivate func createTearParticleSystem() -> SCNParticleSystem {
 fileprivate func createCenterBlastParticleSystem() -> SCNParticleSystem {
     let ps = SCNParticleSystem()
     ps.loops = false
-    ps.birthRate = 600
+    ps.birthRate = 800
     ps.emissionDuration = 0.12
     ps.particleLifeSpan = 0.85
-    ps.particleLifeSpanVariation = 0.3
+    ps.particleLifeSpanVariation = 0.35
     
     ps.emitterShape = SCNSphere(radius: 0.15)
-    ps.particleVelocity = 7.0
-    ps.particleVelocityVariation = 3.0
+    ps.particleVelocity = 8.0
+    ps.particleVelocityVariation = 4.0
+    ps.dampingFactor = 1.5
+    ps.acceleration = SCNVector3(0, -2.0, 0)
     
-    ps.particleSize = 0.11
-    ps.particleSizeVariation = 0.05
-    ps.particleColor = UIColor(red: 0.3, green: 0.75, blue: 1.0, alpha: 1.0) // Electric Cyan
+    ps.particleSize = 0.15
+    ps.particleSizeVariation = 0.08
+    ps.particleImage = createSparkTexture()
+    
+    ps.particleAngleVariation = CGFloat.pi * 2
+    ps.particleAngularVelocity = 5.0
     
     let sizeController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "size"))
     if let sizeAnim = sizeController.animation as? CAKeyframeAnimation {
-        sizeAnim.values = [1.0, 0.0]
-        sizeAnim.keyTimes = [0.0, 1.0]
+        sizeAnim.values = [0.2, 1.5, 0.0]
+        sizeAnim.keyTimes = [0.0, 0.25, 1.0]
     }
     
     let opacityController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "opacity"))
@@ -268,9 +349,21 @@ fileprivate func createCenterBlastParticleSystem() -> SCNParticleSystem {
         opacityAnim.keyTimes = [0.0, 1.0]
     }
     
+    let colorController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "color"))
+    if let colorAnim = colorController.animation as? CAKeyframeAnimation {
+        colorAnim.values = [
+            UIColor.white.cgColor,
+            UIColor(red: 0.2, green: 0.8, blue: 1.0, alpha: 1.0).cgColor,
+            UIColor(red: 0.1, green: 0.3, blue: 0.9, alpha: 0.6).cgColor,
+            UIColor(red: 0.05, green: 0.0, blue: 0.4, alpha: 0.0).cgColor
+        ]
+        colorAnim.keyTimes = [0.0, 0.25, 0.75, 1.0]
+    }
+    
     ps.propertyControllers = [
         .size: sizeController,
-        .opacity: opacityController
+        .opacity: opacityController,
+        .color: colorController
     ]
     
     ps.blendMode = .additive
@@ -326,6 +419,11 @@ public struct SceneKitPacketView: UIViewRepresentable {
     public func updateUIView(_ uiView: SCNView, context: Context) {
         // Applica i cambiamenti di isTorn e della maschera se la vista SwiftUI viene aggiornata senza essere ricreata
         context.coordinator.firstCardName = firstCardName
+        
+        if interactive && context.coordinator.isAnimatingOrTorn {
+            return
+        }
+        
         SCNTransaction.begin()
         SCNTransaction.animationDuration = 0.2
         if isTorn {
@@ -361,7 +459,7 @@ public struct SceneKitPacketView: UIViewRepresentable {
             context.coordinator.backFlapNode.isHidden = false
             context.coordinator.topSealNode.isHidden = false
             
-            context.coordinator.deckContainer.position = SCNVector3(0, 0, -0.12)
+            context.coordinator.deckContainer.position = SCNVector3(0, 0, -0.06)
             if !interactive {
                 context.coordinator.deckContainer.scale = SCNVector3(0.8, 0.8, 0.8)
             } else {
@@ -412,6 +510,7 @@ public class PacketCoordinator: NSObject {
     var lastMaskImage: UIImage?
     var lastHapticFingerX: Float = -10.0
     var packetImageName: String?
+    var isAnimatingOrTorn: Bool = false
     
     deinit {
         NotificationCenter.default.removeObserver(self)
@@ -502,6 +601,8 @@ public class PacketCoordinator: NSObject {
         mat.metalness.contents = 0.6
         mat.roughness.contents = 0.4
         mat.isDoubleSided = true
+        mat.writesToDepthBuffer = true
+        mat.readsFromDepthBuffer = true
         packetGeo.materials = [mat]
         
         bodyNode = SCNNode(geometry: packetGeo.copy() as? SCNGeometry)
@@ -749,6 +850,8 @@ public class PacketCoordinator: NSObject {
         backMat.metalness.contents = 0.8
         backMat.roughness.contents = 0.5
         backMat.isDoubleSided = true
+        backMat.writesToDepthBuffer = true
+        backMat.readsFromDepthBuffer = true
         
         let backGeo = SCNPlane(width: 6.1, height: 9.0)
         backGeo.cornerRadius = 0.1
@@ -761,8 +864,8 @@ public class PacketCoordinator: NSObject {
         backFlapNode = SCNNode(geometry: backGeo.copy() as? SCNGeometry)
         
         // Place behind the card
-        backBodyNode.position = SCNVector3(0, 0, -0.05)
-        backFlapNode.position = SCNVector3(0, 0, -0.05)
+        backBodyNode.position = SCNVector3(0, 0, -0.12)
+        backFlapNode.position = SCNVector3(0, 0, -0.12)
         
         bottomGroupNode.addChildNode(backBodyNode)
         topGroupNode.addChildNode(backFlapNode)
@@ -798,7 +901,7 @@ public class PacketCoordinator: NSObject {
         backFlapNode.geometry?.shaderModifiers = [.geometry: backFlapGeometryShader, .surface: backFlapSurface]
         
         // 6. Card inside the 3D packet
-        let cardGeo = SCNPlane(width: 5.15, height: 7.8) // Aspect ratio matches 111x168
+        let cardGeo = SCNPlane(width: 4.5, height: 6.82) // Aspect ratio matches 111x168
         cardGeo.cornerRadius = 0.15
         let cardMat = SCNMaterial()
         cardMat.lightingModel = .physicallyBased
@@ -807,7 +910,7 @@ public class PacketCoordinator: NSObject {
         cardGeo.materials = [cardMat]
         
         deckContainer = SCNNode()
-        deckContainer.position = SCNVector3(0, 0, -0.12) // Between front and back
+        deckContainer.position = SCNVector3(0, 0, -0.06) // Between front and back
         deckContainer.isHidden = !isTorn // Hidden by default if not torn yet to prevent showing from underneath
         if !interactive {
             deckContainer.scale = SCNVector3(0.75, 0.75, 0.75)
@@ -827,7 +930,7 @@ public class PacketCoordinator: NSObject {
         tiltContainerNode.eulerAngles = tilt
         
         // Initialize Horizontal Lens Flare Node
-        let flareGeo = SCNPlane(width: 30.0, height: 1.2)
+        let flareGeo = SCNPlane(width: 30.0, height: 0.4)
         let flareMat = SCNMaterial()
         flareMat.lightingModel = .constant
         flareMat.diffuse.contents = createHorizontalFlareTexture()
@@ -934,6 +1037,7 @@ public class PacketCoordinator: NSObject {
     
     private func updateMask() {
         guard !touchPoints.isEmpty, let view = scnView else { return }
+        self.isAnimatingOrTorn = true
         
         // PERFORMANCE FIX: Dropped resolution to 256x256 (16x faster generation!).
         // Because the Metal Fragment Shader uses bilinear filtering (filter::linear)
@@ -1057,6 +1161,7 @@ public class PacketCoordinator: NSObject {
             animateOpen()
         } else {
             // Cut failed (too short), reset mask
+            self.isAnimatingOrTorn = false
             maskProp.contents = UIColor.black
             let uniforms = SCNVector4(0, 0, 0, -10.0)
             SCNTransaction.begin()
@@ -1116,33 +1221,32 @@ public class PacketCoordinator: NSObject {
         topScale.timingMode = .easeIn
         topGroupNode.runAction(SCNAction.group([flyUp, topRotate, topScale]))
 
-        // === BOTTOM GROUP: falls DOWN and BACKWARD so it recedes behind the deck ===
-        // z: -4 moves it away from camera — deck cards stay in front, no clip-through.
-        let bodyDownAction = SCNAction.moveBy(x: 0, y: -18.0, z: -4.0, duration: 1.3)
+        // === BOTTOM GROUP: falls DOWN and keeps its Z position so it stays in front of the cards ===
+        let bodyDownAction = SCNAction.moveBy(x: 0, y: -18.0, z: 0.0, duration: 1.3)
         bodyDownAction.timingMode = .easeIn
         bottomGroupNode.runAction(bodyDownAction)
 
         // === DECK: slide up out of the falling packet and present — single smooth motion ===
-        let wait = SCNAction.wait(duration: 0.1)
+        let wait = SCNAction.wait(duration: 1.0)
 
-        // Slide up slightly and bring closer to camera (no scaling down) - stay centered at y: 0.0 to match SwiftUI cards final placement
-        let slideUp = SCNAction.move(to: SCNVector3(0, 0.0, 0.8), duration: 0.8)
-        slideUp.timingMode = .easeOut
+        // Slide forward to camera (Z: 2.2) and straighten (cards stay vertically stationary at Y: 0.0)
+        let slideForward = SCNAction.move(to: SCNVector3(0, 0.0, 2.2), duration: 0.5)
+        slideForward.timingMode = .easeOut
         
-        let straighten = SCNAction.rotateTo(x: 0, y: 0, z: 0.06, duration: 0.8)
+        let straighten = SCNAction.rotateTo(x: 0, y: 0, z: 0.06, duration: 0.5)
         straighten.timingMode = .easeOut
         
-        let presentGroup = SCNAction.group([slideUp, straighten])
+        let presentGroup = SCNAction.group([slideForward, straighten])
 
         deckContainer.runAction(SCNAction.sequence([wait, presentGroup]))
 
         // Notify after deck reaches center.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.25) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
             self.onOpen?()
         }
 
         // Drop back to on-demand rendering once animations finish.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             self.scnView?.rendersContinuously = false
         }
     }

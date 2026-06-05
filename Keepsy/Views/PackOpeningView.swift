@@ -53,13 +53,11 @@ struct PackOpeningView: View {
                 .zIndex(200)
 
             // Effetto apertura stile Pokemon Pocket
-            if showOpeningEffect {
-                PackOpeningFlashView {
-                    showOpeningEffect = false
-                }
-                .zIndex(190)
-                .allowsHitTesting(false)
+            PackOpeningFlashView(isTriggered: showOpeningEffect) {
+                showOpeningEffect = false
             }
+            .zIndex(5)
+            .allowsHitTesting(false)
 
             if packState == .selecting {
                 SingleScrollPackView(
@@ -87,9 +85,9 @@ struct PackOpeningView: View {
                             onTearComplete: {
                                 showOpeningEffect = true
                                 triggerShake()
-                                withAnimation(.easeOut(duration: 0.03)) { flashOpacity = 1.0 }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
-                                    withAnimation(.easeIn(duration: 0.55)) { flashOpacity = 0.0 }
+                                withAnimation(.easeOut(duration: 0.02)) { flashOpacity = 0.8 }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                                    withAnimation(.easeIn(duration: 0.28)) { flashOpacity = 0.0 }
                                 }
                             },
                             onOpen: {
@@ -444,11 +442,12 @@ struct SingleScrollPackView: View {
     }
 
     private var displayedCity: String {
-        if selectedMuseumId == "uffizi" {
-            return "FLORENCE"
-        } else if selectedMuseumId == "capodimonte" {
-            return "NAPLES"
-        } else {
+        switch selectedMuseumId {
+        case "capodimonte": return "NAPLES"
+        case "uffizi":      return "FLORENCE"
+        case "prado":       return "MADRID"
+        case "moma":        return "NEW YORK"
+        default:
             let city = currentCity.uppercased()
             if city == "NAPOLI" { return "NAPLES" }
             if city == "FIRENZE" { return "FLORENCE" }
@@ -829,12 +828,22 @@ struct PacketFoilImageView: View {
 
 // MARK: - PackOpeningFlashView — warm gold burst
 
+struct SparkParticle: Identifiable {
+    let id = UUID()
+    let size: CGFloat
+    let angle: Double
+    let speed: CGFloat
+    let color: Color
+}
+
 struct PackOpeningFlashView: View {
+    var isTriggered: Bool
     var onComplete: () -> Void
 
     @State private var burstScale: CGFloat = 0.1
     @State private var burstOpacity: Double = 0.0
     @State private var rayRotation: Double = 0
+    @State private var rayRotation2: Double = 0
     @State private var rayOpacity: Double = 0.0
     @State private var rayScale: CGFloat = 0.3
     @State private var ring1Scale: CGFloat = 0.1
@@ -843,7 +852,8 @@ struct PackOpeningFlashView: View {
     @State private var ring2Opacity: Double = 0.0
     @State private var sparkOpacity: Double = 0.0
     @State private var sparkScale: CGFloat = 0.15
-    @State private var globalOpacity: Double = 1.0
+    @State private var globalOpacity: Double = 0.0 // starts invisible to avoid mount lag
+    @State private var particles: [SparkParticle] = []
 
     private let goldColors: [Color] = [
         Color(hex: "F5E480"), Color(hex: "FFFFFF"),
@@ -857,44 +867,69 @@ struct PackOpeningFlashView: View {
             RadialGradient(
                 colors: [
                     Color.white.opacity(0.98),
-                    Color(hex: "F5E480").opacity(0.9),
-                    Color(hex: "F1B40A").opacity(0.55),
-                    Color(hex: "9A6F00").opacity(0.25),
+                    Color(hex: "F5E480").opacity(0.95),
+                    Color(hex: "F1B40A").opacity(0.65),
+                    Color(hex: "9A6F00").opacity(0.3),
                     Color.clear
                 ],
                 center: .center,
                 startRadius: 0,
-                endRadius: 310
+                endRadius: 280
             )
             .scaleEffect(burstScale)
             .opacity(burstOpacity)
             .blendMode(.screen)
 
-            // 2. Gold rays — static spokes, whole group rotates as one layer
+            // 2. Dual Gold rays layers
+            // Layer 1: Clockwise rays
+            ZStack {
+                ForEach(0..<16, id: \.self) { i in
+                    Rectangle()
+                        .fill(LinearGradient(
+                            colors: [
+                                .clear,
+                                Color(hex: "F5E480").opacity(0.35),
+                                .clear
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ))
+                        .frame(width: 1.5 + CGFloat(i % 3) * 1.0, height: 750)
+                        .rotationEffect(.degrees(Double(i) * 22.5))
+                }
+            }
+            .drawingGroup()
+            .rotationEffect(.degrees(rayRotation))
+            .blur(radius: 1.5)
+            .scaleEffect(rayScale)
+            .opacity(rayOpacity)
+            .blendMode(.screen)
+
+            // Layer 2: Counter-clockwise rays
             ZStack {
                 ForEach(0..<12, id: \.self) { i in
                     Rectangle()
                         .fill(LinearGradient(
                             colors: [
                                 .clear,
-                                goldColors[i % goldColors.count].opacity(0.52),
+                                Color(hex: "FFAC1C").opacity(0.25),
                                 .clear
                             ],
                             startPoint: .top,
                             endPoint: .bottom
                         ))
-                        .frame(width: 2 + CGFloat(i % 4) * 1.5, height: 680)
-                        .rotationEffect(.degrees(Double(i) * 30.0)) // static per-ray angle
+                        .frame(width: 2.0 + CGFloat(i % 2) * 1.5, height: 700)
+                        .rotationEffect(.degrees(Double(i) * 30.0))
                 }
             }
-            .drawingGroup() // rasterise to Metal texture once, then rotate that texture
-            .rotationEffect(.degrees(rayRotation)) // single transform drives the spin
-            .blur(radius: 1.0)
-            .scaleEffect(rayScale)
-            .opacity(rayOpacity)
+            .drawingGroup()
+            .rotationEffect(.degrees(rayRotation2))
+            .blur(radius: 2.0)
+            .scaleEffect(rayScale * 0.9)
+            .opacity(rayOpacity * 0.8)
             .blendMode(.screen)
 
-            // 3. Inner ring — gold gradient expanding fast
+            // 3. Inner ring — gold gradient expanding and fading
             Circle()
                 .stroke(
                     LinearGradient(
@@ -902,83 +937,118 @@ struct PackOpeningFlashView: View {
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    lineWidth: 3.5
+                    lineWidth: 4.0
                 )
                 .frame(width: 190, height: 190)
                 .scaleEffect(ring1Scale)
                 .opacity(ring1Opacity)
-                .blur(radius: 1.5)
+                .blur(radius: 1.0)
                 .blendMode(.screen)
 
-            // 4. Outer ring — softer gold, slightly delayed
+            // 4. Outer ring — softer gold, delayed expansion
             Circle()
-                .stroke(Color(hex: "F1B40A").opacity(0.45), lineWidth: 2)
+                .stroke(Color(hex: "FFAC1C").opacity(0.4), lineWidth: 2.5)
                 .frame(width: 290, height: 290)
                 .scaleEffect(ring2Scale)
                 .opacity(ring2Opacity)
-                .blur(radius: 3)
+                .blur(radius: 2.5)
                 .blendMode(.screen)
 
-            // 5. Ember sparks flying outward
+            // 5. Ember sparks flying outward organically
             ZStack {
-                ForEach(0..<16, id: \.self) { i in
-                    let size = CGFloat(4) + CGFloat(i % 4) * 2.5
-                    let angle = Double(i) * (.pi * 2.0 / 16.0)
-                    let radius = 145.0 * Double(sparkScale)
+                ForEach(particles) { p in
+                    let distance = p.speed * 320.0 * sparkScale
                     Circle()
-                        .fill(goldColors[i % goldColors.count])
-                        .frame(width: size, height: size)
-                        .offset(x: CGFloat(cos(angle) * radius),
-                                y: CGFloat(sin(angle) * radius))
+                        .fill(p.color)
+                        .frame(width: p.size, height: p.size)
+                        .offset(x: cos(p.angle) * distance,
+                                y: sin(p.angle) * distance)
                 }
             }
             .drawingGroup()
-            .blur(radius: 1.5)
+            .blur(radius: 1.0)
             .opacity(sparkOpacity)
             .blendMode(.screen)
         }
         .opacity(globalOpacity)
         .ignoresSafeArea()
-        .onAppear { runAnimation() }
+        .onChange(of: isTriggered) { _, newValue in
+            if newValue {
+                runAnimation()
+            }
+        }
     }
 
     func runAnimation() {
-        withAnimation(.easeOut(duration: 0.22)) {
-            burstScale = 2.3
-            burstOpacity = 1.0
+        // Reset all states immediately to baseline (no animations)
+        burstScale = 0.1
+        burstOpacity = 1.0
+        rayScale = 0.3
+        rayOpacity = 1.0
+        rayRotation = 0
+        rayRotation2 = 0
+        ring1Scale = 0.1
+        ring1Opacity = 1.0
+        ring2Scale = 0.1
+        ring2Opacity = 0.8
+        sparkScale = 0.1
+        sparkOpacity = 1.0
+        
+        // Generate new particles
+        self.particles = (0..<24).map { i in
+            let angle = Double.random(in: 0...(2 * Double.pi))
+            let size = CGFloat.random(in: 3...9)
+            let speed = CGFloat.random(in: 0.6...1.4)
+            let colors: [Color] = [
+                Color(hex: "FFF9D6"), Color(hex: "F5E480"),
+                Color(hex: "F1B40A"), Color(hex: "FFAC1C"),
+                Color(hex: "FF7F50"), Color(white: 1.0)
+            ]
+            let color = colors[i % colors.count]
+            return SparkParticle(size: size, angle: angle, speed: speed, color: color)
         }
-        withAnimation(.easeOut(duration: 0.14)) {
-            rayOpacity = 1.0
-            rayScale = 1.55
+        
+        // Make the container visible immediately
+        globalOpacity = 1.0
+        
+        // Run smooth expand-and-fade animations over longer durations (0.65s - 0.8s) for fluid rendering
+        withAnimation(.easeOut(duration: 0.68)) {
+            burstScale = 3.5
+            burstOpacity = 0.0
         }
-        withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
-            rayRotation = 360
+        
+        withAnimation(.easeOut(duration: 0.75)) {
+            rayScale = 2.4
+            rayOpacity = 0.0
         }
-        withAnimation(.easeOut(duration: 0.38)) {
-            ring1Scale = 4.0
-            ring1Opacity = 1.0
+        
+        withAnimation(.easeOut(duration: 0.82)) {
+            rayRotation = 270
+            rayRotation2 = -320
         }
-        withAnimation(.easeOut(duration: 0.52).delay(0.08)) {
-            ring2Scale = 3.2
-            ring2Opacity = 0.8
+        
+        withAnimation(.easeOut(duration: 0.7)) {
+            ring1Scale = 5.2
+            ring1Opacity = 0.0
         }
-        withAnimation(.easeOut(duration: 0.36)) {
-            sparkOpacity = 1.0
-            sparkScale = 1.0
+        
+        withAnimation(.easeOut(duration: 0.78).delay(0.04)) {
+            ring2Scale = 6.2
+            ring2Opacity = 0.0
         }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.46) {
-            withAnimation(.easeInOut(duration: 0.54)) {
-                burstOpacity = 0
-                rayOpacity = 0
-                ring1Opacity = 0
-                ring2Opacity = 0
-                sparkOpacity = 0
-                globalOpacity = 0
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.54) {
-                onComplete()
-            }
+        
+        withAnimation(.easeOut(duration: 0.72)) {
+            sparkScale = 1.3
+            sparkOpacity = 0.0
+        }
+        
+        // Smoothly fade the global container at the end
+        withAnimation(.easeIn(duration: 0.2).delay(0.65)) {
+            globalOpacity = 0.0
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
+            onComplete()
         }
     }
 }
