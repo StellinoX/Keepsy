@@ -27,6 +27,11 @@ struct CardInspectionView: View {
     @State private var showFullDetail: Bool = false
     
     private func isCollectionCompleteFor(_ cardName: String) -> Bool {
+        if cardName == "vale" {
+            let artworks = CardDatabase.artworksFor(location: "moma")
+            let revealed = CardDatabase.getRevealedCards()
+            return !artworks.isEmpty && artworks.allSatisfy { revealed.contains($0) }
+        }
         guard cardName.contains("_experience") else { return true }
         let location = cardName.replacingOccurrences(of: "_experience", with: "")
         let artworks = CardDatabase.artworksFor(location: location)
@@ -35,7 +40,7 @@ struct CardInspectionView: View {
     }
 
     private var isRevealed: Bool {
-        CardDatabase.getRevealedCards().contains(card.name) || card.name.contains("_experience")
+        CardDatabase.getRevealedCards().contains(card.name) || card.name.contains("_experience") || card.name == "vale"
     }
     
     private var artwork: NetworkArtwork? {
@@ -44,37 +49,37 @@ struct CardInspectionView: View {
     
     // Categorizzazione dinamica e intelligente dell'opera basata sull'artista
     private var categoryName: String {
-        if card.name.contains("_experience") { return "ESPERIENZA" }
-        guard let artist = artwork?.artist else { return "Collezione" }
+        if card.name.contains("_experience") || card.name == "vale" { return "EXPERIENCE" }
+        guard let artist = artwork?.artist else { return "Collection" }
         let artistLower = artist.lowercased()
         if artistLower.contains("degas") || artistLower.contains("manet") || artistLower.contains("monet") || artistLower.contains("renoir") {
-            return "Impressionismo"
+            return "Impressionism"
         } else if artistLower.contains("caravaggio") || artistLower.contains("ribera") || artistLower.contains("giordano") || artistLower.contains("solimena") {
-            return "Barocco"
+            return "Baroque"
         } else if artistLower.contains("tiziano") || artistLower.contains("raffaello") || artistLower.contains("michelangelo") || artistLower.contains("bellini") || artistLower.contains("parmigianino") {
-            return "Rinascimento"
+            return "Renaissance"
         }
-        return "Arte Classica"
+        return "Classical Art"
     }
     
     private var artistName: String {
-        if card.name.contains("_experience") {
+        if card.name.contains("_experience") || card.name == "vale" {
             if !isCollectionCompleteFor(card.name) {
                 return "Locked"
             }
             return "Keepsy Collection"
         }
-        return artwork?.artist ?? "Artista Sconosciuto"
+        return artwork?.artist ?? "Unknown Artist"
     }
     
     private var creationYear: String {
-        if card.name.contains("_experience") {
+        if card.name.contains("_experience") || card.name == "vale" {
             if !isCollectionCompleteFor(card.name) {
                 return "????"
             }
             return "2026"
         }
-        guard let raw = artwork?.createdAt else { return "Data Sconosciuta" }
+        guard let raw = artwork?.createdAt else { return "Unknown Date" }
         // Se contiene uno spazio o T è un timestamp ISO — estrai solo i primi 4 chars (anno)
         // Altrimenti è già una stringa leggibile tipo "1535 ca."
         if raw.contains("-") && raw.count > 10 {
@@ -84,13 +89,13 @@ struct CardInspectionView: View {
     }
     
     private var descriptionText: String {
-        if card.name.contains("_experience") {
+        if card.name.contains("_experience") || card.name == "vale" {
             if !isCollectionCompleteFor(card.name) {
                 return "To be unlocked when you have the whole collection"
             }
             return "Congratulations! You have completed the entire museum collection and unlocked this exclusive Keepsy Experience Card. You've proven yourself a true art connoisseur!"
         }
-        return artwork?.description ?? "Nessuna descrizione disponibile per questa opera d'arte"
+        return artwork?.description ?? "No description available for this artwork"
     }
     
     var body: some View {
@@ -143,7 +148,7 @@ struct CardInspectionView: View {
                         startPoint: .topLeading, endPoint: .bottomTrailing
                     )
 
-                    if card.name.contains("_experience") && !isCollectionCompleteFor(card.name) {
+                    if (card.name.contains("_experience") || card.name == "vale") && !isCollectionCompleteFor(card.name) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 24)
                                 .fill(
@@ -189,7 +194,7 @@ struct CardInspectionView: View {
                     // ── MINI-SHEET IN BASSO ──────────────────────────────────
                     let collapsedY = screenHeight - sheetPeekHeight
                     let mediumY    = screenHeight * 0.42
-                    let expandedY  = screenHeight * 0.10
+                    let expandedY  = 140.0
                     let sheetY: CGFloat = {
                         switch sheetState {
                         case .collapsed: return collapsedY
@@ -207,27 +212,33 @@ struct CardInspectionView: View {
                             .padding(.top, 12)
                             .padding(.bottom, 18)
 
+                        // Fixed Header Info
+                        VStack(alignment: .leading, spacing: 14) {
+                            // Categoria
+                            Text(categoryName.uppercased())
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white.opacity(0.75))
+                                .padding(.horizontal, 10).padding(.vertical, 5)
+                                .background(Capsule().fill(Color.white.opacity(0.12)))
+
+                            // Titolo
+                            Text((card.name.contains("_experience") || card.name == "vale") && !isCollectionCompleteFor(card.name) ? "Locked Experience" : card.title)
+                                .font(.system(size: 26, weight: .black))
+                                .foregroundColor(.white)
+                                .lineLimit(3)
+
+                            // Artista + data
+                            Text("\(artistName); \(creationYear)")
+                                .font(.system(size: 15).italic())
+                                .foregroundColor(.white.opacity(0.65))
+
+                            Color.white.opacity(0.1).frame(height: 1).padding(.vertical, 4)
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 10)
+
                         ScrollView(showsIndicators: false) {
-                            VStack(alignment: .leading, spacing: 14) {
-                                // Categoria
-                                Text(categoryName.uppercased())
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.75))
-                                    .padding(.horizontal, 10).padding(.vertical, 5)
-                                    .background(Capsule().fill(Color.white.opacity(0.12)))
-
-                                // Titolo
-                                Text(card.name.contains("_experience") && !isCollectionCompleteFor(card.name) ? "Locked Experience" : card.title)
-                                    .font(.system(size: 26, weight: .black))
-                                    .foregroundColor(.white)
-                                    .lineLimit(3)
-
-                                // Artista + data
-                                Text("\(artistName); \(creationYear)")
-                                    .font(.system(size: 15).italic())
-                                    .foregroundColor(.white.opacity(0.65))
-
-                                Color.white.opacity(0.1).frame(height: 1).padding(.vertical, 4)
+                            VStack(alignment: .leading, spacing: 0) {
                                 Text(descriptionText)
                                     .font(.system(size: 15))
                                     .foregroundColor(Color(hex: "D1D1D6"))
@@ -241,15 +252,12 @@ struct CardInspectionView: View {
                     .frame(width: geometry.size.width, height: sheetHeight)
                     .background(
                         RoundedRectangle(cornerRadius: 28)
-                            .fill(LinearGradient(
-                                colors: [Color(hex: "2C2C2E"), Color(hex: "121214")],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ))
+                            .fill(Color(white: 0.12))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 28)
                                     .strokeBorder(
                                         LinearGradient(
-                                            colors: [Color(hex: "B1B1B1"), Color(hex: "464646")],
+                                            colors: [Color.white, Color(hex: "B1B1B1")],
                                             startPoint: .topLeading, endPoint: .bottomTrailing
                                         ), lineWidth: 1.5
                                     )
@@ -288,25 +296,7 @@ struct CardInspectionView: View {
                     )
                 }
 
-                // Top blur bar behind the back button to cover scrolled content
-                if animateContent && !showFullDetail {
-                    VStack(spacing: 0) {
-                        Color.clear
-                            .frame(height: 130)
-                            .background(.ultraThinMaterial)
-                            .environment(\.colorScheme, .dark)
-                            .overlay(
-                                LinearGradient(
-                                    colors: [Color.black.opacity(0.4), Color.clear],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                        Spacer()
-                    }
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-                }
+
 
                 // Back button
                 if animateContent && !showFullDetail {
@@ -400,25 +390,6 @@ struct CardInspectionView: View {
                         }
                 )
 
-                // Top blur bar behind the back button (bustina mode)
-                if animateContent {
-                    VStack(spacing: 0) {
-                        Color.clear
-                            .frame(height: 130)
-                            .background(.ultraThinMaterial)
-                            .environment(\.colorScheme, .dark)
-                            .overlay(
-                                LinearGradient(
-                                    colors: [Color.black.opacity(0.4), Color.clear],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                        Spacer()
-                    }
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-                }
 
                 // Back button (bustina mode)
                 if animateContent {
@@ -501,7 +472,7 @@ struct CardFullDetailView: View {
     private let cardWidth: CGFloat = 310
     private var cardHeight: CGFloat { 470 }
 
-    private var isRevealed: Bool { CardDatabase.getRevealedCards().contains(card.name) || card.name.contains("_experience") }
+    private var isRevealed: Bool { CardDatabase.getRevealedCards().contains(card.name) || card.name.contains("_experience") || card.name == "vale" }
 
     private var isFrontShowing: Bool {
         let absRot = abs(currentRotation.truncatingRemainder(dividingBy: 360))

@@ -26,6 +26,7 @@ struct CollectionAlbumView: View {
     @State private var hasSyncedWithCloud = false
     @State private var inspectedCard: ArtworkCard? = nil
     @State private var showExperienceCardModal = false
+    @State private var showSpecialCardLockModal = false
     @State private var experienceCardFrame: CGRect = .zero
     @Namespace private var albumNamespace
     
@@ -100,6 +101,9 @@ struct CollectionAlbumView: View {
 
     var experienceCardName: String {
         let loc = (museumLocation ?? "capodimonte").lowercased()
+        if loc == "moma" {
+            return "vale"
+        }
         return "\(loc)_experience"
     }
 
@@ -112,6 +116,10 @@ struct CollectionAlbumView: View {
         let cardTopY: CGFloat = max(140, (sh - h - sheetPeek) / 2 + 10)
         return CGRect(x: (sw - w) / 2, y: cardTopY, width: w, height: h)
     }
+    
+    var sheetWidth: CGFloat {
+        screenSize.width > 0 ? min(screenSize.width - 24, 373) : 373
+    }
     var body: some View {
         // GeometryReader cattura le dimensioni schermo — usate da tutte le animazioni
         GeometryReader { rootGeo in
@@ -119,6 +127,7 @@ struct CollectionAlbumView: View {
         ZStack(alignment: .topLeading) {
             Color(red: 0.05, green: 0.05, blue: 0.1).ignoresSafeArea()
             GridBackground()
+                .blur(radius: showSpecialCardLockModal ? 20 : 0)
 
             // ── BACKGROUND LAYER: EXPERIENCE CARD ────────────────────────
             VStack(spacing: 0) {
@@ -161,22 +170,30 @@ struct CollectionAlbumView: View {
                         }
                     } else {
                         ZStack {
+                            // Dark background
                             RoundedRectangle(cornerRadius: 24)
-                                .fill(
+                                .fill(Color(hex: "0D0D0F"))
+                            
+                            // Keepsy Gold Logo
+                            Image("LogoKeepsy")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 70, height: 70)
+                            
+                            // Orange border stroke
+                            RoundedRectangle(cornerRadius: 24)
+                                .stroke(
                                     LinearGradient(
-                                        colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
+                                        colors: [Color(hex: "FF9000"), Color(hex: "FF5100")],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
-                                    )
+                                    ),
+                                    lineWidth: 3
                                 )
-                            
-                            Text("?")
-                                .font(.system(size: 80, weight: .black))
-                                .foregroundColor(.white)
                         }
                         .frame(width: 180, height: 270)
                         .opacity(animatingCardName == experienceCardName ? cellCardOpacity : 1.0)
-                        .shadow(color: Color(hex: "5168C4").opacity(0.4), radius: 25, x: 0, y: 10)
+                        .shadow(color: Color(hex: "FF5100").opacity(0.35), radius: 25, x: 0, y: 10)
                         .background(
                             GeometryReader { geo in
                                 Color.clear
@@ -197,6 +214,8 @@ struct CollectionAlbumView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity)
+            .blur(radius: showSpecialCardLockModal ? 20 : 0)
+            .allowsHitTesting(!showSpecialCardLockModal)
             
             // ── FOREGROUND LAYER: MAIN SCROLL VIEW (THE SHEET/MODAL) ─────
             ScrollViewReader { proxy in
@@ -205,7 +224,7 @@ struct CollectionAlbumView: View {
                         // Spacer corresponding to the height of the Experience Card section
                         ZStack(alignment: .top) {
                             Color.clear
-                                .frame(height: showCloseButton ? 470 : 410)
+                                .frame(height: defaultY)
                                 .background(
                                     GeometryReader { geo in
                                         Color.clear
@@ -231,18 +250,27 @@ struct CollectionAlbumView: View {
                         
                         // ── ALBUM GRID CONTAINER ─────────────────────────────────
                         ZStack(alignment: .top) {
-                            RoundedRectangle(cornerRadius: 33)
-                                .fill(Color(white: 0.12))
-                                .overlay(RoundedRectangle(cornerRadius: 33).stroke(
-                                    LinearGradient(
-                                        colors: [Color(hex: "B1B1B1"), Color(hex: "464646")],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 2
-                                ))
-                                .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
-                                .offset(y: offsetY)
+                            // Pinned sheet background and grab handle
+                            ZStack(alignment: .top) {
+                                RoundedRectangle(cornerRadius: 33)
+                                    .fill(Color(white: 0.12))
+                                    .overlay(RoundedRectangle(cornerRadius: 33).stroke(
+                                        LinearGradient(
+                                            colors: [Color(hex: "B1B1B1"), Color(hex: "464646")],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 2
+                                    ))
+                                
+                                // Grab handle (pill)
+                                Capsule()
+                                    .fill(Color(white: 0.28))
+                                    .frame(width: 36, height: 5)
+                                    .padding(.top, 10)
+                            }
+                            .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
+                            .offset(y: offsetY)
                             
                             StickerGridView(
                                 artworks: filteredArtworks,
@@ -266,14 +294,15 @@ struct CollectionAlbumView: View {
                                 startPullAnimation(for: name)
                             }
                             .equatable()
-                            .padding(.vertical, 24)
+                            .padding(.top, 28)
+                            .padding(.bottom, 24)
                             .padding(.horizontal, 16)
                             .mask(
                                 Rectangle()
-                                    .padding(.top, offsetY)
+                                    .padding(.top, offsetY + 28)
                             )
                         }
-                        .frame(width: 373)
+                        .frame(width: sheetWidth)
                         .padding(.bottom, 40)
                     }
                     .frame(maxWidth: .infinity)
@@ -292,6 +321,8 @@ struct CollectionAlbumView: View {
                     }
                 }
             }
+            .blur(radius: showSpecialCardLockModal ? 20 : 0)
+            .allowsHitTesting(!showSpecialCardLockModal)
 
             if showCloseButton {
                 Button(action: {
@@ -311,6 +342,8 @@ struct CollectionAlbumView: View {
                     )
                 }
                 .position(x: 30 + 85/2, y: 83 + 44/2)
+                .blur(radius: showSpecialCardLockModal ? 20 : 0)
+                .allowsHitTesting(!showSpecialCardLockModal)
             }
 
             // Floating cards bar removed - cards now animate directly from the screen center
@@ -365,7 +398,10 @@ struct CollectionAlbumView: View {
                 }
             }
 
-
+            if showSpecialCardLockModal {
+                specialCardLockModal
+                    .zIndex(200)
+            }
         }
         // Nome del coordinateSpace — sia GeometryReader che .position lo usano
         .coordinateSpace(name: "root")
@@ -403,24 +439,32 @@ struct CollectionAlbumView: View {
 
     @ViewBuilder
     func flyingCardView(for name: String) -> some View {
-        if name.contains("_experience") && !isCollectionComplete {
+        if (name.contains("_experience") || name == "vale") && !isCollectionComplete {
             let finalW: CGFloat = destinationFrame.width
             let finalH: CGFloat = destinationFrame.height
             let scale = flyingFrame.width / finalW
             
             ZStack {
+                // Dark background
                 RoundedRectangle(cornerRadius: 24)
-                    .fill(
+                    .fill(Color(hex: "0D0D0F"))
+                
+                // Keepsy Gold Logo
+                Image("LogoKeepsy")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 70, height: 70)
+                
+                // Orange border stroke
+                RoundedRectangle(cornerRadius: 24)
+                    .stroke(
                         LinearGradient(
-                            colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
+                            colors: [Color(hex: "FF9000"), Color(hex: "FF5100")],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
-                        )
+                        ),
+                        lineWidth: 3
                     )
-                
-                Text("?")
-                    .font(.system(size: 80, weight: .black))
-                    .foregroundColor(.white)
             }
             .clipShape(RoundedRectangle(cornerRadius: 24))
             .scaleEffect(scale, anchor: .center)
@@ -428,7 +472,7 @@ struct CollectionAlbumView: View {
             .opacity(flyingOpacity)
             .position(x: flyingFrame.midX, y: flyingFrame.midY)
         } else {
-            let isRevealed = CardDatabase.getRevealedCards().contains(name) || name.contains("_experience")
+            let isRevealed = CardDatabase.getRevealedCards().contains(name) || name.contains("_experience") || name == "vale"
             let index = CardDatabase.allArtworkNames.firstIndex(of: name)
             let goldBorder = LinearGradient(
                 colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
@@ -460,21 +504,114 @@ struct CollectionAlbumView: View {
     private func tapExperienceCard() {
         guard recentlyCompletedPack.isEmpty else { return }
         guard animationPhase == .idle else { return }
-        sourceFrame = experienceCardFrame
-        pocketFrame = .zero
-        pulledSourceFrame = experienceCardFrame
         
-        animatingCardName = experienceCardName
-        animationPhase = .zooming
-        flyingFrame = experienceCardFrame
-        flyingCornerRadius = 24
-        flyingOpacity = 1.0
-        overlayOpacity = 0.0
-        cellCardOpacity = 0.0
-        
-        HapticManager.shared.triggerImpact(style: .medium)
-        
-        startZoomAnimation()
+        if !isCollectionComplete {
+            HapticManager.shared.triggerNotification(type: .warning)
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                showSpecialCardLockModal = true
+            }
+        } else {
+            sourceFrame = experienceCardFrame
+            pocketFrame = .zero
+            pulledSourceFrame = experienceCardFrame
+            
+            animatingCardName = experienceCardName
+            animationPhase = .zooming
+            flyingFrame = experienceCardFrame
+            flyingCornerRadius = 24
+            flyingOpacity = 1.0
+            overlayOpacity = 0.0
+            cellCardOpacity = 0.0
+            
+            HapticManager.shared.triggerImpact(style: .medium)
+            
+            startZoomAnimation()
+        }
+    }
+
+    private var specialCardLockModal: some View {
+        ZStack {
+            // Semi-transparent dim background
+            Color.black.opacity(0.4)
+                .edgesIgnoringSafeArea(.all)
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showSpecialCardLockModal = false
+                    }
+                }
+                .transition(.opacity)
+
+            // Dialog Card
+            VStack(spacing: 28) {
+                // Title
+                Text("SPECIAL CARD LOCKED")
+                    .font(.custom("Helvetica-BoldOblique", size: 26))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: "FF7A00"), Color(hex: "FFB800")],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 8)
+                    .padding(.horizontal, 20)
+                    .minimumScaleFactor(0.8)
+                
+                // Description
+                VStack(spacing: 6) {
+                    Text("An exclusive reward awaits.")
+                        .font(.custom("Helvetica-Oblique", size: 15))
+                        .foregroundColor(.white.opacity(0.85))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    
+                    Text("Complete the collection to reveal it.")
+                        .font(.custom("Helvetica-Oblique", size: 15))
+                        .foregroundColor(.white.opacity(0.85))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                .padding(.horizontal, 16)
+                
+                // Keep Exploring Button
+                Button(action: {
+                    HapticManager.shared.triggerImpact(style: .light)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showSpecialCardLockModal = false
+                    }
+                }) {
+                    Text("KEEP EXPLORING")
+                        .font(.custom("Helvetica-BoldOblique", size: 15))
+                        .foregroundColor(.black)
+                        .frame(width: 240, height: 50)
+                        .background(
+                            Capsule()
+                                .fill(Color(hex: "D8D8D8"))
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .frame(width: 340)
+            .padding(.vertical, 42)
+            .background(
+                RoundedRectangle(cornerRadius: 30)
+                    .fill(Color(white: 0.12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 30)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [Color.white, Color(hex: "B1B1B1")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.0
+                            )
+                    )
+            )
+            .shadow(color: .black.opacity(0.6), radius: 40, x: 0, y: 20)
+            .transition(.scale(scale: 0.9).combined(with: .opacity))
+        }
     }
 
     // MARK: - Animazioni
@@ -763,7 +900,7 @@ struct AlbumCardCell: View {
                 .frame(width: 72, height: 103)
 
             } else {
-                ZStack(alignment: .bottom) {
+                ZStack(alignment: .top) {
                     ZStack(alignment: .center) {
                         Text(String(format: "%02d", index + 1))
                             .font(.custom("Helvetica-BoldOblique", size: 17))
@@ -783,8 +920,9 @@ struct AlbumCardCell: View {
                         }
                     }
                     .frame(width: 72, height: 94)
+                    .padding(.top, 5)
                 }
-                .frame(width: 72, height: 103, alignment: .bottom)
+                .frame(width: 72, height: 103)
             }
         }
     }

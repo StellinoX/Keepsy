@@ -125,50 +125,52 @@ struct ArtworkCardFrontView: View {
                 .clipShape(RoundedRectangle(cornerRadius: cr))
 
             // 2. Info Overlay (Title and Author/Year)
-            VStack(alignment: .leading, spacing: 3 * scale) {
-                // Title Box
-                Text(title)
-                    .font(.system(size: 5.5 * scale, weight: .bold))
-                    .foregroundColor(.black)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .padding(.horizontal, 5 * scale)
-                    .padding(.vertical, 3 * scale)
-                    .frame(width: 105 * scale)
-                    .frame(minHeight: 19 * scale, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 3 * scale)
-                            .fill(Color.white)
-                            .overlay(RoundedRectangle(cornerRadius: 3 * scale).stroke(Color.black.opacity(0.12), lineWidth: 0.2 * scale))
-                            .shadow(color: .black.opacity(0.35), radius: 14 * scale / 2.0, x: 0, y: -4 * scale / 2.0)
-                    )
-
-                // Author/Year Box
-                let authorText = [artwork?.artist, artwork?.date]
-                    .compactMap { v -> String? in
-                        guard let s = v, !s.isEmpty else { return nil }
-                        return s
-                    }
-                    .joined(separator: "; ")
-
-                if !authorText.isEmpty {
-                    Text(authorText)
-                        .font(.system(size: 3.2 * scale).italic())
-                        .foregroundColor(Color(white: 0.45))
-                        .lineLimit(1)
-                        .padding(.horizontal, 4 * scale)
-                        .frame(height: 7 * scale)
-                        .frame(minWidth: 40 * scale)
+            if !name.contains("_experience") && name != "vale" {
+                VStack(alignment: .leading, spacing: 3 * scale) {
+                    // Title Box
+                    Text(title)
+                        .font(.system(size: 5.5 * scale, weight: .bold))
+                        .foregroundColor(.black)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .padding(.horizontal, 5 * scale)
+                        .padding(.vertical, 3 * scale)
+                        .frame(width: 105 * scale)
+                        .frame(minHeight: 19 * scale, alignment: .leading)
                         .background(
-                            Capsule()
+                            RoundedRectangle(cornerRadius: 3 * scale)
                                 .fill(Color.white)
-                                .overlay(Capsule().stroke(Color.black.opacity(0.12), lineWidth: 0.2 * scale))
+                                .overlay(RoundedRectangle(cornerRadius: 3 * scale).stroke(Color.black.opacity(0.12), lineWidth: 0.2 * scale))
                                 .shadow(color: .black.opacity(0.35), radius: 14 * scale / 2.0, x: 0, y: -4 * scale / 2.0)
                         )
+
+                    // Author/Year Box
+                    let authorText = [artwork?.artist, artwork?.date]
+                        .compactMap { v -> String? in
+                            guard let s = v, !s.isEmpty else { return nil }
+                            return s
+                        }
+                        .joined(separator: "; ")
+
+                    if !authorText.isEmpty {
+                        Text(authorText)
+                            .font(.system(size: 3.2 * scale).italic())
+                            .foregroundColor(Color(white: 0.45))
+                            .lineLimit(1)
+                            .padding(.horizontal, 4 * scale)
+                            .frame(height: 7 * scale)
+                            .frame(minWidth: 40 * scale)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white)
+                                    .overlay(Capsule().stroke(Color.black.opacity(0.12), lineWidth: 0.2 * scale))
+                                    .shadow(color: .black.opacity(0.35), radius: 14 * scale / 2.0, x: 0, y: -4 * scale / 2.0)
+                            )
+                    }
                 }
+                .padding(.leading, 3 * scale)
+                .padding(.bottom, 4 * scale)
             }
-            .padding(.leading, 3 * scale)
-            .padding(.bottom, 4 * scale)
 
             // 3. Number Badge (Top Right)
             if let idx = cardIndex {
@@ -208,18 +210,11 @@ struct ArtworkCardFrontView: View {
             if showCheckmark {
                 VStack {
                     HStack {
-                        ZStack {
-                            Circle()
-                                .fill(Color.green)
-                                .shadow(color: .black.opacity(0.35), radius: 2 * scale, x: 0, y: 1 * scale)
-                            
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 11 * scale, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                        .frame(width: 20 * scale, height: 20 * scale)
-                        .padding(.top, 6 * scale)
-                        .padding(.leading, 6 * scale)
+                        Image("check")
+                            .resizable()
+                            .frame(width: 20 * scale, height: 20 * scale)
+                            .padding(.top, 6 * scale)
+                            .padding(.leading, 6 * scale)
                         
                         Spacer()
                     }

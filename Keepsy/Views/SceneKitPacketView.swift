@@ -428,11 +428,13 @@ public struct SceneKitPacketView: UIViewRepresentable {
         
         SCNTransaction.begin()
         SCNTransaction.animationDuration = 0.2
+        context.coordinator.tiltContainerNode.position = SCNVector3(0, interactive ? -4.9 : 0.0, 0)
+        context.coordinator.tiltContainerNode.scale = interactive ? SCNVector3(1.18, 1.18, 1.18) : SCNVector3(1.0, 1.0, 1.0)
         if isTorn {
             let tornMask = tearMaskImage ?? createTornMask()
             context.coordinator.maskProp.contents = tornMask
             
-            let uniforms = SCNVector4(0, 0, 0, 10.0) // fingerX far right
+            let uniforms = SCNVector4(0, 0, 1.0, 10.0) // fingerX far right, left-to-right swipe direction to force full curl
             context.coordinator.bodyNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
             context.coordinator.backBodyNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")
             
@@ -441,8 +443,8 @@ public struct SceneKitPacketView: UIViewRepresentable {
             context.coordinator.topSealNode.isHidden = true
             
             if !interactive {
-                context.coordinator.deckContainer.position = SCNVector3(0, 0.95, -0.05)
-                context.coordinator.deckContainer.scale = SCNVector3(0.75, 0.75, 0.75)
+                context.coordinator.deckContainer.position = SCNVector3(0, 1.6, -0.05)
+                context.coordinator.deckContainer.scale = SCNVector3(0.9, 0.9, 0.9)
             } else {
                 context.coordinator.deckContainer.position = SCNVector3(0, 1.2, -0.05)
                 context.coordinator.deckContainer.scale = SCNVector3(1.0, 1.0, 1.0)
@@ -468,7 +470,7 @@ public struct SceneKitPacketView: UIViewRepresentable {
                 context.coordinator.deckContainer.scale = SCNVector3(1.0, 1.0, 1.0)
             }
             context.coordinator.deckContainer.isHidden = true
-            context.coordinator.tiltContainerNode.eulerAngles = SCNVector3(0, 0, -0.06)
+            context.coordinator.tiltContainerNode.eulerAngles = SCNVector3(0, 0, 0)
         }
         SCNTransaction.commit()
     }
@@ -624,7 +626,7 @@ public class PacketCoordinator: NSObject {
         let geometryShaderBase = """
         #pragma arguments
         texture2d<float, access::sample> maskTex;
-        float4 customData; // w = fingerX
+        float4 customData; // w = fingerX, z = swipeDirection
         
         #pragma varyings
         float edgeGlow;
@@ -633,6 +635,7 @@ public class PacketCoordinator: NSObject {
         #pragma body
         constexpr sampler maskSampler(coord::normalized, address::clamp_to_edge, filter::linear);
         float fingerX = customData.w;
+        float swipeDirection = customData.z;
         
         // SCNPlane UVs: (0,0) is bottom-left, (1,1) is top-right.
         float2 sampleUV = _geometry.texcoords[0];
@@ -643,12 +646,22 @@ public class PacketCoordinator: NSObject {
         // m=1 is Flap(Top), m=0 is Body(Bottom). Edge is at m=0.5
         float isCutEdge = smoothstep(0.0, 1.0, 1.0 - abs(m - 0.5) * 2.0);
         
-        // Only curl if we are to the left of the finger!
-        float curlActive = 1.0 - smoothstep(fingerX - 0.2, fingerX + 0.1, _geometry.position.x);
+        // Curl on the side the user swiped from
+        float curlActive;
+        if (swipeDirection < -0.5) {
+            curlActive = smoothstep(fingerX - 0.1, fingerX + 0.2, _geometry.position.x);
+        } else {
+            curlActive = 1.0 - smoothstep(fingerX - 0.2, fingerX + 0.1, _geometry.position.x);
+        }
         float curl = isCutEdge * curlActive;
         
         // --- GLOW EFFECT ---
-        float distFromFinger = max(0.0, fingerX - _geometry.position.x);
+        float distFromFinger = 0.0;
+        if (swipeDirection < -0.5) {
+            distFromFinger = max(0.0, _geometry.position.x - fingerX);
+        } else {
+            distFromFinger = max(0.0, fingerX - _geometry.position.x);
+        }
         float glowFactor = exp(-distFromFinger * 4.0); // Fades exponentially behind the finger
         out.edgeGlow = curl * glowFactor;
         """
@@ -748,7 +761,7 @@ public class PacketCoordinator: NSObject {
         let backGeometryShaderBase = """
         #pragma arguments
         texture2d<float, access::sample> maskTex;
-        float4 customData; // w = fingerX
+        float4 customData; // w = fingerX, z = swipeDirection
         
         #pragma varyings
         float2 rawUV;
@@ -756,6 +769,7 @@ public class PacketCoordinator: NSObject {
         #pragma body
         constexpr sampler maskSampler(coord::normalized, address::clamp_to_edge, filter::linear);
         float fingerX = customData.w;
+        float swipeDirection = customData.z;
         
         float2 sampleUV = _geometry.texcoords[0];
         // OFFSET for depth illusion! The back cuts slightly to the right of the front.
@@ -764,7 +778,13 @@ public class PacketCoordinator: NSObject {
         
         float m = maskTex.sample(maskSampler, sampleUV).r;
         float isCutEdge = smoothstep(0.0, 1.0, 1.0 - abs(m - 0.5) * 2.0);
-        float curlActive = 1.0 - smoothstep(fingerX - 0.2, fingerX + 0.1, _geometry.position.x);
+        
+        float curlActive;
+        if (swipeDirection < -0.5) {
+            curlActive = smoothstep(fingerX - 0.1, fingerX + 0.2, _geometry.position.x);
+        } else {
+            curlActive = 1.0 - smoothstep(fingerX - 0.2, fingerX + 0.1, _geometry.position.x);
+        }
         float curl = isCutEdge * curlActive;
         """
         
@@ -829,6 +849,8 @@ public class PacketCoordinator: NSObject {
         
         // --- RIGID GROUPS & TILT CONTAINER ---
         tiltContainerNode = SCNNode()
+        tiltContainerNode.position = SCNVector3(0, interactive ? -4.9 : 0.0, 0) // Shifted down only during active tearing to align with "verso il basso"
+        tiltContainerNode.scale = interactive ? SCNVector3(1.18, 1.18, 1.18) : SCNVector3(1.0, 1.0, 1.0)
         scene.rootNode.addChildNode(tiltContainerNode)
         
         topGroupNode = SCNNode()
@@ -931,7 +953,7 @@ public class PacketCoordinator: NSObject {
         }
         
         // Premium tilt (apply to container so everything moves perfectly along its local axis)
-        let tilt = SCNVector3(0, 0, -0.06)
+        let tilt = SCNVector3(0, 0, 0) // Straight packet (no tilt)
         tiltContainerNode.eulerAngles = tilt
         
         // Initialize Horizontal Lens Flare Node
@@ -963,9 +985,11 @@ public class PacketCoordinator: NSObject {
             
             // Move deck container up so it sticks out of the packet
             if !interactive {
-                deckContainer.position = SCNVector3(0, 0.95, -0.05)
+                deckContainer.position = SCNVector3(0, 1.6, -0.05)
+                deckContainer.scale = SCNVector3(0.9, 0.9, 0.9)
             } else {
                 deckContainer.position = SCNVector3(0, 1.2, -0.05)
+                deckContainer.scale = SCNVector3(1.0, 1.0, 1.0)
             }
             
             // Remove Z-tilt rotation when the packet is already torn, keeping it centered and straight
@@ -1052,7 +1076,7 @@ public class PacketCoordinator: NSObject {
         let renderer = UIGraphicsImageRenderer(size: texSize)
         
         // Convert screen touches to local UV texture coordinates
-        let uvPoints = touchPoints.map { pt -> CGPoint in
+        var uvPoints = touchPoints.map { pt -> CGPoint in
             var local = screenToLocal(point: pt, view: view)
             
             // LIMIT CUT ZONE: Allow freeform wavy tearing, but restricted to a specific horizontal "tear strip" band.
@@ -1066,6 +1090,9 @@ public class PacketCoordinator: NSObject {
             return CGPoint(x: max(0, min(texSize.width, u * texSize.width)),
                            y: max(0, min(texSize.height, v * texSize.height)))
         }
+        
+        // Sort points by X coordinate so the path is always drawn left-to-right, preventing horizontal line cuts
+        uvPoints.sort { $0.x < $1.x }
         
         let maskImage = renderer.image { ctx in
             // Background is Black (Body)
@@ -1110,12 +1137,15 @@ public class PacketCoordinator: NSObject {
         
         // Pass fingerX to the shader to activate the curl ONLY where the finger has passed
         let fingerX = Float(screenToLocal(point: touchPoints.last!, view: view).x)
-        let uniforms = SCNVector4(0, 0, 0, fingerX)
+        let startX = touchPoints.first!.x
+        let currentX = touchPoints.last!.x
+        let swipeDirection: Float = currentX >= startX ? 1.0 : -1.0
+        let uniforms = SCNVector4(0, 0, swipeDirection, fingerX)
         
-        // Trigger a haptic tick when the finger cuts further to the right
+        // Trigger a haptic tick when the finger cuts further in either direction
         if lastHapticFingerX == -10.0 {
             lastHapticFingerX = fingerX
-        } else if fingerX > lastHapticFingerX + 0.45 {
+        } else if abs(fingerX - lastHapticFingerX) > 0.45 {
             HapticManager.shared.triggerSelection()
             lastHapticFingerX = fingerX
         }
@@ -1135,7 +1165,7 @@ public class PacketCoordinator: NSObject {
         let dx = lastPt.x - start.x
         
         // If cut spans across at least 35% of the screen width
-        if dx > view.bounds.width * 0.35 {
+        if abs(dx) > view.bounds.width * 0.35 {
             self.hasFinishedTear = true
             let maskToSave = self.lastMaskImage
             let city = self.museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
@@ -1150,7 +1180,7 @@ public class PacketCoordinator: NSObject {
             }
             
             // Force curl across the whole packet before dropping
-            let uniforms = SCNVector4(0, 0, 0, 10.0) // fingerX far right
+            let uniforms = SCNVector4(0, 0, 1.0, 10.0) // fingerX far right, left-to-right swipe direction to force full curl
             SCNTransaction.begin()
             SCNTransaction.animationDuration = 0.0
             bodyNode.geometry?.setValue(NSValue(scnVector4: uniforms), forKey: "customData")

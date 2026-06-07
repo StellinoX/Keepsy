@@ -11,6 +11,9 @@ struct ArtImageView: View {
         self.isRevealed = isRevealed
         if let cached = CardDatabase.imageCache.object(forKey: cardName as NSString) {
             self._localImage = State(initialValue: cached)
+        } else if let bundleImg = UIImage(named: cardName) {
+            CardDatabase.imageCache.setObject(bundleImg, forKey: cardName as NSString)
+            self._localImage = State(initialValue: bundleImg)
         } else {
             self._localImage = State(initialValue: nil)
         }

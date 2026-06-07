@@ -51,7 +51,7 @@ class NetworkService {
 
             artworks.append(NetworkArtwork(
                 id: doc.documentID,
-                title: data["title"] as? String ?? "Senza Titolo",
+                title: data["title"] as? String ?? "Untitled",
                 description: data["description"] as? String,
                 artist: data["artist"] as? String,
                 imageUrl: imageUrl,

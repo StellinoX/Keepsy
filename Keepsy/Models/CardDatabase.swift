@@ -368,6 +368,9 @@ struct CardDatabase {
     
     /// Returns the official artwork title from the database, or cleans the raw name as fallback.
     static func cleanedArtworkName(_ name: String) -> String {
+        if name == "vale" {
+            return "Vale"
+        }
         if let artwork = remoteArtworks[name] {
             return artwork.title
         }

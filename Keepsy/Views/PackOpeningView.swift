@@ -26,6 +26,7 @@ struct PackOpeningView: View {
     @State private var shakeOffset: CGFloat = 0
     @State private var showTearHint = false
     @State private var packSwayX: CGFloat = 0
+    @State private var showCompletionModal = false
 
     // Animazione carte — una per carta
     @State private var cardOffsetX: [CGFloat] = [123, 0, -123, 61.5, -61.5]
@@ -38,47 +39,70 @@ struct PackOpeningView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "06080B"), Color(hex: "14193B")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .edgesIgnoringSafeArea(.all)
-            GridBackground()
-
-            // Flash bianco all'apertura
-            Color.white
-                .edgesIgnoringSafeArea(.all)
-                .opacity(flashOpacity)
-                .blendMode(.screen)
-                .allowsHitTesting(false)
-                .zIndex(200)
-
-            // Effetto apertura stile Pokemon Pocket
-            PackOpeningFlashView(isTriggered: showOpeningEffect) {
-                showOpeningEffect = false
-            }
-            .zIndex(5)
-            .allowsHitTesting(false)
-
-            if packState == .selecting {
-                SingleScrollPackView(
-                    activeView: $activeView,
-                    currentCity: locationManager.currentCity,
-                    selectedMuseumId: $selectedMuseumId,
-                    onStart: {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                            packState = .tearing
-                        }
-                    },
-                    onTapActivePack: {
-                        onTapActivePack()
-                    },
-                    onTapCity: {
-                        showCitySelector = true
-                    }
+            ZStack {
+                LinearGradient(
+                    colors: [Color(hex: "06080B"), Color(hex: "14193B")],
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
-            } else {
+                .edgesIgnoringSafeArea(.all)
+                GridBackground()
+
+                // Flash bianco all'apertura
+                Color.white
+                    .edgesIgnoringSafeArea(.all)
+                    .opacity(flashOpacity)
+                    .blendMode(.screen)
+                    .allowsHitTesting(false)
+                    .zIndex(200)
+
+                // Effetto apertura stile Pokemon Pocket
+                PackOpeningFlashView(isTriggered: showOpeningEffect) {
+                    showOpeningEffect = false
+                }
+                .zIndex(5)
+                .allowsHitTesting(false)
+
+                if packState == .selecting {
+                    SingleScrollPackView(
+                        activeView: $activeView,
+                        currentCity: locationManager.currentCity,
+                        selectedMuseumId: $selectedMuseumId,
+                        onStart: {
+                            if isMuseumComplete(selectedMuseumId) {
+                                HapticManager.shared.triggerNotification(type: .warning)
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                    showCompletionModal = true
+                                }
+                            } else {
+                                withAnimation(.spring(response: 0.52, dampingFraction: 0.8)) {
+                                    packState = .packSelection
+                                }
+                            }
+                        },
+                        onTapActivePack: {
+                            onTapActivePack()
+                        },
+                        onTapCity: {
+                            showCitySelector = true
+                        }
+                    )
+                } else if packState == .packSelection {
+                    PackSelectionView(
+                        museumId: selectedMuseumId,
+                        onPacketSelected: {
+                            withAnimation(.spring(response: 0.52, dampingFraction: 0.8)) {
+                                packState = .tearing
+                            }
+                        },
+                        onClose: {
+                            withAnimation(.spring(response: 0.52, dampingFraction: 0.8)) {
+                                packState = .selecting
+                            }
+                        }
+                    )
+                }
+            else {
                 ZStack {
                     if packState == .tearing {
                         ZStack {
@@ -92,10 +116,7 @@ struct PackOpeningView: View {
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
                                         withAnimation(.easeIn(duration: 0.28)) { flashOpacity = 0.0 }
                                     }
-                                    if !UserDefaults.standard.bool(forKey: "hasPlayedSanSebastianoSound") {
-                                        SoundManager.shared.playSound(named: "san sebastiano")
-                                        UserDefaults.standard.set(true, forKey: "hasPlayedSanSebastianoSound")
-                                    }
+                                    SoundManager.shared.playSound(named: "san sebastiano")
                                 },
                                 onOpen: {
                                     completeOpening()
@@ -123,22 +144,24 @@ struct PackOpeningView: View {
                                 VStack(spacing: 20) {
                                     // Riga 1: carte 0,1,2
                                     HStack(spacing: 12) {
-                                        ForEach(0..<min(3, cards.count), id: \.self) { index in
-                                            CardView(card: $cards[index], cardIndex: index) {
-                                                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                                    inspectedCard = cards[index]
+                                        ForEach(0..<3, id: \.self) { index in
+                                            if index < cards.count {
+                                                CardView(card: $cards[index], cardIndex: index) {
+                                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                                        inspectedCard = cards[index]
+                                                    }
                                                 }
+                                                .offset(x: cardOffsetX[index], y: cardOffsetY[index])
+                                                .rotationEffect(.degrees(cardRotation[index]))
+                                                .scaleEffect(cardScale[index])
+                                                .opacity(cardOpacity[index])
                                             }
-                                            .offset(x: cardOffsetX[index], y: cardOffsetY[index])
-                                            .rotationEffect(.degrees(cardRotation[index]))
-                                            .scaleEffect(cardScale[index])
-                                            .opacity(cardOpacity[index])
                                         }
                                     }
                                     // Riga 2: carte 3,4
-                                    if cards.count > 3 {
-                                        HStack(spacing: 12) {
-                                            ForEach(3..<min(5, cards.count), id: \.self) { index in
+                                    HStack(spacing: 12) {
+                                        ForEach(3..<5, id: \.self) { index in
+                                            if index < cards.count {
                                                 CardView(card: $cards[index], cardIndex: index) {
                                                     withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                                                         inspectedCard = cards[index]
@@ -243,6 +266,15 @@ struct PackOpeningView: View {
                 .position(x: 30 + 85/2, y: 83 + 44/2)
                 .zIndex(150)
             }
+            } // Nested ZStack
+            .blur(radius: showCompletionModal ? 20 : 0)
+            .allowsHitTesting(!showCompletionModal)
+
+            if showCompletionModal {
+                completionModal
+                    .zIndex(300)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
         }
         .ignoresSafeArea()
         .fullScreenCover(isPresented: $showCitySelector) {
@@ -314,13 +346,11 @@ struct PackOpeningView: View {
     func animateCardsIn() {
         let finalRotations: [Double] = Array(repeating: 0, count: 5)
 
-        for i in 0..<5 {
-            cardOffsetX[i] = 0
-            cardOffsetY[i] = 0
-            cardScale[i] = 0.6
-            cardOpacity[i] = 0
-            cardRotation[i] = finalRotations[i]
-        }
+        cardOffsetX = [123, 0, -123, 61.5, -61.5]
+        cardOffsetY = [94, 94, 94, -94, -94]
+        cardScale = Array(repeating: 0.6, count: 5)
+        cardOpacity = Array(repeating: 0, count: 5)
+        cardRotation = finalRotations
 
         let revealOrder: [Int] = [0, 3, 1, 4, 2]
         let stagger = 0.14
@@ -332,12 +362,26 @@ struct PackOpeningView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 HapticManager.shared.triggerImpact(style: seq == 0 ? .heavy : .medium)
                 withAnimation(.spring(response: 0.46, dampingFraction: 0.6)) {
-                    cardScale[i] = 1.08
-                    cardOpacity[i] = 1.0
+                    var newOffsetsX = cardOffsetX
+                    var newOffsetsY = cardOffsetY
+                    var newScales = cardScale
+                    var newOpacities = cardOpacity
+                    
+                    if i < newOffsetsX.count { newOffsetsX[i] = 0 }
+                    if i < newOffsetsY.count { newOffsetsY[i] = 0 }
+                    if i < newScales.count { newScales[i] = 1.08 }
+                    if i < newOpacities.count { newOpacities[i] = 1.0 }
+                    
+                    cardOffsetX = newOffsetsX
+                    cardOffsetY = newOffsetsY
+                    cardScale = newScales
+                    cardOpacity = newOpacities
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                        cardScale[i] = 1.0
+                        var newScales = cardScale
+                        if i < newScales.count { newScales[i] = 1.0 }
+                        cardScale = newScales
                     }
                 }
             }
@@ -393,14 +437,11 @@ struct PackOpeningView: View {
             await CardDatabase.downloadImages(for: selectedArtworks)
         }
         
-        let finalRotations: [Double] = Array(repeating: 0, count: 5)
-        for i in 0..<5 {
-            cardOffsetX[i] = 0
-            cardOffsetY[i] = 0
-            cardScale[i] = 0.6
-            cardOpacity[i] = 0
-            cardRotation[i] = finalRotations[i]
-        }
+        cardOffsetX = [123, 0, -123, 61.5, -61.5]
+        cardOffsetY = [94, 94, 94, -94, -94]
+        cardScale = Array(repeating: 0.6, count: 5)
+        cardOpacity = Array(repeating: 0, count: 5)
+        cardRotation = Array(repeating: 0, count: 5)
 
         self.packState = .opened
         self.showCards = true
@@ -417,14 +458,11 @@ struct PackOpeningView: View {
                 ArtworkCard(name: name, imageName: name, gradient: CardDatabase.gradientFor(name: name), isFlipped: true)
             }
             // Carte già viste: mostrale subito senza animazione
-            let finalRotations: [Double] = Array(repeating: 0, count: 5)
-            for i in 0..<5 {
-                cardOffsetX[i] = 0
-                cardOffsetY[i] = 0
-                cardScale[i] = 1.0
-                cardOpacity[i] = 1.0
-                cardRotation[i] = finalRotations[i]
-            }
+            cardOffsetX = Array(repeating: 0, count: 5)
+            cardOffsetY = Array(repeating: 0, count: 5)
+            cardScale = Array(repeating: 1.0, count: 5)
+            cardOpacity = Array(repeating: 1.0, count: 5)
+            cardRotation = Array(repeating: 0, count: 5)
         } else {
             self.cards = []
         }
@@ -457,6 +495,107 @@ struct PackOpeningView: View {
         cardScale = Array(repeating: 0.6, count: 5)
         cardOpacity = Array(repeating: 0, count: 5)
         cardRotation = Array(repeating: 0, count: 5)
+    }
+
+    func isMuseumComplete(_ museumId: String) -> Bool {
+        let artworks = CardDatabase.artworksFor(location: museumId)
+        let revealed = CardDatabase.getRevealedCards()
+        return !artworks.isEmpty && artworks.allSatisfy { revealed.contains($0) }
+    }
+
+    private var completionModal: some View {
+        ZStack {
+            // Semi-transparent dim background
+            Color.black.opacity(0.4)
+                .edgesIgnoringSafeArea(.all)
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showCompletionModal = false
+                    }
+                }
+            
+            // Modal Card
+            VStack(spacing: 28) {
+                // Title
+                Text("GREAT NEWS!")
+                    .font(.custom("Helvetica-BoldOblique", size: 28))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: "FF5E3A"), Color(hex: "FF9500")],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .padding(.horizontal, 20)
+                    .minimumScaleFactor(0.8)
+                
+                // Description Text
+                VStack(spacing: 6) {
+                    Text("Looks like you're having a great time exploring!")
+                        .font(.custom("Helvetica-Oblique", size: 15))
+                        .foregroundColor(.white.opacity(0.7))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    
+                    Text("You've already completed this collection.")
+                        .font(.custom("Helvetica-Oblique", size: 15))
+                        .foregroundColor(.white.opacity(0.7))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    
+                    (
+                        Text("Go ")
+                            .font(.custom("Helvetica-Oblique", size: 15))
+                            .foregroundColor(.white.opacity(0.7))
+                        + Text("Keep")
+                            .font(.custom("Helvetica-BoldOblique", size: 15))
+                            .foregroundColor(.white)
+                        + Text(" another one!")
+                            .font(.custom("Helvetica-Oblique", size: 15))
+                            .foregroundColor(.white.opacity(0.7))
+                    )
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                }
+                .padding(.horizontal, 16)
+                
+                // Keep Exploring Button
+                Button(action: {
+                    HapticManager.shared.triggerImpact(style: .light)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showCompletionModal = false
+                    }
+                }) {
+                    Text("KEEP EXPLORING")
+                        .font(.custom("Helvetica-BoldOblique", size: 15))
+                        .foregroundColor(.black)
+                        .frame(width: 240, height: 50)
+                        .background(
+                            Capsule()
+                                .fill(Color(hex: "D8D8D8"))
+                        )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .frame(width: 340)
+            .padding(.vertical, 42)
+            .background(
+                RoundedRectangle(cornerRadius: 30)
+                    .fill(Color(white: 0.12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 30)
+                            .strokeBorder(
+                                LinearGradient(
+                                    colors: [Color.white, Color(hex: "B1B1B1")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.0
+                            )
+                    )
+            )
+            .shadow(color: .black.opacity(0.6), radius: 40, x: 0, y: 20)
+        }
     }
 }
 
@@ -753,33 +892,51 @@ struct MuseumPackPage: View {
         return pack
     }
 
+    private var isComplete: Bool {
+        let artworks = CardDatabase.artworksFor(location: museum.id)
+        return !artworks.isEmpty && artworks.allSatisfy { revealedCards.contains($0) }
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            if let activePack = activePack {
-                // Pack strappato con carta che spunta — serve SceneKit
-                let firstCardName = activePack[0]
-                SceneKitPacketView(interactive: false, isTorn: true,
-                                   museumId: museum.id,
-                                   packetImageName: packetImage,
-                                   firstCardName: firstCardName,
-                                   isFirstCardRevealed: revealedCards.contains(firstCardName),
-                                   tearMaskImage: savedTearMask)
-                    .frame(width: 380, height: 515)
-                    .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
-                    .contentShape(Rectangle())
-                    .onTapGesture { onTapActivePack() }
-            } else {
-                // Pack sigillato — usiamo SceneKit in 3D per avere esattamente le stesse dimensioni, prospettiva ed ombra del pack aperto!
-                SceneKitPacketView(interactive: false, isTorn: false,
-                                   museumId: museum.id,
-                                   packetImageName: packetImage)
-                    .frame(width: 380, height: 515)
-                    .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
-                    .contentShape(Rectangle())
-                    .onTapGesture { onTapStart() }
+        ZStack {
+            VStack(spacing: 0) {
+                if let activePack = activePack {
+                    // Pack strappato con carta che spunta — serve SceneKit
+                    let firstCardName = activePack[0]
+                    SceneKitPacketView(interactive: false, isTorn: true,
+                                       museumId: museum.id,
+                                       packetImageName: packetImage,
+                                       firstCardName: firstCardName,
+                                       isFirstCardRevealed: revealedCards.contains(firstCardName),
+                                       tearMaskImage: savedTearMask)
+                        .frame(width: 380, height: 515)
+                        .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
+                        .contentShape(Rectangle())
+                        .onTapGesture { onTapActivePack() }
+                } else {
+                    // Pack sigillato — usiamo SceneKit in 3D per avere esattamente le stesse dimensioni, prospettiva ed ombra del pack aperto!
+                    SceneKitPacketView(interactive: false, isTorn: false,
+                                       museumId: museum.id,
+                                       packetImageName: packetImage)
+                        .frame(width: 380, height: 515)
+                        .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
+                        .contentShape(Rectangle())
+                        .onTapGesture { onTapStart() }
+                }
+            }
+            .padding(.top, 4)
+            .colorMultiply(isComplete ? Color(white: 0.72) : .white)
+            
+            if isComplete {
+                let ipadScale = (UIDevice.current.userInterfaceIdiom == .pad) ? 1.4 : 1.0
+                Image("check")
+                    .resizable()
+                    .padding(4 * ipadScale)
+                    .frame(width: 55 * ipadScale, height: 55 * ipadScale)
+                    .shadow(color: Color.black.opacity(0.35), radius: 8 * ipadScale, x: 0, y: 4 * ipadScale)
+                    .offset(x: 75 * ipadScale, y: -125 * ipadScale)
             }
         }
-        .padding(.top, 4)
         .onAppear {
             if let data = UserDefaults.standard.data(forKey: "activePackTearMask_\(museum.id)")
                 ?? UserDefaults.standard.data(forKey: "activePackTearMask") {
@@ -789,96 +946,161 @@ struct MuseumPackPage: View {
     }
 }
 
+struct CircularProgressView: View {
+    let progress: Double
+    var percentText: String
+    
+    var body: some View {
+        ZStack {
+            // Background track
+            Circle()
+                .stroke(Color.white.opacity(0.12), lineWidth: 3)
+                .frame(width: 32, height: 32)
+            
+            // Progress arc
+            Circle()
+                .trim(from: 0.0, to: CGFloat(progress))
+                .stroke(Color.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .frame(width: 32, height: 32)
+                .rotationEffect(.degrees(-90)) // Start from top
+            
+            // Percentage text
+            Text(percentText)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .frame(width: 32, height: 32)
+    }
+}
+
+struct CompletedBadgeView: View {
+    var x: CGFloat = 0
+    var y: CGFloat = 0
+
+    var body: some View {
+        let ipadScale = (UIDevice.current.userInterfaceIdiom == .pad) ? 1.4 : 1.0
+        Image("check")
+            .resizable()
+            .padding(3 * ipadScale)
+            .frame(width: 62 * ipadScale, height: 62 * ipadScale)
+            .offset(x: -17 * ipadScale, y: -17 * ipadScale)
+    }
+}
+
 struct PackExpansionRow: View {
     let museumId: String
     let title: String
     let progress: Double
     let onTap: () -> Void
+    
     var isComplete: Bool { progress >= 1.0 }
     var percentText: String { "\(Int(round(progress * 100)))%" }
 
-    var body: some View {
+    private var subtitle: String {
+        switch museumId {
+        case "uffizi":      return "Florence, Italy"
+        case "prado":       return "Madrid, Spain"
+        case "capodimonte": return "Naples, Italy"
+        case "moma":        return "New York, NY"
+        default:            return ""
+        }
+    }
+
+    private var fannedPacketsView: some View {
         let imageName = MuseumConfig.shared.museums.first(where: { $0.id == museumId })?.packetImageName ?? "uffizi_pacchetto"
-        return Button(action: onTap) {
-            HStack(spacing: 0) {
-                // Left side: Zoomed, fanned, and clipped packets
-                ZStack {
-                    Image(imageName)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 130, height: 195)
-                        .rotationEffect(.degrees(-10))
-                        .offset(x: -20, y: 8)
-                    
-                    Image(imageName)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 130, height: 195)
-                        .rotationEffect(.degrees(10))
-                        .offset(x: 15, y: 18)
+        let ipadScale = (UIDevice.current.userInterfaceIdiom == .pad) ? 1.4 : 1.0
+        return ZStack(alignment: .bottom) {
+            // Left packet
+            Image(imageName)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 125 * ipadScale, height: 187 * ipadScale)
+                .rotationEffect(.degrees(-12))
+                .offset(x: -40 * ipadScale, y: 75 * ipadScale)
+                .colorMultiply(isComplete ? Color(white: 0.72) : Color.white)
+            
+            // Right packet
+            Image(imageName)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 125 * ipadScale, height: 187 * ipadScale)
+                .rotationEffect(.degrees(12))
+                .offset(x: 40 * ipadScale, y: 75 * ipadScale)
+                .colorMultiply(isComplete ? Color(white: 0.72) : Color.white)
+
+            // Center packet (on top of the others)
+            Image(imageName)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 125 * ipadScale, height: 187 * ipadScale)
+                .offset(x: 0, y: 65 * ipadScale)
+                .colorMultiply(isComplete ? Color(white: 0.72) : Color.white)
+        }
+    }
+
+    private var headerView: some View {
+        ZStack(alignment: .top) {
+            // Centered Text
+            VStack(spacing: 2) {
+                Text(title.uppercased())
+                    .font(.custom("Helvetica-BoldOblique", size: 22))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: "FF7A00"), Color(hex: "FFB800")],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                
+                Text(subtitle)
+                    .font(.custom("Helvetica-Oblique", size: 12))
+                    .foregroundColor(Color.white.opacity(0.6))
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, 2)
+            
+            // Leading/Trailing items overlay
+            HStack(alignment: .center) {
+                if isComplete {
+                    CompletedBadgeView()
+                } else {
+                    CircularProgressView(progress: progress, percentText: percentText)
                 }
-                .frame(width: 140, height: 194)
-                .offset(x: 8, y: 0)
                 
                 Spacer()
                 
-                // Right side
-                VStack(alignment: .trailing, spacing: 0) {
-                    // Chevron at the top right
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white.opacity(0.6))
-                        .padding(.top, 18)
-                        .padding(.trailing, 20)
-                    
-                    Spacer()
-                    
-                    // Museum name (title) + percentage + progress bar in bottom right
-                    VStack(alignment: .trailing, spacing: 6) {
-                        Text(title)
-                            .font(.system(size: 13, weight: .semibold)).italic()
-                            .foregroundColor(.white.opacity(0.6))
-                        
-                        Text(percentText)
-                            .font(.system(size: 28, weight: .black)).italic()
-                            .foregroundColor(.white)
-                        
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.18))
-                                .frame(height: 5)
-                            Capsule()
-                                .fill(Color.white)
-                                .frame(width: max(5, 110 * CGFloat(progress)), height: 5)
-                        }
-                        .frame(width: 110, height: 5)
-                    }
-                    .padding(.bottom, 22)
-                    .padding(.trailing, 20)
-                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(Color.white.opacity(0.6))
             }
-            .frame(width: 344, height: 194)
+        }
+    }
+
+    var body: some View {
+        Button(action: onTap) {
+            ZStack(alignment: .top) {
+                fannedPacketsView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                
+                headerView
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+            }
+            .frame(height: 220)
+            .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: "2C2C2E"), Color(hex: "121214")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color(hex: "151517"))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 24)
                     .strokeBorder(
-                        isComplete ?
-                            LinearGradient(colors: [Color(hex: "F2CA03"), Color(hex: "C7A245")], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                            LinearGradient(colors: [Color(hex: "B1B1B1"), Color(hex: "464646")], startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: 2
+                        Color.white.opacity(0.12),
+                        lineWidth: 1.0
                     )
             )
-            .clipShape(RoundedRectangle(cornerRadius: 16)) // Clip packets to card shape
-            .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .shadow(color: Color.black.opacity(0.55), radius: 30, x: 0, y: 15)
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -1185,34 +1407,62 @@ struct PackOpeningFlashView: View {
 struct PackTearHintView: View {
     @State private var shimmerX: CGFloat = -180
     @State private var glowOpacity: Double = 0.2
+    @State private var handOffset: CGFloat = -40
+    @State private var textOpacity: Double = 1.0
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer().frame(height: UIScreen.main.bounds.height * 0.31)
-
-            VStack(spacing: 10) {
-                // Striscia luminosa con sweep
+        GeometryReader { geometry in
+            let screenWidth = geometry.size.width
+            let screenHeight = geometry.size.height
+            
+            ZStack {
+                // SWIPE RIGHT TO OPEN text & hand icon
+                VStack(spacing: 6) {
+                    Text("SWIPE RIGHT")
+                        .font(.custom("Helvetica-BoldOblique", size: 20))
+                        .foregroundColor(Color(hex: "FF7A00"))
+                        .italic()
+                        .bold()
+                        .shadow(color: Color(hex: "FF7A00").opacity(0.3), radius: 4)
+                    
+                    Text("TO OPEN")
+                        .font(.custom("Helvetica-BoldOblique", size: 20))
+                        .foregroundColor(Color(hex: "FF7A00"))
+                        .italic()
+                        .bold()
+                        .shadow(color: Color(hex: "FF7A00").opacity(0.3), radius: 4)
+                    
+                    Image(systemName: "hand.point.up.left.fill")
+                        .font(.system(size: 26))
+                        .foregroundColor(.white.opacity(0.8))
+                        .offset(x: handOffset)
+                        .padding(.top, 4)
+                }
+                .opacity(textOpacity)
+                .position(x: screenWidth / 2, y: screenHeight * 0.27)
+                
+                // Horizontal Orange Glowing Line & Shimmer
                 ZStack {
-                    // Glow halo dietro la riga
+                    // Glow halo behind the line
                     Rectangle()
-                        .fill(Color.white.opacity(0.18))
+                        .fill(Color(hex: "FF7A00").opacity(0.25))
                         .frame(maxWidth: .infinity, maxHeight: 8)
                         .blur(radius: 4)
                         .opacity(glowOpacity)
 
-                    // Riga principale bold
+                    // Main bold orange line
                     Rectangle()
                         .fill(LinearGradient(
-                            colors: [.clear, .white.opacity(0.55), .white.opacity(0.95), .white.opacity(0.55), .clear],
+                            colors: [.clear, Color(hex: "FF7A00").opacity(0.55), Color(hex: "FF7A00").opacity(0.95), Color(hex: "FF7A00").opacity(0.55), .clear],
                             startPoint: .leading, endPoint: .trailing
                         ))
                         .frame(maxWidth: .infinity, maxHeight: 3)
                         .opacity(glowOpacity)
 
-                    // Sweep luminoso
+                    // Yellow/Orange Shimmer sweep
                     Rectangle()
                         .fill(LinearGradient(
-                            colors: [.clear, .white, .white, .clear],
+                            colors: [.clear, Color(hex: "FFB800"), Color(hex: "FFB800"), .clear],
                             startPoint: .leading, endPoint: .trailing
                         ))
                         .frame(width: 110, height: 3)
@@ -1223,18 +1473,22 @@ struct PackTearHintView: View {
                 .frame(height: 8)
                 .clipped()
                 .padding(.horizontal, 24)
-
+                .position(x: screenWidth / 2, y: screenHeight * 0.55)
             }
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                shimmerX = 180
-            }
-            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                glowOpacity = 0.9
+            .frame(width: screenWidth, height: screenHeight)
+            .onAppear {
+                withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                    shimmerX = 180
+                }
+                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                    glowOpacity = 0.9
+                }
+                withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: false)) {
+                    handOffset = 40
+                }
+                withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
+                    textOpacity = 0.25
+                }
             }
         }
     }

@@ -29,6 +29,7 @@ struct ArtworkCard: Identifiable, Equatable {
 
 enum PackState {
     case selecting
+    case packSelection
     case tearing
     case opened
 }
