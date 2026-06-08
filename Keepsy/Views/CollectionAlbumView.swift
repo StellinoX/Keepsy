@@ -23,6 +23,7 @@ struct CollectionAlbumView: View {
 
     @State private var foundCards: Set<String> = []
     @State private var revealedCards: Set<String> = []
+    
     @State private var hasSyncedWithCloud = false
     @State private var inspectedCard: ArtworkCard? = nil
     @State private var showExperienceCardModal = false
@@ -173,13 +174,13 @@ struct CollectionAlbumView: View {
                             // Dark background
                             RoundedRectangle(cornerRadius: 24)
                                 .fill(Color(hex: "0D0D0F"))
-                            
+
                             // Keepsy Gold Logo
                             Image("LogoKeepsy")
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
                                 .frame(width: 70, height: 70)
-                            
+
                             // Orange border stroke
                             RoundedRectangle(cornerRadius: 24)
                                 .stroke(
@@ -346,6 +347,8 @@ struct CollectionAlbumView: View {
                 .allowsHitTesting(!showSpecialCardLockModal)
             }
 
+
+
             // Floating cards bar removed - cards now animate directly from the screen center
             
             // Flying card e overlay dentro lo stesso ZStack "root"
@@ -423,9 +426,10 @@ struct CollectionAlbumView: View {
             await CardDatabase.syncWithCloud()
             hasSyncedWithCloud = true
         }
-        } // GeometryReader
+        }
         .ignoresSafeArea()
     }
+
 
     private var dynamicPadding: CGFloat {
         let minW: CGFloat = 58
@@ -443,18 +447,18 @@ struct CollectionAlbumView: View {
             let finalW: CGFloat = destinationFrame.width
             let finalH: CGFloat = destinationFrame.height
             let scale = flyingFrame.width / finalW
-            
+
             ZStack {
                 // Dark background
                 RoundedRectangle(cornerRadius: 24)
                     .fill(Color(hex: "0D0D0F"))
-                
+
                 // Keepsy Gold Logo
                 Image("LogoKeepsy")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 70, height: 70)
-                
+
                 // Orange border stroke
                 RoundedRectangle(cornerRadius: 24)
                     .stroke(
@@ -670,15 +674,12 @@ struct CollectionAlbumView: View {
 
         HapticManager.shared.triggerImpact(style: .light)
 
-        // La flying card è sotto la inspection con opacity calcolata come (1 - inspectionOpacity).
-        // Fade out inspection → flying card riappare automaticamente grazie alla formula nell'overlay.
         flyingFrame = destinationFrame
         flyingCornerRadius = 18
         withAnimation(.easeInOut(duration: 0.15)) {
             inspectionOpacity = 0
         }
 
-        // Fase A parte dopo il crossfade
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(.easeInOut(duration: 0.40)) {
                 flyingFrame = pulledSourceFrame
@@ -687,6 +688,15 @@ struct CollectionAlbumView: View {
             }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.40) {
+                // ── Aggiorna i frame con la posizione attuale della cella ──
+                if let name = animatingCardName,
+                   let f = frameTracker.cellFrames[name] {
+                    sourceFrame       = CGRect(x: f.minX + 7, y: f.minY + 5, width: 58,  height: 84)
+                    pulledSourceFrame = CGRect(x: sourceFrame.minX, y: sourceFrame.minY - pullDistance,
+                                              width: sourceFrame.width, height: sourceFrame.height)
+                    pocketFrame       = CGRect(x: f.minX,     y: f.minY + 5, width: 72,  height: 94)
+                }
+
                 if pocketFrame == .zero {
                     flyingOpacity = 0
                     animatingCardName = nil
@@ -695,22 +705,20 @@ struct CollectionAlbumView: View {
                         cellCardOpacity = 1.0
                     }
                 } else {
-                    // Fase B: scende nella bustina
-                    // Nascondi il pocket della cella e attiva l'overlay prima della discesa
-                    hideCellPocket = true
-                    pocketOverlayOpacity = 1.0
-                    withAnimation(.easeIn(duration: 0.28)) {
+                    // Fase B: anima SOLO il frame (la volante scende mantenendo opacity 1.0)
+                    // A fine animazione: swap atomico volante→cella, no crossfade, no doppia immagine
+                    withAnimation(.easeIn(duration: 0.30)) {
                         flyingFrame = sourceFrame
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-                        flyingOpacity = 0
-                        pocketOverlayOpacity = 0
-                        hideCellPocket = false
-                        withAnimation(.easeIn(duration: 0.08)) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
+                        var t2 = Transaction(animation: nil)
+                        t2.disablesAnimations = true
+                        withTransaction(t2) {
+                            flyingOpacity = 0
                             cellCardOpacity = 1.0
+                            animatingCardName = nil
+                            animationPhase = .idle
                         }
-                        animatingCardName = nil
-                        animationPhase = .idle
                     }
                 }
             }
@@ -813,34 +821,29 @@ struct CollectionAlbumView: View {
 
             // Wait 0.55 seconds for this flight to finish
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                // Phase 3: nascondi il pocket della cella e mostra l'overlay — così la carta scende "dentro"
-                hideCellPocket = true
-                pocketOverlayOpacity = 1.0
+                // Phase 3: la card scende sopra il pocket — niente overlay, pocket sempre visibile
                 withAnimation(.easeOut(duration: 0.35)) {
                     flyingFrame = finalSourceFrame
+                    flyingOpacity = 0.0
                 }
-                
+
                 // Wait 0.35 seconds for card to completely slide inside
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                     HapticManager.shared.triggerImpact(style: .light)
-                    
+
                     // Add to animated set so the grid cell blinks and reveals
                     _ = withAnimation(.easeIn(duration: 0.15)) {
                         animatedCompletedCards.insert(cardName)
                     }
-                    
-                    // Hide flying overlays and reveal cell card
-                    flyingOpacity = 0.0
-                    pocketOverlayOpacity = 0.0
-                    hideCellPocket = false
+
+                    // Reveal cell card
                     cellCardOpacity = 1.0
-                    
-                    // Reset animation states immediately for the current sticker!
-                    // This completely destroys the flying view overlay, preventing it from holding onto the previous card's image state during the next scroll!
+
+                    // Reset animation states
                     currentlyAnimatingSticker = nil
                     animatingCardName = nil
                     animationPhase = .idle
-                    
+
                     // Short pause, then repeat for the next sticker in the queue!
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                         animateNextSticker(index: index + 1, proxy: proxy)

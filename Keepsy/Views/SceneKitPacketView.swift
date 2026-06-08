@@ -156,8 +156,7 @@ fileprivate func createCardFrontTexture(name: String) -> UIImage {
         width: 540,
         height: 818,
         isRevealed: isRevealed,
-        goldBorder: borderGrad,
-        showCheckmark: isAlreadyOwned || isRevealed
+        goldBorder: borderGrad
     )
     
     let renderer = ImageRenderer(content: cardView)

@@ -89,7 +89,18 @@ struct CardInspectionView: View {
     }
     
     private var descriptionText: String {
-        if card.name.contains("_experience") || card.name == "vale" {
+        if card.name == "vale" {
+            if !isCollectionCompleteFor(card.name) {
+                return "To be unlocked when you have the whole collection"
+            }
+            return """
+Hello! I’m Valentina, a 24 year old illustrator based in Naples, Italy.
+I have been drawing ever since I have memory, I don’t remember a moment where I didn’t have a pencil, crayon or marker in hand. My love for art developed naturally from there.
+
+Van Gogh is one of my favourite painters, and Starry Night one of his works I enjoy the most. I’ve seen it in person and I still remember how it moved me, so I’m particularly attached to it. It felt only natural to choose it. During my art school years I grew an interest in children illustration, and that’s the style I wanted to reinterpret the painting in. Transposing a cornerstone of art into something much simpler, catered to a whole different public, was something unexpected but that I enjoyed immensely. I’d surely do it again if I’ll ever have the possibility.
+"""
+        }
+        if card.name.contains("_experience") {
             if !isCollectionCompleteFor(card.name) {
                 return "To be unlocked when you have the whole collection"
             }
@@ -357,8 +368,7 @@ struct CardInspectionView: View {
                             width: 310,
                             height: 470,
                             isRevealed: isRevealed,
-                            goldBorder: goldBorder,
-                            showCheckmark: isAlreadyOwned
+                            goldBorder: goldBorder
                         )
                         .opacity(abs(currentRotation.truncatingRemainder(dividingBy: 360)) > 90 && abs(currentRotation.truncatingRemainder(dividingBy: 360)) < 270 ? 0 : 1)
                     }
@@ -517,8 +527,7 @@ struct CardFullDetailView: View {
                         width: 310,
                         height: 470,
                         isRevealed: isRevealed,
-                        goldBorder: goldBorder,
-                        showCheckmark: false
+                        goldBorder: goldBorder
                     )
                         .opacity(isFrontShowing ? 1 : 0)
                 }

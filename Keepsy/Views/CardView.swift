@@ -24,6 +24,12 @@ struct CardView: View {
 
     private var artwork: NetworkArtwork? { CardDatabase.remoteArtworks[card.name] }
 
+    private var showCheckmark: Bool {
+        let isRevealed = CardDatabase.getRevealedCards().contains(card.name)
+        let isAlreadyOwned = CardDatabase.getDuplicatesInActivePack().contains(card.name)
+        return isRevealed || isAlreadyOwned
+    }
+
     var body: some View {
         ZStack {
             cardBack
@@ -32,12 +38,26 @@ struct CardView: View {
             cardFront
                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
                 .opacity(card.isFlipped ? 1 : 0)
+
+            // Checkmark fuori dal clipShape della carta
+            if card.isFlipped && showCheckmark {
+                VStack {
+                    HStack {
+                        Image("check")
+                            .resizable()
+                            .frame(width: 27, height: 27)
+                            .rotation3DEffect(.degrees(-rotation), axis: (x: 0, y: 1, z: 0))
+                            .offset(x: -8, y: -8)
+                        Spacer()
+                    }
+                    Spacer()
+                }
+            }
         }
-        // Frame + clip + shadow condivisi → fronte e retro identici
         .frame(width: w, height: h)
-        .clipShape(RoundedRectangle(cornerRadius: cr))
         .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
         .rotation3DEffect(.degrees(rotation), axis: (x: 0, y: 1, z: 0))
+        .contentShape(Rectangle())
         .onTapGesture {
             if !card.isFlipped {
                 SoundManager.shared.playSound(named: "giro_carta")
@@ -65,7 +85,6 @@ struct CardView: View {
 
     private var cardFront: some View {
         let isRevealed = CardDatabase.getRevealedCards().contains(card.name)
-        let isAlreadyOwned = CardDatabase.getDuplicatesInActivePack().contains(card.name)
         return ArtworkCardFrontView(
             name: card.name,
             title: card.title,
@@ -73,8 +92,7 @@ struct CardView: View {
             width: w,
             height: h,
             isRevealed: isRevealed,
-            goldBorder: goldBorder,
-            showCheckmark: isAlreadyOwned || isRevealed
+            goldBorder: goldBorder
         )
     }
 }
@@ -88,9 +106,7 @@ struct ArtworkCardFrontView: View {
     let height: CGFloat
     let isRevealed: Bool
     let goldBorder: LinearGradient
-    var showCheckmark: Bool = false
 
-    // Memberwise initializer to ensure default parameters work under all build circumstances
     init(
         name: String,
         title: String,
@@ -98,8 +114,7 @@ struct ArtworkCardFrontView: View {
         width: CGFloat,
         height: CGFloat,
         isRevealed: Bool,
-        goldBorder: LinearGradient,
-        showCheckmark: Bool = false
+        goldBorder: LinearGradient
     ) {
         self.name = name
         self.title = title
@@ -108,7 +123,6 @@ struct ArtworkCardFrontView: View {
         self.height = height
         self.isRevealed = isRevealed
         self.goldBorder = goldBorder
-        self.showCheckmark = showCheckmark
     }
 
     private var scale: CGFloat { width / 111.0 }
@@ -205,25 +219,8 @@ struct ArtworkCardFrontView: View {
                     Spacer()
                 }
             }
-
-            // 4. Checkmark Badge (Top Left)
-            if showCheckmark {
-                VStack {
-                    HStack {
-                        Image("check")
-                            .resizable()
-                            .frame(width: 20 * scale, height: 20 * scale)
-                            .padding(.top, 6 * scale)
-                            .padding(.leading, 6 * scale)
-                        
-                        Spacer()
-                    }
-                    Spacer()
-                }
-            }
         }
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: cr))
-        // Nessuna shadow qui — gestita dal parent (CardView / SilverMetalCardView)
     }
 }

@@ -29,13 +29,14 @@ struct PackOpeningView: View {
     @State private var showCompletionModal = false
 
     // Animazione carte — una per carta
-    @State private var cardOffsetX: [CGFloat] = [123, 0, -123, 61.5, -61.5]
-    @State private var cardOffsetY: [CGFloat] = [94, 94, 94, -94, -94]
+    @State private var cardOffsetX: [CGFloat] = [123, 0, -123, -61.5, 61.5]
+    @State private var cardOffsetY: [CGFloat] = [94, 94, 94, 94, 94]
     @State private var cardScale: [CGFloat] = Array(repeating: 1.0, count: 5)
     @State private var cardOpacity: [Double] = Array(repeating: 0, count: 5)
     @State private var cardRotation: [Double] = Array(repeating: 0, count: 5)
     @State private var shimmerPhase: CGFloat = 0
     @State private var nextButtonScale: CGFloat = 0
+    @State private var isDealt = false
 
     var body: some View {
         ZStack {
@@ -155,6 +156,7 @@ struct PackOpeningView: View {
                                                 .rotationEffect(.degrees(cardRotation[index]))
                                                 .scaleEffect(cardScale[index])
                                                 .opacity(cardOpacity[index])
+                                                .allowsHitTesting(cardOpacity[index] > 0)
                                             }
                                         }
                                     }
@@ -171,6 +173,7 @@ struct PackOpeningView: View {
                                                 .rotationEffect(.degrees(cardRotation[index]))
                                                 .scaleEffect(cardScale[index])
                                                 .opacity(cardOpacity[index])
+                                                .allowsHitTesting(cardOpacity[index] > 0)
                                             }
                                         }
                                     }
@@ -291,12 +294,7 @@ struct PackOpeningView: View {
             if newState == .tearing {
                 showTearHint = false
                 packSwayX = 0
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    guard packState == .tearing, !showOpeningEffect else { return }
-                    withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                        packSwayX = 9
-                    }
-                }
+                // Pack fermo: nessun dondolio nella schermata tearing
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
                     guard packState == .tearing, !showOpeningEffect else { return }
                     withAnimation(.easeIn(duration: 0.4)) { showTearHint = true }
@@ -346,8 +344,8 @@ struct PackOpeningView: View {
     func animateCardsIn() {
         let finalRotations: [Double] = Array(repeating: 0, count: 5)
 
-        cardOffsetX = [123, 0, -123, 61.5, -61.5]
-        cardOffsetY = [94, 94, 94, -94, -94]
+        cardOffsetX = [123, 0, -123, -61.5, 61.5]
+        cardOffsetY = [94, 94, 94, 94, 94]
         cardScale = Array(repeating: 0.6, count: 5)
         cardOpacity = Array(repeating: 0, count: 5)
         cardRotation = finalRotations
@@ -437,8 +435,8 @@ struct PackOpeningView: View {
             await CardDatabase.downloadImages(for: selectedArtworks)
         }
         
-        cardOffsetX = [123, 0, -123, 61.5, -61.5]
-        cardOffsetY = [94, 94, 94, -94, -94]
+        cardOffsetX = [123, 0, -123, -61.5, 61.5]
+        cardOffsetY = [94, 94, 94, 94, 94]
         cardScale = Array(repeating: 0.6, count: 5)
         cardOpacity = Array(repeating: 0, count: 5)
         cardRotation = Array(repeating: 0, count: 5)
@@ -767,9 +765,9 @@ struct SingleScrollPackView: View {
                 let isSelectedActive = CardDatabase.hasActivePack(for: selectedMuseumId)
                 Button(action: isSelectedActive ? onTapActivePack : onStart) {
                     Text(isSelectedActive ? "CONTINUE" : "START")
-                        .font(.custom("Helvetica-BoldOblique", size: 15))
+                        .font(.custom("Helvetica-BoldOblique", size: 18))
                         .foregroundColor(.black)
-                        .frame(width: isSelectedActive ? 130 : 110, height: 38)
+                        .frame(width: isSelectedActive ? 150 : 150, height: 44)
                         .background(
                             RoundedRectangle(cornerRadius: 19)
                                 .fill(LinearGradient(

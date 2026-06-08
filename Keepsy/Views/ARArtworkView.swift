@@ -30,6 +30,8 @@ struct ARArtworkView: View {
     @State private var catturataScale: CGFloat = 1.5
     @State private var catturataOpacity: Double = 0.0
     @State private var showUnlockCheckmark = false
+    @State private var showAutoKeptPopup: Bool = false
+    @State private var autoKeptCount: Int = 0
 
     enum UnlockAnimationStep {
         case none
@@ -91,8 +93,8 @@ struct ARArtworkView: View {
                                 guard !isAnimatingUnlock else { return }
                                 guard triggerUnlockAnimation == nil else { return }
                                 
-                                let isAlreadyUnlocked = revealedCards.contains(dbName) || 
-                                                        duplicatesInPack.contains(dbName) || 
+                                let isAlreadyUnlocked = revealedCards.contains(dbName) ||
+                                                        duplicatesInPack.contains(dbName) ||
                                                         sessionFoundCards.contains(dbName)
                                 guard !isAlreadyUnlocked else { return }
                                 
@@ -115,8 +117,8 @@ struct ARArtworkView: View {
                         .contentShape(Rectangle())
                         .onTapGesture {
                             if let target = selectedTargetCard {
-                                let isAlreadyUnlocked = revealedCards.contains(target) || 
-                                                        duplicatesInPack.contains(target) || 
+                                let isAlreadyUnlocked = revealedCards.contains(target) ||
+                                                        duplicatesInPack.contains(target) ||
                                                         sessionFoundCards.contains(target)
                                 if !isAlreadyUnlocked && !isAnimatingUnlock && triggerUnlockAnimation == nil {
                                     let cleanedName = CardDatabase.cleanedArtworkName(target)
@@ -197,8 +199,8 @@ struct ARArtworkView: View {
                             Button(action: {
                                 HapticManager.shared.triggerImpact(style: .medium)
                                 if let target = selectedTargetCard {
-                                    let isAlreadyUnlocked = revealedCards.contains(target) || 
-                                                            duplicatesInPack.contains(target) || 
+                                    let isAlreadyUnlocked = revealedCards.contains(target) ||
+                                                            duplicatesInPack.contains(target) ||
                                                             sessionFoundCards.contains(target)
                                     if !isAlreadyUnlocked && triggerUnlockAnimation == nil {
                                         let cleanedName = CardDatabase.cleanedArtworkName(target)
@@ -208,17 +210,11 @@ struct ARArtworkView: View {
                                     }
                                 }
                             }) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "wand.and.stars")
-                                        .font(.system(size: 14, weight: .bold))
-                                    Text("DEV DETECT")
-                                        .font(.custom("Helvetica-BoldOblique", size: 14))
-                                }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-                                .background(Capsule().fill(Color(hex: "FF7A00")))
-                                .shadow(color: Color(hex: "FF7A00").opacity(0.4), radius: 6)
+                                Text("Guest Mode")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.white.opacity(0.35))
+                                .frame(width: 80, height: 24)
+                                .background(Capsule().fill(Color.white.opacity(0.10)))
                             }
                             .padding(.bottom, 14)
                         }
@@ -333,15 +329,15 @@ struct ARArtworkView: View {
                                                         .resizable()
                                                         .padding(4.5 * cardScale)
                                                         .frame(width: 50 * cardScale, height: 50 * cardScale)
-                                                        .offset(x: 10 * cardScale, y: -10 * cardScale)
+                                                        .offset(x: 20 * cardScale, y: -25 * cardScale)
                                                         .transition(.scale.combined(with: .opacity))
                                                 }
                                             } else if isUnlocked {
                                                 Image("check")
                                                     .resizable()
                                                     .padding(5 * cardScale)
-                                                    .frame(width: 60 * cardScale, height: 60 * cardScale)
-                                                    .offset(x: 12 * cardScale, y: -12 * cardScale)
+                                                    .frame(width: 55 * cardScale, height: 55 * cardScale)
+                                                    .offset(x: 20 * cardScale, y: -20 * cardScale)
                                             }
                                         }
                                         .shadow(
@@ -491,7 +487,7 @@ struct ARArtworkView: View {
                             (
                                 Text("You just ")
                                     .font(.custom("Helvetica-Oblique", size: 16))
-                                + Text("Keeped")
+                                + Text("Kept")
                                     .font(.custom("Helvetica-BoldOblique", size: 16))
                                 + Text(" an artwork")
                                     .font(.custom("Helvetica-Oblique", size: 16))
@@ -594,11 +590,88 @@ struct ARArtworkView: View {
                     .zIndex(150)
                 }
                 } // End of else block for !isBlocked
+
+                // ── AUTO-KEPT POPUP ──────────────────────────────────────────
+                if showAutoKeptPopup {
+                    ZStack {
+                        Color.black.opacity(0.65)
+                            .ignoresSafeArea()
+                            .transition(.opacity)
+
+                        VStack(spacing: 24) {
+                            Text("WE KEPT 'EM")
+                                .font(.system(size: 26, weight: .black))
+                                .italic()
+                                .foregroundColor(Color(hex: "FF7A00"))
+                                .multilineTextAlignment(.center)
+                                .padding(.top, 8)
+
+                            (
+                                Text("You closed the app with ")
+                                    .font(.system(size: 15, weight: .semibold)).italic()
+                                + Text("\(autoKeptCount) \(autoKeptCount == 1 ? "card" : "cards")")
+                                    .font(.system(size: 15, weight: .black)).italic()
+                                + Text(" not yet in your collection.\nDon't worry — we ")
+                                    .font(.system(size: 15, weight: .semibold)).italic()
+                                + Text("Kept")
+                                    .font(.system(size: 15, weight: .black)).italic()
+                                + Text(" them for you.")
+                                    .font(.system(size: 15, weight: .semibold)).italic()
+                            )
+                            .foregroundColor(.white.opacity(0.85))
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(4)
+                            .padding(.horizontal, 16)
+
+                            Button(action: {
+                                HapticManager.shared.triggerImpact(style: .light)
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    showAutoKeptPopup = false
+                                }
+                            }) {
+                                Text("NICE, THANKS")
+                                    .font(.system(size: 18, weight: .black))
+                                    .italic()
+                                    .foregroundColor(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 54)
+                                    .background(Capsule().fill(Color(hex: "E5E5EA")))
+                            }
+                            .padding(.horizontal, 8)
+                        }
+                        .padding(28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 32)
+                                .fill(Color(hex: "1C1C1E"))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 32)
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
+                                )
+                        )
+                        .padding(.horizontal, 28)
+                        .shadow(color: Color.black.opacity(0.5), radius: 20, y: 10)
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                    }
+                    .zIndex(160)
+                }
             }
             .ignoresSafeArea()
         }
         .onAppear {
             locationManager.startHighAccuracyTracking()
+
+            // Mostra popup se l'app era stata chiusa con carte non salvate
+            let autoCount = UserDefaults.standard.integer(forKey: "autoKeptCardsCount")
+            if autoCount > 0 {
+                autoKeptCount = autoCount
+                UserDefaults.standard.removeObject(forKey: "autoKeptCardsCount")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        showAutoKeptPopup = true
+                    }
+                }
+            }
+
             if let active = CardDatabase.getActivePack(), !active.isEmpty {
                 let dupes = CardDatabase.getDuplicatesInActivePack()
                 let revealed = CardDatabase.getRevealedCards()
@@ -656,6 +729,9 @@ struct ARArtworkView: View {
                     await checkAndDownloadImages()
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+            autoSaveSessionCards()
         }
     }
     
@@ -822,6 +898,18 @@ struct ARArtworkView: View {
         }
     }
 
+    private func autoSaveSessionCards() {
+        guard !sessionFoundCards.isEmpty else { return }
+        let count = sessionFoundCards.count
+        for name in sessionFoundCards {
+            CardDatabase.addRevealedCard(name)
+        }
+        UserDefaults.standard.set(Array(sessionFoundCards), forKey: "recentlyCompletedPackCards")
+        CardDatabase.clearActivePackIfNeeded()
+        sessionFoundCards.removeAll()
+        UserDefaults.standard.set(count, forKey: "autoKeptCardsCount")
+    }
+
     private func geofenceWarningOverlay(geometry: GeometryProxy) -> some View {
         let screenWidth = geometry.size.width
         let screenHeight = geometry.size.height
@@ -949,29 +1037,20 @@ struct ARArtworkView: View {
                 }
                 
                 #if DEBUG
-                Spacer().frame(height: 32)
+                Spacer().frame(height: 16)
                 Button(action: {
-                    HapticManager.shared.triggerImpact(style: .medium)
+                    HapticManager.shared.triggerImpact(style: .light)
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
                         devBypassGeofence = true
                     }
                 }) {
-                    Text("DEV BYPASS")
-                        .font(.custom("Helvetica-BoldOblique", size: 16))
-                        .foregroundColor(.white)
-                        .frame(width: 254, height: 50)
-                        .background(
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(hex: "FF7A00"), Color(hex: "FFB800")],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                        )
+                    Text("Guest Mode")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(0.45))
+                        .frame(width: 110, height: 32)
+                        .background(Capsule().fill(Color.white.opacity(0.12)))
                 }
-                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, alignment: .center)
                 #endif
                 
                 Spacer()
