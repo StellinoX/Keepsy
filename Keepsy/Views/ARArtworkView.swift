@@ -183,8 +183,9 @@ struct ARArtworkView: View {
                                 .font(.system(size: 16, weight: .regular))
                         }
                         .foregroundColor(.white)
-                        .frame(width: 85, height: 44)
-                        .background(Capsule().fill(Color(hex: "383838")))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(Color.white.opacity(0.12)))
                     }
                     .position(x: 30 + 85/2, y: 83 + 44/2)
                     .opacity(isAnimatingUnlock ? 0.0 : 1.0)
@@ -241,31 +242,28 @@ struct ARArtworkView: View {
                                     let diff = CGFloat(index) - currentCarouselOffset
                                     
                                     // Scrollable horizontal X position
+                                    // Scrollable horizontal X position
                                     let xOffset: CGFloat = {
                                         if isThisCardUnlocking {
                                             return 0
                                         } else if isAnimatingUnlock {
-                                            // Sposta le altre carte fuori dallo schermo
                                             return diff * cardWidth * 1.8
                                         } else {
-                                            return diff * cardWidth * 0.52
+                                            // Carte laterali spostate orizzontalmente, quella centrale ferma
+                                            return diff * cardWidth * 0.38
                                         }
                                     }()
-                                    
-                                    // Spostamento verticale (curvatura del rullo)
+
                                     let yOffset: CGFloat = {
                                         if isThisCardUnlocking {
                                             return -screenHeight * 0.28
                                         } else {
                                             let distance = abs(diff)
-                                            let baseCurve = distance * 18.0
-                                            let t = max(0.0, min(1.0, 1.0 - distance))
-                                            let smoothT = t * t * (3 - 2 * t)
-                                            return baseCurve - (smoothT * 15.0) // range from -15 at center to baseCurve at >=1
+                                            return distance * cardHeight * 0.06
                                         }
                                     }()
-                                    
-                                    // Scala: se selezionata zooma, altrimenti mantiene la scala fissa del ventaglio
+
+                                    // Scala: centrale più grande, laterali leggermente più piccole
                                     let scale: CGFloat = {
                                         if isThisCardUnlocking {
                                             return unlockStep == .zoomToCenter ? 1.85 : 0.6
@@ -276,31 +274,26 @@ struct ARArtworkView: View {
                                             if distance <= 1.0 {
                                                 let t = 1.0 - distance
                                                 let smoothT = t * t * (3 - 2 * t)
-                                                return 0.82 + (smoothT * 0.33) // 0.82 to 1.15
+                                                return 0.80 + (smoothT * 0.20) // 0.80 → 1.0
                                             } else {
-                                                return max(0.62, 0.82 - (distance - 1.0) * 0.15)
+                                                return max(0.65, 0.80 - (distance - 1.0) * 0.08)
                                             }
                                         }
                                     }()
-                                    
+
                                     // Opacità dinamica
                                     let opacity: Double = {
                                         if isThisCardUnlocking {
                                             return unlockStep == .zoomToCenter ? 1.0 : 0.0
                                         } else {
-                                            if isAnimatingUnlock {
-                                                return 0.0
-                                            } else {
-                                                let absDiff = abs(diff)
-                                                if absDiff <= 1.5 {
-                                                    return 1.0
-                                                } else {
-                                                    return Double(max(0.0, 1.0 - (absDiff - 1.5) * 1.0))
-                                                }
-                                            }
+                                            if isAnimatingUnlock { return 0.0 }
+                                            let absDiff = abs(diff)
+                                            if absDiff <= 1.5 { return 1.0 }
+                                            return Double(max(0.0, 1.0 - (absDiff - 1.5) * 1.0))
                                         }
                                     }()
-                                    
+
+                                    // NIENTE rotationZ né rotationY — carte sempre frontali
                                     let rotationZ: Double = {
                                         if isThisCardUnlocking { return 0.0 }
                                         let angle = diff * 6.0
@@ -319,8 +312,10 @@ struct ARArtworkView: View {
  
                                     ScannerCardView(name: cardName, width: cardWidth, height: cardHeight)
                                         .overlay(
-                                            RoundedRectangle(cornerRadius: 3.0 * cardScale)
-                                                .strokeBorder(Color(hex: "4CD964"), lineWidth: showGreenBorder ? (isThisCardUnlocking ? 3.0 : 1.5) : 0)
+                                            RoundedRectangle(cornerRadius: cardCorner)
+                                                .stroke(Color(hex: "6DB832"), lineWidth: showGreenBorder ? (isThisCardUnlocking ? 4.0 : 2.5) : 0)
+                                                .padding(-8)
+                                                .shadow(color: Color(hex: "6DB832").opacity(showGreenBorder ? 0.85 : 0), radius: 10, x: 0, y: 0)
                                         )
                                         .overlay(alignment: .topTrailing) {
                                             if isThisCardUnlocking {
@@ -371,14 +366,6 @@ struct ARArtworkView: View {
                                             }
                                         }
                                         .allowsHitTesting(!isAnimatingUnlock && opacity > 0)
-                                        .rotation3DEffect(
-                                            .degrees(rotationY),
-                                            axis: (x: 0.0, y: 1.0, z: 0.0),
-                                            anchor: .center,
-                                            anchorZ: 0.0,
-                                            perspective: 0.45
-                                        )
-                                        .rotationEffect(.degrees(rotationZ))
                                         .scaleEffect(scale, anchor: .bottom)
                                         .offset(x: xOffset, y: yOffset)
                                         .opacity(opacity)
@@ -396,7 +383,7 @@ struct ARArtworkView: View {
                                         dragOffset = value.translation.width
                                         
                                         // Update active selection to the one closest to the center dynamically during drag
-                                        let cardStep = cardWidth * 0.52
+                                        let cardStep = cardWidth * 0.28
                                         let dragSteps = -value.translation.width / cardStep
                                         let activeOffset = max(0.0, min(CGFloat(displayCards.count - 1), carouselOffset + dragSteps))
                                         let newIndex = Int(activeOffset.rounded())
@@ -972,16 +959,11 @@ struct ARArtworkView: View {
                             activeView = .opening
                         }
                     }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 14, weight: .bold))
-                            Text("Back")
-                                .font(.system(size: 16, weight: .regular))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(Color.white.opacity(0.12)))
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color(hex: "383838")))
                     }
                     
                     Spacer()

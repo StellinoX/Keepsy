@@ -7,7 +7,7 @@ struct CardInspectionView: View {
     var externalScale: CGFloat = 1.0
     var externalOpacity: Double = 1.0
     let onClose: () -> Void
-    
+
     @State private var dragOffset: CGSize = .zero
     @State private var accumulatedRotation: Double = 0.0
     @State private var animateContent: Bool = false
@@ -15,7 +15,6 @@ struct CardInspectionView: View {
     @State private var sheetOffset: CGFloat = 0
     @State private var verticalDragOffset: CGFloat = 0
 
-    // Mini-sheet drag per album mode
     enum SheetState {
         case collapsed
         case medium
@@ -23,9 +22,8 @@ struct CardInspectionView: View {
     }
     @State private var sheetState: SheetState = .collapsed
     @State private var miniSheetDrag: CGFloat = 0
-    // Tap carta → dettaglio completo
     @State private var showFullDetail: Bool = false
-    
+
     private func isCollectionCompleteFor(_ cardName: String) -> Bool {
         if cardName == "vale" {
             let artworks = CardDatabase.artworksFor(location: "moma")
@@ -42,12 +40,11 @@ struct CardInspectionView: View {
     private var isRevealed: Bool {
         CardDatabase.getRevealedCards().contains(card.name) || card.name.contains("_experience") || card.name == "vale"
     }
-    
+
     private var artwork: NetworkArtwork? {
         CardDatabase.remoteArtworks[card.name]
     }
-    
-    // Categorizzazione dinamica e intelligente dell'opera basata sull'artista
+
     private var categoryName: String {
         if card.name.contains("_experience") || card.name == "vale" { return "EXPERIENCE" }
         guard let artist = artwork?.artist else { return "Collection" }
@@ -61,43 +58,35 @@ struct CardInspectionView: View {
         }
         return "Classical Art"
     }
-    
+
     private var artistName: String {
         if card.name.contains("_experience") || card.name == "vale" {
-            if !isCollectionCompleteFor(card.name) {
-                return "Locked"
-            }
+            if !isCollectionCompleteFor(card.name) { return "Locked" }
             return "Keepsy Collection"
         }
         return artwork?.artist ?? "Unknown Artist"
     }
-    
+
     private var creationYear: String {
         if card.name.contains("_experience") || card.name == "vale" {
-            if !isCollectionCompleteFor(card.name) {
-                return "????"
-            }
+            if !isCollectionCompleteFor(card.name) { return "????" }
             return "2026"
         }
         guard let raw = artwork?.createdAt else { return "Unknown Date" }
-        // Se contiene uno spazio o T è un timestamp ISO — estrai solo i primi 4 chars (anno)
-        // Altrimenti è già una stringa leggibile tipo "1535 ca."
-        if raw.contains("-") && raw.count > 10 {
-            return String(raw.prefix(4))
-        }
+        if raw.contains("-") && raw.count > 10 { return String(raw.prefix(4)) }
         return raw
     }
-    
+
     private var descriptionText: String {
         if card.name == "vale" {
             if !isCollectionCompleteFor(card.name) {
                 return "To be unlocked when you have the whole collection"
             }
             return """
-Hello! I’m Valentina, a 24 year old illustrator based in Naples, Italy.
-I have been drawing ever since I have memory, I don’t remember a moment where I didn’t have a pencil, crayon or marker in hand. My love for art developed naturally from there.
+Hello! I'm Valentina, a 24 year old illustrator based in Naples, Italy.
+I have been drawing ever since I have memory, I don't remember a moment where I didn't have a pencil, crayon or marker in hand. My love for art developed naturally from there.
 
-Van Gogh is one of my favourite painters, and Starry Night one of his works I enjoy the most. I’ve seen it in person and I still remember how it moved me, so I’m particularly attached to it. It felt only natural to choose it. During my art school years I grew an interest in children illustration, and that’s the style I wanted to reinterpret the painting in. Transposing a cornerstone of art into something much simpler, catered to a whole different public, was something unexpected but that I enjoyed immensely. I’d surely do it again if I’ll ever have the possibility.
+Van Gogh is one of my favourite painters, and Starry Night one of his works I enjoy the most. I've seen it in person and I still remember how it moved me, so I'm particularly attached to it. It felt only natural to choose it. During my art school years I grew an interest in children illustration, and that's the style I wanted to reinterpret the painting in. Transposing a cornerstone of art into something much simpler, catered to a whole different public, was something unexpected but that I enjoyed immensely. I'd surely do it again if I'll ever have the possibility.
 """
         }
         if card.name.contains("_experience") {
@@ -108,346 +97,274 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
         }
         return artwork?.description ?? "No description available for this artwork"
     }
-    
+
     var body: some View {
         GeometryReader { geometry in
-        let screenHeight = geometry.size.height
-        
-        // Calcolo delle dimensioni e offset in base alla sorgente (Album vs Bustina)
-        let cardWidth: CGFloat = 310
-        let cardHeight: CGFloat = 470
-        
-        ZStack {
-            if isZoomingFromAlbum {
-                // Sfondo scuro — solo in modalità non-album (in album mode il genitore gestisce overlayOpacity)
-                if !isZoomingFromAlbum {
-                    Color.black
-                        .opacity(animateContent ? 0.6 : 0.0)
-                        .ignoresSafeArea()
-                        .onTapGesture { closeAction() }
-                } else {
-                    // Tap su sfondo in album mode
+            let screenHeight = geometry.size.height
+            let cardWidth: CGFloat = 310
+            let cardHeight: CGFloat = 470
+
+            ZStack {
+                if isZoomingFromAlbum {
+                    // Album mode background
                     Color.clear
                         .ignoresSafeArea()
                         .contentShape(Rectangle())
                         .onTapGesture { closeAction() }
-                }
 
-                if showFullDetail {
-                    // ── DETTAGLIO COMPLETO (SilverMetalCard + flip) ──────────
-                    CardFullDetailView(
-                        card: card,
-                        namespace: namespace,
-                        onClose: {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                                showFullDetail = false
+                    if showFullDetail {
+                        CardFullDetailView(
+                            card: card,
+                            namespace: namespace,
+                            onClose: {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                    showFullDetail = false
+                                }
                             }
-                        }
-                    )
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                } else {
-                    // ── CARTA GRANDE IN ALTO ─────────────────────────────────
-                    let cardW: CGFloat = min(geometry.size.width - 48, 300)
-                    let cardH: CGFloat = cardW * (470.0 / 310.0)
-                    let sheetPeekHeight: CGFloat = 160
-                    let cardTopY: CGFloat = max(140, (screenHeight - cardH - sheetPeekHeight) / 2 + 10)
-
-                    let index = CardDatabase.allArtworkNames.firstIndex(of: card.name)
-                    let goldBorder = LinearGradient(
-                        colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
-                                 Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-
-                    if (card.name.contains("_experience") || card.name == "vale") && !isCollectionCompleteFor(card.name) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 24)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                            
-                            Text("?")
-                                .font(.system(size: 110, weight: .black))
-                                .foregroundColor(.white)
-                        }
-                        .frame(width: cardW, height: cardH)
-                        .clipShape(RoundedRectangle(cornerRadius: 24))
-                        .shadow(color: Color(hex: "5168C4").opacity(0.4), radius: 30, x: 0, y: 15)
-                        .position(x: geometry.size.width / 2,
-                                  y: cardTopY + cardH / 2)
-                    } else {
-                        ArtworkCardFrontView(
-                            name: card.name,
-                            title: card.title,
-                            cardIndex: index,
-                            width: cardW,
-                            height: cardH,
-                            isRevealed: isRevealed,
-                            goldBorder: goldBorder
                         )
-                        .position(x: geometry.size.width / 2,
-                                  y: cardTopY + cardH / 2)
-                        // In album mode animateContent is true from the start — no entrance animation needed here,
-                        // the parent's inspectionOpacity crossfade already handles the reveal.
-                        .opacity(1.0)
-                        .onTapGesture {
-                            HapticManager.shared.triggerImpact(style: .medium)
-                            withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                                showFullDetail = true
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    } else {
+                        let cardW: CGFloat = min(geometry.size.width - 48, 300)
+                        let cardH: CGFloat = cardW * (470.0 / 310.0)
+                        let sheetPeekHeight: CGFloat = 160
+                        let cardTopY: CGFloat = max(140, (screenHeight - cardH - sheetPeekHeight) / 2 + 10)
+
+                        let index = CardDatabase.allArtworkNames.firstIndex(of: card.name)
+                        let goldBorder = LinearGradient(
+                            colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
+                                     Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+
+                        if (card.name.contains("_experience") || card.name == "vale") && !isCollectionCompleteFor(card.name) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 24)
+                                    .fill(LinearGradient(
+                                        colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
+                                        startPoint: .topLeading, endPoint: .bottomTrailing
+                                    ))
+                                Text("?")
+                                    .font(.system(size: 110, weight: .black))
+                                    .foregroundColor(.white)
+                            }
+                            .frame(width: cardW, height: cardH)
+                            .clipShape(RoundedRectangle(cornerRadius: 24))
+                            .shadow(color: Color(hex: "5168C4").opacity(0.4), radius: 30, x: 0, y: 15)
+                            .position(x: geometry.size.width / 2, y: cardTopY + cardH / 2)
+                        } else {
+                            ArtworkCardFrontView(
+                                name: card.name,
+                                title: card.title,
+                                cardIndex: index,
+                                width: cardW,
+                                height: cardH,
+                                isRevealed: isRevealed,
+                                goldBorder: goldBorder
+                            )
+                            .position(x: geometry.size.width / 2, y: cardTopY + cardH / 2)
+                            .opacity(1.0)
+                            .contentShape(Rectangle().size(CGSize(width: cardW, height: cardH)))
+                            .onTapGesture {
+                                HapticManager.shared.triggerImpact(style: .medium)
+                                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                                    showFullDetail = true
+                                }
                             }
                         }
-                    }
 
-                    // ── MINI-SHEET IN BASSO ──────────────────────────────────
-                    let collapsedY = screenHeight - sheetPeekHeight
-                    let mediumY    = screenHeight * 0.42
-                    let expandedY  = 140.0
-                    let sheetY: CGFloat = {
-                        switch sheetState {
-                        case .collapsed: return collapsedY
-                        case .medium:    return mediumY
-                        case .expanded:  return expandedY
-                        }
-                    }()
-                    let sheetHeight: CGFloat = screenHeight * 0.90
+                        // Mini-sheet
+                        let collapsedY = screenHeight - sheetPeekHeight
+                        let mediumY    = screenHeight * 0.42
+                        let expandedY  = 140.0
+                        let sheetY: CGFloat = {
+                            switch sheetState {
+                            case .collapsed: return collapsedY
+                            case .medium:    return mediumY
+                            case .expanded:  return expandedY
+                            }
+                        }()
+                        let sheetHeight: CGFloat = screenHeight * 0.90
 
-                    VStack(spacing: 0) {
-                        // Handle
-                        Capsule()
-                            .fill(Color.white.opacity(0.2))
-                            .frame(width: 36, height: 5)
-                            .padding(.top, 12)
-                            .padding(.bottom, 18)
+                        VStack(spacing: 0) {
+                            Capsule()
+                                .fill(Color.white.opacity(0.2))
+                                .frame(width: 36, height: 5)
+                                .padding(.top, 12)
+                                .padding(.bottom, 18)
 
-                        // Fixed Header Info
-                        VStack(alignment: .leading, spacing: 14) {
-                            // Categoria
-                            Text(categoryName.uppercased())
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(.white.opacity(0.75))
-                                .padding(.horizontal, 10).padding(.vertical, 5)
-                                .background(Capsule().fill(Color.white.opacity(0.12)))
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text(categoryName.uppercased())
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(.white.opacity(0.75))
+                                    .padding(.horizontal, 10).padding(.vertical, 5)
+                                    .background(Capsule().fill(Color.white.opacity(0.12)))
 
-                            // Titolo
-                            Text((card.name.contains("_experience") || card.name == "vale") && !isCollectionCompleteFor(card.name) ? "Locked Experience" : card.title)
-                                .font(.system(size: 26, weight: .black))
-                                .foregroundColor(.white)
-                                .lineLimit(3)
+                                Text((card.name.contains("_experience") || card.name == "vale") && !isCollectionCompleteFor(card.name) ? "Locked Experience" : card.title)
+                                    .font(.system(size: 26, weight: .black))
+                                    .foregroundColor(.white)
+                                    .lineLimit(3)
 
-                            // Artista + data
-                            Text("\(artistName); \(creationYear)")
-                                .font(.system(size: 15).italic())
-                                .foregroundColor(.white.opacity(0.65))
+                                Text("\(artistName); \(creationYear)")
+                                    .font(.system(size: 15).italic())
+                                    .foregroundColor(.white.opacity(0.65))
 
-                            Color.white.opacity(0.1).frame(height: 1).padding(.vertical, 4)
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 10)
-
-                        ScrollView(showsIndicators: false) {
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(descriptionText)
-                                    .font(.system(size: 15))
-                                    .foregroundColor(Color(hex: "D1D1D6"))
-                                    .lineSpacing(4)
+                                Color.white.opacity(0.1).frame(height: 1).padding(.vertical, 4)
                             }
                             .padding(.horizontal, 24)
-                            .padding(.bottom, 40)
-                        }
-                        .scrollDisabled(sheetState != .expanded)
-                    }
-                    .frame(width: geometry.size.width, height: sheetHeight)
-                    .background(
-                        RoundedRectangle(cornerRadius: 28)
-                            .fill(Color(white: 0.12))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 28)
-                                    .strokeBorder(
-                                        LinearGradient(
-                                            colors: [Color.white, Color(hex: "B1B1B1")],
-                                            startPoint: .topLeading, endPoint: .bottomTrailing
-                                        ), lineWidth: 1.5
-                                    )
-                            )
-                    )
-                    .shadow(color: .black.opacity(0.5), radius: 30, x: 0, y: -4)
-                    .position(x: geometry.size.width / 2,
-                              y: sheetY + miniSheetDrag + sheetHeight / 2)
-                    .offset(y: animateContent ? 0 : screenHeight)
-                    .gesture(
-                        DragGesture()
-                            .onChanged { v in
-                                miniSheetDrag = min(max(v.translation.height, -200), 200)
+                            .padding(.bottom, 10)
+
+                            ScrollView(showsIndicators: false) {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text(descriptionText)
+                                        .font(.system(size: 15))
+                                        .foregroundColor(Color(hex: "D1D1D6"))
+                                        .lineSpacing(4)
+                                }
+                                .padding(.horizontal, 24)
+                                .padding(.bottom, 40)
                             }
-                            .onEnded { v in
-                                let drag = v.translation.height
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
-                                    miniSheetDrag = 0
-                                    if drag < -60 {
-                                        if sheetState == .collapsed {
-                                            sheetState = .medium
-                                        } else if sheetState == .medium {
-                                            sheetState = .expanded
-                                        }
-                                    } else if drag > 60 {
-                                        if sheetState == .expanded {
-                                            sheetState = .medium
-                                        } else if sheetState == .medium {
-                                            sheetState = .collapsed
-                                        } else {
-                                            closeAction()
+                            .scrollDisabled(sheetState != .expanded)
+                        }
+                        .frame(width: geometry.size.width, height: sheetHeight)
+                        .background(
+                            RoundedRectangle(cornerRadius: 28)
+                                .fill(Color(white: 0.12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 28)
+                                        .strokeBorder(
+                                            LinearGradient(
+                                                colors: [Color.white, Color(hex: "B1B1B1")],
+                                                startPoint: .topLeading, endPoint: .bottomTrailing
+                                            ), lineWidth: 1.5
+                                        )
+                                )
+                        )
+                        .shadow(color: .black.opacity(0.5), radius: 30, x: 0, y: -4)
+                        .position(x: geometry.size.width / 2, y: sheetY + miniSheetDrag + sheetHeight / 2)
+                        .offset(y: 0)
+                        .gesture(
+                            DragGesture()
+                                .onChanged { v in
+                                    miniSheetDrag = min(max(v.translation.height, -200), 200)
+                                }
+                                .onEnded { v in
+                                    let drag = v.translation.height
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                                        miniSheetDrag = 0
+                                        if drag < -60 {
+                                            if sheetState == .collapsed { sheetState = .medium }
+                                            else if sheetState == .medium { sheetState = .expanded }
+                                        } else if drag > 60 {
+                                            if sheetState == .expanded { sheetState = .medium }
+                                            else if sheetState == .medium { sheetState = .collapsed }
+                                            else { closeAction() }
                                         }
                                     }
                                 }
+                        )
+                    }
+
+                } else {
+                    // ── MODALITÀ BUSTINA ────────────────────────────────────────
+
+                    // Sfondo scuro — tap fuori dalla carta chiude
+                    Color.black
+                        .opacity(0.85)
+                        .edgesIgnoringSafeArea(.all)
+                        .onTapGesture { closeAction() }
+
+                    // Carta con effetto metallico
+                    SilverMetalCardView(
+                        width: cardWidth,
+                        height: cardHeight,
+                        isEnabled: isFrontShowing,
+                        tiltX: Double(dragOffset.width) / (cardWidth / 2.0),
+                        tiltY: Double(dragOffset.height) / (cardHeight / 2.0),
+                        customRotationX: Double(-dragOffset.height) / 10.0,
+                        customRotationY: currentRotation
+                    ) {
+                        ZStack {
+                            Image("retro")
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: cardWidth, height: cardHeight)
+                                .clipped()
+                                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+
+                            let index = CardDatabase.allArtworkNames.firstIndex(of: card.name)
+                            let goldBorder = LinearGradient(
+                                colors: [
+                                    Color(hex: "F5E480"), Color(hex: "F1B40A"),
+                                    Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")
+                                ],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            )
+
+                            ArtworkCardFrontView(
+                                name: card.name,
+                                title: card.title,
+                                cardIndex: index,
+                                width: 310,
+                                height: 470,
+                                isRevealed: isRevealed,
+                                goldBorder: goldBorder
+                            )
+                            .opacity(abs(currentRotation.truncatingRemainder(dividingBy: 360)) > 90 && abs(currentRotation.truncatingRemainder(dividingBy: 360)) < 270 ? 0 : 1)
+                        }
+                    }
+                    .matchedGeometryEffectOptional(id: "card_\(card.name)", in: isZoomingFromAlbum ? nil : namespace, isSource: false)
+                    .offset(y: isZoomingFromAlbum ? -50 : 0)
+                    .scaleEffect(1.0)
+                    .opacity(1.0)
+                    // ← contentShape limita il tap all'area fisica della carta
+                    .contentShape(Rectangle().size(CGSize(width: cardWidth, height: cardHeight)))
+                    .onTapGesture {
+                        SoundManager.shared.playSound(named: "giro_carta")
+                        withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) {
+                            accumulatedRotation += 180
+                        }
+                    }
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in dragOffset = value.translation }
+                            .onEnded { value in
+                                withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                                    if value.translation.width > 80 {
+                                        SoundManager.shared.playSound(named: "giro_carta")
+                                        accumulatedRotation += 180
+                                    } else if value.translation.width < -80 {
+                                        SoundManager.shared.playSound(named: "giro_carta")
+                                        accumulatedRotation -= 180
+                                    }
+                                    dragOffset = .zero
+                                }
                             }
                     )
                 }
-
-
-
-                // Back button
-                if animateContent && !showFullDetail {
-                    Button(action: { closeAction() }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 14, weight: .bold))
-                            Text("Back")
-                                .font(.system(size: 16, weight: .regular))
-                        }
-                        .foregroundColor(.white)
-                        .frame(width: 85, height: 44)
-                        .background(Capsule().fill(Color(hex: "383838")))
-                    }
-                    .position(x: 30 + 85/2, y: 83 + 44/2)
-                }
-            } else {
-                // Sfondo scuro per focalizzare la carta. Un tap qui chiude l'ispezione.
-                Color.black
-                    .opacity(animateContent ? 0.85 : 0.0)
-                    .edgesIgnoringSafeArea(.all)
-                    .onTapGesture { closeAction() }
-                
-                // CARTA CON METALLO/OLOGRAMMA — nascosta in modalità album (la flying card fa già da carta)
-                SilverMetalCardView(
-                    width: cardWidth,
-                    height: cardHeight,
-                    isEnabled: isFrontShowing,
-                    tiltX: Double(dragOffset.width) / (cardWidth / 2.0),
-                    tiltY: Double(dragOffset.height) / (cardHeight / 2.0),
-                    customRotationX: Double(-dragOffset.height) / 10.0,
-                    customRotationY: currentRotation
-                ) {
-                    ZStack {
-                        // Same frame as front — fill+clipped, PNG retro has its own border
-                        Image("retro")
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: cardWidth, height: cardHeight)
-                            .clipped()
-                            .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-                        
-                        // FRONTE DELLA CARTA
-                        let index = CardDatabase.allArtworkNames.firstIndex(of: card.name)
-                        let goldBorder = LinearGradient(
-                            colors: [
-                                Color(hex: "F5E480"), Color(hex: "F1B40A"),
-                                Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")
-                            ],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                        
-                        let isAlreadyOwned = CardDatabase.getDuplicatesInActivePack().contains(card.name) || CardDatabase.getRevealedCards().contains(card.name)
-                        ArtworkCardFrontView(
-                            name: card.name,
-                            title: card.title,
-                            cardIndex: index,
-                            width: 310,
-                            height: 470,
-                            isRevealed: isRevealed,
-                            goldBorder: goldBorder
-                        )
-                        .opacity(abs(currentRotation.truncatingRemainder(dividingBy: 360)) > 90 && abs(currentRotation.truncatingRemainder(dividingBy: 360)) < 270 ? 0 : 1)
-                    }
-                }
-                .matchedGeometryEffectOptional(id: "card_\(card.name)", in: isZoomingFromAlbum ? nil : namespace, isSource: false)
-                .offset(y: isZoomingFromAlbum ? -50 : (namespace == nil ? (animateContent ? 0 : 380) : 0))
-                .scaleEffect(namespace == nil && !isZoomingFromAlbum ? (animateContent ? 1.0 : 0.75) : 1.0)
-                .opacity(animateContent ? 1.0 : 0.0)
-                .onTapGesture {
-                    SoundManager.shared.playSound(named: "giro_carta")
-                    withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) {
-                        accumulatedRotation += 180
-                    }
-                }
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in dragOffset = value.translation }
-                        .onEnded { value in
-                            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                                if value.translation.width > 80 {
-                                    SoundManager.shared.playSound(named: "giro_carta")
-                                    accumulatedRotation += 180
-                                } else if value.translation.width < -80 {
-                                    SoundManager.shared.playSound(named: "giro_carta")
-                                    accumulatedRotation -= 180
-                                }
-                                dragOffset = .zero
-                            }
-                        }
-                )
-
-
-                // Back button (bustina mode)
-                if animateContent {
-                    Button(action: { closeAction() }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 14, weight: .bold))
-                            Text("Back")
-                                .font(.system(size: 16, weight: .regular))
-                        }
-                        .foregroundColor(.white)
-                        .frame(width: 85, height: 44)
-                        .background(Capsule().fill(Color(hex: "383838")))
-                    }
-                    .position(x: 30 + 85/2, y: 83 + 44/2)
-                }
             }
-        }
-        .edgesIgnoringSafeArea(.all)
-        .onAppear {
-            if isZoomingFromAlbum {
-                // In album mode the parent controls opacity via inspectionOpacity crossfade.
-                // We must NOT run our own entrance animation or we get a double-card effect.
-                animateContent = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                        animateSheet = true
-                    }
-                }
-            } else {
-                withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) {
+            .edgesIgnoringSafeArea(.all)
+            .onAppear {
+                if isZoomingFromAlbum {
                     animateContent = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            animateSheet = true
+                        }
+                    }
+                } else {
+                    withAnimation(.spring(response: 0.42, dampingFraction: 0.8)) {
+                        animateContent = true
+                    }
                 }
             }
         }
-        } // GeometryReader
         .ignoresSafeArea()
     }
-    
+
     private func closeAction() {
         HapticManager.shared.triggerImpact(style: .light)
         sheetState = .collapsed
         if isZoomingFromAlbum {
-            // In album mode the parent (CollectionAlbumView.startCloseAnimation) owns the
-            // entire close sequence — crossfade of inspectionOpacity, then flying-card
-            // shrink back to the cell.  We must call onClose() immediately so the parent
-            // can start its 0.15s fade-out right away; any internal animation here
-            // would fight with that crossfade and produce a double-card flash.
             onClose()
         } else {
             withAnimation(.easeOut(duration: 0.2)) {
@@ -456,19 +373,19 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
             onClose()
         }
     }
-    
+
     private var isFrontShowing: Bool {
         let absRot = abs(currentRotation.truncatingRemainder(dividingBy: 360))
         return !(absRot > 90 && absRot < 270)
     }
-    
+
     private var currentRotation: Double {
         let dragRotation = Double(dragOffset.width) / 4.0
         return accumulatedRotation + dragRotation
     }
 }
 
-// MARK: - CardFullDetailView — dettaglio completo con SilverMetalCard e flip
+// MARK: - CardFullDetailView
 
 struct CardFullDetailView: View {
     let card: ArtworkCard
@@ -482,12 +399,15 @@ struct CardFullDetailView: View {
     private let cardWidth: CGFloat = 310
     private var cardHeight: CGFloat { 470 }
 
-    private var isRevealed: Bool { CardDatabase.getRevealedCards().contains(card.name) || card.name.contains("_experience") || card.name == "vale" }
+    private var isRevealed: Bool {
+        CardDatabase.getRevealedCards().contains(card.name) || card.name.contains("_experience") || card.name == "vale"
+    }
 
     private var isFrontShowing: Bool {
         let absRot = abs(currentRotation.truncatingRemainder(dividingBy: 360))
         return !(absRot > 90 && absRot < 270)
     }
+
     private var currentRotation: Double {
         accumulatedRotation + Double(dragOffset.width) / 4.0
     }
@@ -507,7 +427,6 @@ struct CardFullDetailView: View {
                 customRotationY: currentRotation
             ) {
                 ZStack {
-                    // Same frame as front — fill+clipped, PNG retro has its own border
                     Image("retro")
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -529,45 +448,35 @@ struct CardFullDetailView: View {
                         isRevealed: isRevealed,
                         goldBorder: goldBorder
                     )
-                        .opacity(isFrontShowing ? 1 : 0)
+                    .opacity(isFrontShowing ? 1 : 0)
                 }
             }
             .scaleEffect(animateContent ? 1.0 : 0.85)
             .opacity(animateContent ? 1.0 : 0.0)
+            // ← solo l'area fisica della carta gira, tutto fuori chiude
+            .contentShape(Rectangle().size(CGSize(width: cardWidth, height: cardHeight)))
             .onTapGesture {
                 SoundManager.shared.playSound(named: "giro_carta")
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) { accumulatedRotation += 180 }
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) {
+                    accumulatedRotation += 180
+                }
             }
-            .gesture(DragGesture()
-                .onChanged { dragOffset = $0.translation }
-                .onEnded { v in
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                        if v.translation.width > 80 {
-                            SoundManager.shared.playSound(named: "giro_carta")
-                            accumulatedRotation += 180
-                        } else if v.translation.width < -80 {
-                            SoundManager.shared.playSound(named: "giro_carta")
-                            accumulatedRotation -= 180
+            .gesture(
+                DragGesture()
+                    .onChanged { dragOffset = $0.translation }
+                    .onEnded { v in
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                            if v.translation.width > 80 {
+                                SoundManager.shared.playSound(named: "giro_carta")
+                                accumulatedRotation += 180
+                            } else if v.translation.width < -80 {
+                                SoundManager.shared.playSound(named: "giro_carta")
+                                accumulatedRotation -= 180
+                            }
+                            dragOffset = .zero
                         }
-                        dragOffset = .zero
                     }
-                }
             )
-
-            if animateContent {
-                Button(action: { closeDetail() }) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .bold))
-                        Text("Back")
-                            .font(.system(size: 16, weight: .regular))
-                    }
-                    .foregroundColor(.white)
-                    .frame(width: 85, height: 44)
-                    .background(Capsule().fill(Color(hex: "383838")))
-                }
-                .position(x: 30 + 85/2, y: 83 + 44/2)
-            }
         }
         .ignoresSafeArea()
         .onAppear {

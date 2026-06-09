@@ -42,17 +42,11 @@ struct CitySelectorView: View {
                         HapticManager.shared.triggerImpact(style: .light)
                         dismiss()
                     }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 14, weight: .bold))
-                            Text("Back")
-                                .font(.system(size: 16, weight: .regular))
-                        }
-                        .foregroundColor(.white)
-                        .frame(width: 85, height: 44)
-                        .background(
-                            Capsule().fill(Color(hex: "383838"))
-                        )
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Color(hex: "383838")))
                     }
                     Spacer()
                 }

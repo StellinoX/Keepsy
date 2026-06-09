@@ -21,12 +21,14 @@ struct PackOpeningView: View {
     @State private var packOpacity: Double = 1.0
     @State private var inspectedCard: ArtworkCard? = nil
     @State private var hasSyncedWithCloud = false
+    @State private var pendingFlipIndex: Int? = nil
     @State private var flashOpacity: Double = 0.0
     @State private var showOpeningEffect = false
     @State private var shakeOffset: CGFloat = 0
     @State private var showTearHint = false
     @State private var packSwayX: CGFloat = 0
     @State private var showCompletionModal = false
+    @State private var packRaised = false
 
     // Animazione carte — una per carta
     @State private var cardOffsetX: [CGFloat] = [123, 0, -123, -61.5, 61.5]
@@ -92,9 +94,8 @@ struct PackOpeningView: View {
                     PackSelectionView(
                         museumId: selectedMuseumId,
                         onPacketSelected: {
-                            withAnimation(.spring(response: 0.52, dampingFraction: 0.8)) {
-                                packState = .tearing
-                            }
+                            packRaised = true   // il pacchetto del tearing appare ALZATO + bottone OPEN
+                            withAnimation(.easeInOut(duration: 0.20)) { packState = .tearing }
                         },
                         onClose: {
                             withAnimation(.spring(response: 0.52, dampingFraction: 0.8)) {
@@ -110,6 +111,7 @@ struct PackOpeningView: View {
                             SceneKitPacketView(
                                 museumId: selectedMuseumId,
                                 packetImageName: MuseumConfig.shared.museums.first(where: { $0.id == selectedMuseumId })?.packetImageName ?? "uffizi_pacchetto",
+                                raised: packRaised,
                                 onTearComplete: {
                                     showOpeningEffect = true
                                     triggerShake()
@@ -119,22 +121,43 @@ struct PackOpeningView: View {
                                     }
                                     SoundManager.shared.playSound(named: "san sebastiano")
                                 },
-                                onOpen: {
-                                    completeOpening()
-                                }
+                                onOpen: { completeOpening() }
                             )
                             .ignoresSafeArea()
 
-                            if packState == .tearing && showTearHint && !showOpeningEffect {
+                            if packState == .tearing && showTearHint && !showOpeningEffect && !packRaised {
                                 PackTearHintView()
                                     .allowsHitTesting(false)
                                     .transition(.opacity)
                             }
                         }
+                        .offset(x: packSwayX, y: packRaised ? -UIScreen.main.bounds.height * 0.15 : 0)  // un filo più in alto; il pieno lo dà l'inquadratura
+                        .allowsHitTesting(!packRaised)              // strappo solo dopo la discesa
                         .ignoresSafeArea()
-                        .offset(x: packSwayX)
-                        .transition(.identity)
+                        .transition(.opacity)
                         .zIndex(10)
+                    }
+
+                    // Bottone OPEN: stesso pacchetto, premi -> scende LINEARE alla posizione del tearing
+                    if packState == .tearing && packRaised {
+                        Button(action: {
+                            HapticManager.shared.triggerImpact(style: .heavy)
+                            withAnimation(.linear(duration: 0.45)) { packRaised = false }
+                        }) {
+                            Text("OPEN")
+                                .font(.custom("Helvetica-BoldOblique", size: 20))
+                                .foregroundColor(.black)
+                                .frame(width: 180, height: 56)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 28)
+                                        .fill(LinearGradient(colors: [.white, Color(hex: "EAEAEA")],
+                                                             startPoint: .top, endPoint: .bottom))
+                                        .shadow(color: .black.opacity(0.50), radius: 24, y: 8)
+                                )
+                        }
+                        .position(x: UIScreen.main.bounds.width / 2, y: UIScreen.main.bounds.height * 0.82)
+                        .transition(.opacity)
+                        .zIndex(60)
                     }
 
                     if packState == .opened {
@@ -145,36 +168,30 @@ struct PackOpeningView: View {
                                 VStack(spacing: 20) {
                                     // Riga 1: carte 0,1,2
                                     HStack(spacing: 12) {
-                                        ForEach(0..<3, id: \.self) { index in
-                                            if index < cards.count {
-                                                CardView(card: $cards[index], cardIndex: index) {
-                                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                                        inspectedCard = cards[index]
-                                                    }
-                                                }
-                                                .offset(x: cardOffsetX[index], y: cardOffsetY[index])
-                                                .rotationEffect(.degrees(cardRotation[index]))
-                                                .scaleEffect(cardScale[index])
-                                                .opacity(cardOpacity[index])
-                                                .allowsHitTesting(cardOpacity[index] > 0)
+                                        ForEach(0..<min(3, cards.count), id: \.self) { index in
+                                            CardView(card: $cards[index], cardIndex: index) {
+                                                handleCardTap(index: index)
                                             }
+                                            .id(cards[index].id)
+                                            .offset(x: cardOffsetX[index], y: cardOffsetY[index])
+                                            .rotationEffect(.degrees(cardRotation[index]))
+                                            .scaleEffect(cardScale[index])
+                                            .opacity(cardOpacity[index])
+                                            .allowsHitTesting(cardOpacity[index] > 0)
                                         }
                                     }
                                     // Riga 2: carte 3,4
                                     HStack(spacing: 12) {
-                                        ForEach(3..<5, id: \.self) { index in
-                                            if index < cards.count {
-                                                CardView(card: $cards[index], cardIndex: index) {
-                                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                                                        inspectedCard = cards[index]
-                                                    }
-                                                }
-                                                .offset(x: cardOffsetX[index], y: cardOffsetY[index])
-                                                .rotationEffect(.degrees(cardRotation[index]))
-                                                .scaleEffect(cardScale[index])
-                                                .opacity(cardOpacity[index])
-                                                .allowsHitTesting(cardOpacity[index] > 0)
+                                        ForEach(3..<min(5, cards.count), id: \.self) { index in
+                                            CardView(card: $cards[index], cardIndex: index) {
+                                                handleCardTap(index: index)
                                             }
+                                            .id(cards[index].id)
+                                            .offset(x: cardOffsetX[index], y: cardOffsetY[index])
+                                            .rotationEffect(.degrees(cardRotation[index]))
+                                            .scaleEffect(cardScale[index])
+                                            .opacity(cardOpacity[index])
+                                            .allowsHitTesting(cardOpacity[index] > 0)
                                         }
                                     }
                                 }
@@ -238,12 +255,15 @@ struct PackOpeningView: View {
 
             if let card = inspectedCard {
                 CardInspectionView(card: card) {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                        self.inspectedCard = nil
+                    // Chiusura ISTANTANEA: la view sparisce subito, niente fantasma cliccabile
+                    self.inspectedCard = nil
+                    if let i = self.pendingFlipIndex, i < self.cards.count {
+                        self.cards[i].isFlipped = true
+                        self.pendingFlipIndex = nil
                     }
                 }
                 .id(card.name)
-                .transition(.opacity)
+                .transition(.asymmetric(insertion: .opacity, removal: .identity))
                 .zIndex(100)
             }
 
@@ -322,6 +342,29 @@ struct PackOpeningView: View {
                 selectedMuseumId = lastSelected
             }
             loadActivePack()
+        }
+    }
+
+    // MARK: - Card Tap Handler
+
+    func handleCardTap(index: Int) {
+        guard index < cards.count else { return }
+        guard inspectedCard == nil else { return }   // ignora i tap solo col dettaglio aperto
+
+        if cards[index].isFlipped {
+            // Già fronte: solo dettaglio, NIENTE suono
+            withAnimation(.easeOut(duration: 0.25)) {
+                inspectedCard = cards[index]
+            }
+        } else {
+            // Retro: suono + dettaglio (copia già girata). Girata applicata alla chiusura.
+            SoundManager.shared.playSound(named: "giro_carta")
+            var flipped = cards[index]
+            flipped.isFlipped = true
+            pendingFlipIndex = index
+            withAnimation(.easeOut(duration: 0.25)) {
+                inspectedCard = flipped
+            }
         }
     }
 
@@ -780,7 +823,7 @@ struct SingleScrollPackView: View {
                 }
                 .padding(.top, 25)
                 .padding(.bottom, 36)
-                .animation(.easeInOut(duration: 0.2), value: selectedMuseumId)
+                
 
                 // Collezioni divise per museo
                 VStack(spacing: 14) {

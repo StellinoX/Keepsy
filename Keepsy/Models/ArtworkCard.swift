@@ -23,7 +23,7 @@ struct ArtworkCard: Identifiable, Equatable {
     let gradient: LinearGradient
     var isFlipped: Bool = false
     static func == (lhs: ArtworkCard, rhs: ArtworkCard) -> Bool {
-        return lhs.name == rhs.name && lhs.isFlipped == rhs.isFlipped
+        return lhs.id == rhs.id
     }
 }
 

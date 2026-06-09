@@ -3,9 +3,7 @@ import SwiftUI
 struct CardView: View {
     @Binding var card: ArtworkCard
     var cardIndex: Int? = nil
-    var onInspect: (() -> Void)? = nil
-
-    @State private var rotation: Double = 0
+    var onTap: (() -> Void)? = nil
 
     // Dimensioni originali — NON modificare
     private let w: CGFloat = 111
@@ -32,21 +30,23 @@ struct CardView: View {
 
     var body: some View {
         ZStack {
+            // Retro: visibile quando non flippata
             cardBack
                 .opacity(card.isFlipped ? 0 : 1)
+                .rotation3DEffect(.degrees(card.isFlipped ? 180 : 0), axis: (x: 0, y: 1, z: 0))
 
+            // Fronte: visibile quando flippata, parte già ruotata di 180 e torna a 0
             cardFront
-                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
                 .opacity(card.isFlipped ? 1 : 0)
+                .rotation3DEffect(.degrees(card.isFlipped ? 0 : -180), axis: (x: 0, y: 1, z: 0))
 
-            // Checkmark fuori dal clipShape della carta
+            // Checkmark
             if card.isFlipped && showCheckmark {
                 VStack {
                     HStack {
                         Image("check")
                             .resizable()
                             .frame(width: 27, height: 27)
-                            .rotation3DEffect(.degrees(-rotation), axis: (x: 0, y: 1, z: 0))
                             .offset(x: -8, y: -8)
                         Spacer()
                     }
@@ -56,21 +56,9 @@ struct CardView: View {
         }
         .frame(width: w, height: h)
         .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
-        .rotation3DEffect(.degrees(rotation), axis: (x: 0, y: 1, z: 0))
         .contentShape(Rectangle())
         .onTapGesture {
-            if !card.isFlipped {
-                SoundManager.shared.playSound(named: "giro_carta")
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                    rotation += 180
-                    card.isFlipped = true
-                }
-            } else {
-                onInspect?()
-            }
-        }
-        .onAppear {
-            if card.isFlipped { rotation = 180 }
+            onTap?()
         }
     }
 

@@ -380,9 +380,11 @@ public struct SceneKitPacketView: UIViewRepresentable {
     var firstCardName: String?
     var isFirstCardRevealed: Bool
     var tearMaskImage: UIImage?
+    var raised: Bool = false
     
-    public init(interactive: Bool = true, isTorn: Bool = false, museumId: String? = nil, packetImageName: String? = nil, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, onTearComplete: (() -> Void)? = nil, onOpen: (() -> Void)? = nil) {
+    public init(interactive: Bool = true, isTorn: Bool = false, museumId: String? = nil, packetImageName: String? = nil, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, raised: Bool = false, onTearComplete: (() -> Void)? = nil, onOpen: (() -> Void)? = nil) {
         self.interactive = interactive
+        self.raised = raised
         self.isTorn = isTorn
         self.museumId = museumId
         self.packetImageName = packetImageName
@@ -404,9 +406,12 @@ public struct SceneKitPacketView: UIViewRepresentable {
         view.isOpaque = false
         view.clipsToBounds = true
         view.isUserInteractionEnabled = interactive
-        view.rendersContinuously = false
-        view.antialiasingMode = .multisampling2X
-        view.preferredFramesPerSecond = 60
+        // Rullo (non interattivo): rendering continuo per non mostrare il drawable nero
+        // quando le bustine scorrono. Tearing: on-demand come prima.
+        view.rendersContinuously = !interactive
+        // MSAA pesante: solo sul pacchetto interattivo (tearing).
+        view.antialiasingMode = interactive ? .multisampling2X : .none
+        view.preferredFramesPerSecond = !interactive ? 30 : 60
         
         if interactive {
             let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(PacketCoordinator.handlePan(_:)))
@@ -427,8 +432,9 @@ public struct SceneKitPacketView: UIViewRepresentable {
         
         SCNTransaction.begin()
         SCNTransaction.animationDuration = 0.2
-        context.coordinator.tiltContainerNode.position = SCNVector3(0, interactive ? -4.9 : 0.0, 0)
-        context.coordinator.tiltContainerNode.scale = interactive ? SCNVector3(1.18, 1.18, 1.18) : SCNVector3(1.0, 1.0, 1.0)
+        let tearFraming = interactive && !raised   // alzato (preview OPEN) = pacchetto pieno e centrato
+        context.coordinator.tiltContainerNode.position = SCNVector3(0, tearFraming ? -4.9 : 0.0, 0)
+        context.coordinator.tiltContainerNode.scale = tearFraming ? SCNVector3(1.18, 1.18, 1.18) : SCNVector3(1.0, 1.0, 1.0)
         if isTorn {
             let tornMask = tearMaskImage ?? createTornMask()
             context.coordinator.maskProp.contents = tornMask
@@ -590,8 +596,12 @@ public class PacketCoordinator: NSObject {
         let height: CGFloat = 9.0
         let packetGeo = SCNPlane(width: width, height: height)
         packetGeo.cornerRadius = 0.1
-        packetGeo.widthSegmentCount = 100 // Needed for smooth side curl
-        packetGeo.heightSegmentCount = 100
+        // 100x100 serve all'arricciatura del tearing (interattivo). Nel rullo i pacchetti
+        // non si arricciano: pochi segmenti = stesso aspetto, GPU enormemente più leggera (niente bustine nere).
+        // 100x100 era esagerato anche per il tearing: 60 mantiene l'arricciatura liscia
+        // e dimezza abbondantemente il tempo di costruzione/caricamento dell'OPEN.
+        packetGeo.widthSegmentCount = interactive ? 60 : 10
+        packetGeo.heightSegmentCount = interactive ? 60 : 10
         
         // Material (Dark Foil PBR)
         let mat = SCNMaterial()
