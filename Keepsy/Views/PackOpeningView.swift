@@ -142,7 +142,7 @@ struct PackOpeningView: View {
                     if packState == .tearing && packRaised {
                         Button(action: {
                             HapticManager.shared.triggerImpact(style: .heavy)
-                            withAnimation(.linear(duration: 0.45)) { packRaised = false }
+                            withAnimation(.spring(response: 0.52, dampingFraction: 0.78)) { packRaised = false }
                         }) {
                             Text("OPEN")
                                 .font(.custom("Helvetica-BoldOblique", size: 20))

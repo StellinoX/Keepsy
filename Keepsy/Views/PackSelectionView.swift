@@ -88,7 +88,9 @@ struct PackSelectionView: View {
             if isOpening {
                 Button(action: {
                     HapticManager.shared.triggerImpact(style: .heavy)
-                    onPacketSelected()   // il tearing scende e prende il posto; questo pack sfuma fermo
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        onPacketSelected()
+                    }
                 }) {
                     Text("OPEN")
                         .font(.custom("Helvetica-BoldOblique", size: 20))
@@ -158,7 +160,7 @@ struct PackSelectionView: View {
         let naturalY: CGFloat = rulloCenterY + diff * spacing
 
         let yPos: CGFloat = {
-            if isOpening { return isSel ? selectedY : H * 1.5 }
+            if isOpening { return isSel ? -packHeight * baseZoom * 0.6 : H * 1.5 }
             return isSel ? naturalY - selLift : naturalY
         }()
 
@@ -281,6 +283,11 @@ struct PackSelectionView: View {
     private func openPacket() {
         guard selectedVirtualPos != nil else { return }
         HapticManager.shared.triggerImpact(style: .medium)
-        onPacketSelected()   // va subito al pacchetto del tearing (alzato + OPEN), stesso asset
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.80)) {
+            isOpening = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            onPacketSelected()
+        }
     }
 }
