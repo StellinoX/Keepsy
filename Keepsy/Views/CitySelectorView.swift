@@ -4,24 +4,29 @@ struct CitySelectorView: View {
     @Binding var selectedMuseumId: String
     @Environment(\.dismiss) private var dismiss
     
-    @State private var selectedCity: String = "Naples"
-    @State private var searchText: String = ""
-    
-    // Struct representing a city in the selector list
+    // Struct representing a museum in the selector list
     struct CityItem: Identifiable {
         let id = UUID()
         let name: String
-        let flag: String
-        let museumsCountText: String
-        let museumId: String? // nil if coming soon
+        let cityFullName: String
+        let museumId: String
+        let packetImageName: String
     }
     
     private let cities = [
-        CityItem(name: "Naples",   flag: "🇮🇹", museumsCountText: "1 Museums", museumId: "capodimonte"),
-        CityItem(name: "Florence", flag: "🇮🇹", museumsCountText: "1 Museums", museumId: "uffizi"),
-        CityItem(name: "Madrid",   flag: "🇪🇸", museumsCountText: "1 Museums", museumId: "prado"),
-        CityItem(name: "New York", flag: "🇺🇸", museumsCountText: "1 Museums", museumId: "moma"),
+        CityItem(name: "Uffizi",       cityFullName: "Florence, Italy", museumId: "uffizi",      packetImageName: "uffizi_pacchetto"),
+        CityItem(name: "Prado",        cityFullName: "Madrid, Spain",   museumId: "prado",       packetImageName: "prado_pacchetto"),
+        CityItem(name: "Capodimonte",  cityFullName: "Naples, Italy",   museumId: "capodimonte", packetImageName: "capodimonte_pacchetto"),
+        CityItem(name: "MoMA",         cityFullName: "New York, NY",    museumId: "moma",        packetImageName: "moma_pacchetto"),
     ]
+    
+    private func progressFor(_ museumId: String) -> Double {
+        let artworks = CardDatabase.artworksFor(location: museumId)
+        if artworks.isEmpty { return 0.0 }
+        let revealed = CardDatabase.getRevealedCards()
+        let found = artworks.filter { revealed.contains($0) }.count
+        return Double(found) / Double(artworks.count)
+    }
     
     var body: some View {
         ZStack {
@@ -36,7 +41,7 @@ struct CitySelectorView: View {
             GridBackground()
             
             VStack(spacing: 0) {
-                // ... (code omitted for brevity but preserved)
+                // Header (Close Button)
                 HStack {
                     Button(action: {
                         HapticManager.shared.triggerImpact(style: .light)
@@ -52,10 +57,10 @@ struct CitySelectorView: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 64)
-                .padding(.bottom, 24)
+                .padding(.bottom, 16)
                 
-                // Title and Subtitle
-                VStack(alignment: .leading, spacing: 8) {
+                // Title
+                VStack(alignment: .leading, spacing: 6) {
                     Text("WHERE SHOULD YOUR\nEXPERIENCE START?")
                         .font(.custom("Helvetica-BoldOblique", size: 26))
                         .italic()
@@ -75,141 +80,173 @@ struct CitySelectorView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
-                .padding(.bottom, 28)
+                .padding(.bottom, 20)
                 
-                // Search Bar
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                        .font(.system(size: 18))
-                    
-                    TextField("", text: $searchText, prompt: Text("Your city").foregroundColor(.white.opacity(0.5)))
-                        .foregroundColor(.white)
-                        .font(.custom("Helvetica", size: 16))
-                }
-                .padding(.horizontal, 16)
-                .frame(width: 366, height: 55)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.black.opacity(0.4))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.6), Color(hex: "3A3A3C").opacity(0.45)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            lineWidth: 2
-                        )
-                )
-                .padding(.bottom, 24)
-                
-                // City List Container Card
-                VStack(spacing: 0) {
-                    let filteredCities = cities.filter {
-                        searchText.isEmpty || $0.name.lowercased().contains(searchText.lowercased())
-                    }
-                    
-                    ForEach(Array(filteredCities.enumerated()), id: \.element.id) { idx, city in
-                        Button(action: {
-                            HapticManager.shared.triggerSelection()
-                            selectedCity = city.name
-                        }) {
-                            HStack(spacing: 0) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("\(city.name) \(city.flag)")
-                                        .font(.custom("Helvetica-Bold", size: 18))
-                                        .foregroundColor(.white)
-                                    
-                                    Text(city.museumsCountText)
-                                        .font(.custom("Helvetica-Oblique", size: 11))
-                                        .foregroundColor(.white.opacity(0.5))
-                                }
-                                
-                                Spacer()
-                                
-                                // Radio button ring/indicator
-                                ZStack {
-                                    Circle()
-                                        .stroke(
-                                            selectedCity == city.name ? Color(hex: "FF7A00") : Color.gray.opacity(0.5),
-                                            lineWidth: 2
-                                        )
-                                        .frame(width: 22, height: 22)
-                                    
-                                    if selectedCity == city.name {
-                                        Circle()
-                                            .fill(
-                                                LinearGradient(
-                                                    colors: [Color(hex: "FF7A00"), Color(hex: "FFB800")],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                )
-                                            )
-                                            .frame(width: 12, height: 12)
-                                    }
-                                }
+                // Museum Scroll List
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        ForEach(cities) { city in
+                            let progress = progressFor(city.museumId)
+                            let isSelected = selectedMuseumId == city.museumId
+                            
+                            MuseumCardView(
+                                city: city,
+                                progress: progress,
+                                isSelected: isSelected
+                            ) {
+                                HapticManager.shared.triggerImpact(style: .medium)
+                                selectedMuseumId = city.museumId
+                                dismiss()
                             }
-                            .padding(.vertical, 16)
-                            .padding(.horizontal, 18)
-                        }
-                        
-                        // Thin divider only after the first (localized) city item
-                        if idx == 0 && filteredCities.count > 1 {
-                            Divider()
-                                .background(Color.white.opacity(0.12))
-                                .padding(.horizontal, 18)
                         }
                     }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 32)
                 }
-                .frame(width: 366)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(hex: "121214").opacity(0.85))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color.white.opacity(0.6), Color(hex: "3A3A3C").opacity(0.45)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            lineWidth: 2
-                        )
-                )
-                
-                Spacer()
-                
-                // Confirm Button
-                Button(action: {
-                    HapticManager.shared.triggerImpact(style: .medium)
-                    if let matched = cities.first(where: { $0.name == selectedCity }),
-                       let museumId = matched.museumId {
-                        selectedMuseumId = museumId
-                        dismiss()
-                    }
-                }) {
-                    Text("CONFIRM")
-                        .font(.custom("Helvetica-BoldOblique", size: 18))
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 54)
-                        .background(
-                            RoundedRectangle(cornerRadius: 27)
-                                .fill(Color(hex: "D8D8D8"))
-                                .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
-                        )
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 48)
             }
         }
         .ignoresSafeArea()
-        .onAppear {
-            selectedCity = cities.first(where: { $0.museumId == selectedMuseumId })?.name ?? "Naples"
+    }
+}
+
+// MARK: - Circular Progress Ring Component
+struct MuseumProgressCircle: View {
+    let progress: Double
+    
+    var body: some View {
+        ZStack {
+            if progress >= 1.0 {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 36, height: 36)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 14, weight: .black))
+                    .foregroundColor(.white)
+            } else {
+                Circle()
+                    .fill(Color.black.opacity(0.4))
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.15), lineWidth: 2)
+                    )
+                
+                Circle()
+                    .trim(from: 0.0, to: CGFloat(progress))
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color(hex: "FF7A00"), Color(hex: "FFB800")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                    )
+                    .frame(width: 36, height: 36)
+                    .rotationEffect(.degrees(-90))
+                
+                Text("\(Int(round(progress * 100)))%")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+            }
         }
+    }
+}
+
+// MARK: - Individual Card View Component
+struct MuseumCardView: View {
+    let city: CitySelectorView.CityItem
+    let progress: Double
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                // Translucent Rounded Card Background
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Color(hex: "121214").opacity(0.72))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(
+                                LinearGradient(
+                                    colors: isSelected
+                                        ? [Color(hex: "FF7A00"), Color(hex: "FFB800")]
+                                        : [Color.white.opacity(0.15), Color.white.opacity(0.04)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: isSelected ? 2.0 : 1.2
+                            )
+                    )
+                    .shadow(color: .black.opacity(0.5), radius: 16, x: 0, y: 8)
+                
+                // Decorative overlapping packets in background
+                VStack {
+                    Spacer()
+                    HStack(spacing: -18) {
+                        Image(city.packetImageName)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 48, height: 72)
+                            .rotationEffect(.degrees(-12))
+                            .offset(y: 10)
+                        
+                        Image(city.packetImageName)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 55, height: 82)
+                            .zIndex(1)
+                        
+                        Image(city.packetImageName)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 48, height: 72)
+                            .rotationEffect(.degrees(12))
+                            .offset(y: 10)
+                    }
+                    .opacity(0.70)
+                    .padding(.bottom, -12)
+                }
+                .clipped()
+                
+                // Information Content Layout
+                VStack(spacing: 0) {
+                    HStack {
+                        MuseumProgressCircle(progress: progress)
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    
+                    Spacer()
+                    
+                    VStack(spacing: 2) {
+                        Text(city.name.uppercased())
+                            .font(.custom("Helvetica-BoldOblique", size: 26))
+                            .italic()
+                            .bold()
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hex: "FF7A00"), Color(hex: "FFB800")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        
+                        Text(city.cityFullName)
+                            .font(.custom("Helvetica-Oblique", size: 12))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    .padding(.bottom, 22)
+                }
+            }
+            .frame(height: 165)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }

@@ -24,25 +24,20 @@ struct PackSelectionView: View {
     private var selLiftY:     CGFloat { rulloCenterY - 55 }
     private var selectedY:    CGFloat { H * 0.35 }
 
-    // CALIBRA: il pack OPEN a fine zoom deve riempire lo schermo come il pack tearing.
-    // Alza se troppo piccolo, abbassa se troppo grande.
-    private let exitScale: CGFloat = 0.8
+    // Posizione Y raised del tearing: centro schermo meno l'offset raised di PackOpeningView
+    private var raisedY: CGFloat { H / 2 - H * 0.15 }
 
-    // Quanto si alza la bustina selezionata. Tienilo sotto ~spacing/2 per non sovrapporre le hitbox.
+    private let exitScale: CGFloat = 0.8
     private let selLift: CGFloat = 28
 
     private var imageName: String {
         MuseumConfig.shared.museums.first(where: { $0.id == museumId })?.packetImageName ?? "uffizi_pacchetto"
     }
 
-    // Offset cima visibile: la parte che l'utente vede e tocca è la cima del pack,
-    // che sta più in alto del centro logico. Proporzionale alla scala del pack.
-    // 0.225 calibrato sullo screenshot — ritocca se le linee debug non cadono sulle cime.
     private func topOffset(forDiff diff: CGFloat) -> CGFloat {
         let s = max(0.15, 1.0 + diff * 0.07)
         return packHeight * baseZoom * s * 0.225
     }
-
 
     var body: some View {
         ZStack {
@@ -85,47 +80,32 @@ struct PackSelectionView: View {
                         }
                 )
 
-            if isOpening {
-                Button(action: {
-                    HapticManager.shared.triggerImpact(style: .heavy)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        onPacketSelected()
-                    }
-                }) {
-                    Text("OPEN")
-                        .font(.custom("Helvetica-BoldOblique", size: 20))
-                        .foregroundColor(.black)
-                        .frame(width: 180, height: 56)
-                        .background(
-                            RoundedRectangle(cornerRadius: 28)
-                                .fill(LinearGradient(
-                                    colors: [.white, Color(hex: "EAEAEA")],
-                                    startPoint: .top, endPoint: .bottom
-                                ))
-                                .shadow(color: .black.opacity(0.50), radius: 24, y: 8)
-                        )
-                }
-                .position(x: W / 2, y: H * 0.78)
-                .transition(.opacity.combined(with: .scale(scale: 0.88)))
-                .zIndex(200)
-            }
-
+            // Museum name + city header with blur
             if !isOpening {
-                Button(action: {
-                    HapticManager.shared.triggerImpact(style: .light)
-                    onClose()
-                }) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .bold))
-                        Text("Back")
-                            .font(.system(size: 16, weight: .regular))
+                VStack(spacing: 4) {
+                    if let museum = MuseumConfig.shared.museums.first(where: { $0.id == museumId }) {
+                        Text(museum.name.uppercased())
+                            .font(.system(size: 36, weight: .black, design: .default).italic())
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hex: "E36D13"), Color(hex: "FEBB0B")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        Text(museum.city)
+                            .font(.system(size: 16, weight: .regular, design: .default).italic())
+                            .foregroundColor(.white.opacity(0.75))
                     }
-                    .foregroundColor(.white)
-                    .frame(width: 85, height: 44)
-                    .background(Capsule().fill(Color(hex: "383838")))
                 }
-                .position(x: 30 + 44 / 2, y: 83 + 44 / 2)
+                .background(
+                    Ellipse()
+                        .fill(Color(hex: "E36D13").opacity(0.25))
+                        .frame(width: 220, height: 70)
+                        .blur(radius: 35)
+                        .offset(y: -5)
+                )
+                .position(x: W / 2, y: 100)
                 .zIndex(300)
             }
         }
@@ -145,8 +125,8 @@ struct PackSelectionView: View {
         let isSel = selectedVirtualPos == virtualPos
 
         let scale: CGFloat = {
-            if isOpening { return isSel ? exitScale : 0.0 }
-            if isSel     { return max(0.15, 1.0 + min(diff, 0) * 0.07) }
+            if isOpening && isSel { return 1.0 }   // mantiene scala naturale (baseZoom applicato sotto)
+            if isOpening          { return 0.0 }
             return max(0.15, 1.0 + diff * 0.07)
         }()
 
@@ -160,7 +140,11 @@ struct PackSelectionView: View {
         let naturalY: CGFloat = rulloCenterY + diff * spacing
 
         let yPos: CGFloat = {
-            if isOpening { return isSel ? -packHeight * baseZoom * 0.6 : H * 1.5 }
+            if isOpening && isSel {
+                // Muove il pack esattamente alla posizione raised del tearing
+                return raisedY
+            }
+            if isOpening { return H * 1.5 }
             return isSel ? naturalY - selLift : naturalY
         }()
 
@@ -182,11 +166,10 @@ struct PackSelectionView: View {
             radius: isSel ? 36 : 6,
             y: isSel ? 18 : 2
         )
-        .rotationEffect(.degrees(isOpening && isSel ? -4 : 0))
         .scaleEffect(scale * baseZoom)
         .opacity(opacity)
         .position(x: W / 2, y: yPos)
-        .animation(.spring(response: 0.55, dampingFraction: 0.82), value: isOpening)
+        .animation(.spring(response: 0.48, dampingFraction: 0.82), value: isOpening)
         .animation(.spring(response: 0.50, dampingFraction: 0.82), value: selectedVirtualPos)
     }
 
@@ -283,10 +266,13 @@ struct PackSelectionView: View {
     private func openPacket() {
         guard selectedVirtualPos != nil else { return }
         HapticManager.shared.triggerImpact(style: .medium)
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.80)) {
+        // Alza il pack nel rullo, poi (dopo che la spring si è stabilizzata) passa al tearing
+        withAnimation(.spring(response: 0.48, dampingFraction: 0.82)) {
             isOpening = true
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        // Delay > response spring così il pack è effettivamente FERMO a raisedY:
+        // il swap rullo→tearing avviene su un pack statico → niente scatto.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
             onPacketSelected()
         }
     }

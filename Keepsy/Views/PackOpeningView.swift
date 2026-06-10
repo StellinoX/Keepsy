@@ -40,6 +40,56 @@ struct PackOpeningView: View {
     @State private var nextButtonScale: CGFloat = 0
     @State private var isDealt = false
 
+    // Pack del tearing estratto in una proprietà: viene montato sia in .packSelection
+    // (pre-warm, nascosto dietro il rullo) sia in .tearing, mantenendo la STESSA identità
+    // di view → la scena SceneKit non si re-inizializza e non c'è frame vuoto all'handoff.
+    // Geometria IDENTICA alla bustina selezionata del rullo (frame, baseZoom, raisedY).
+    @ViewBuilder
+    private var tearingPackView: some View {
+        let scrW = UIScreen.main.bounds.width
+        let scrH = UIScreen.main.bounds.height
+        let pW = scrW * 0.90
+        let pH = pW * (350.0 / 230.0)
+        // Al SWAP (rullo → tearing) il pack DEVE essere identico al rullo: scale 2.0,
+        // stessa posizione. Solo dopo, durante l'abbassamento, anima a restZoom.
+        let raisedZoom: CGFloat = 2.0   // == baseZoom del rullo → handoff invisibile
+        let restZoom:   CGFloat = 1.85
+        let raisedY = scrH / 2 - scrH * 0.15
+        let restY   = scrH / 2
+        let lowered = (packState == .tearing && !packRaised)
+        ZStack {
+            SceneKitPacketView(
+                museumId: selectedMuseumId,
+                packetImageName: MuseumConfig.shared.museums.first(where: { $0.id == selectedMuseumId })?.packetImageName ?? "uffizi_pacchetto",
+                raised: false,   // niente modalità raised: render identico al rullo
+                onTearComplete: {
+                    showOpeningEffect = true
+                    triggerShake()
+                    withAnimation(.easeOut(duration: 0.02)) { flashOpacity = 0.8 }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                        withAnimation(.easeIn(duration: 0.28)) { flashOpacity = 0.0 }
+                    }
+                    SoundManager.shared.playSound(named: "san sebastiano")
+                },
+                onOpen: { completeOpening() }
+            )
+            .frame(width: pW, height: pH)
+            .scaleEffect(lowered ? restZoom : raisedZoom)
+            .shadow(color: Color(hex: "FF7A00").opacity(0.55), radius: 36, y: 18)
+            .offset(x: packSwayX + shakeOffset)
+            .position(x: scrW / 2, y: lowered ? restY : raisedY)
+
+            if packState == .tearing && showTearHint && !showOpeningEffect && !packRaised {
+                PackTearHintView(packetZoom: lowered ? restZoom : raisedZoom)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .frame(width: scrW, height: scrH)
+        .allowsHitTesting(packState == .tearing && !packRaised)
+        .ignoresSafeArea()
+    }
+
     var body: some View {
         ZStack {
             ZStack {
@@ -90,12 +140,32 @@ struct PackOpeningView: View {
                             showCitySelector = true
                         }
                     )
-                } else if packState == .packSelection {
+                }
+
+                // Pack del tearing montato GIÀ durante .packSelection, dietro il gradiente
+                // opaco del rullo. La scena SceneKit è quindi già renderizzata: all'handoff
+                // non compare il frame vuoto del primo render (niente sparizione).
+                if packState == .packSelection || packState == .tearing {
+                    tearingPackView
+                        .zIndex(packState == .tearing ? 10 : 1)
+                }
+
+                if packState == .packSelection {
                     PackSelectionView(
                         museumId: selectedMuseumId,
                         onPacketSelected: {
-                            packRaised = true   // il pacchetto del tearing appare ALZATO + bottone OPEN
-                            withAnimation(.easeInOut(duration: 0.20)) { packState = .tearing }
+                            // tearingPackView è già montato e caldo: lo portiamo a raisedY
+                            // (stessa posizione del pack del rullo) senza animazione, poi
+                            // lo abbassiamo. Un tap solo, nessuno scatto, nessuna sparizione.
+                            packRaised = true
+                            var t = Transaction()
+                            t.disablesAnimations = true
+                            withTransaction(t) { packState = .tearing }
+                            DispatchQueue.main.async {
+                                withAnimation(.spring(response: 0.52, dampingFraction: 0.78)) {
+                                    packRaised = false
+                                }
+                            }
                         },
                         onClose: {
                             withAnimation(.spring(response: 0.52, dampingFraction: 0.8)) {
@@ -103,64 +173,14 @@ struct PackOpeningView: View {
                             }
                         }
                     )
+                    .zIndex(5)
+                    // Crossfade lungo all'uscita: maschera la differenza di render SceneKit
+                    // tra l'istanza del rullo e quella del tearing (init diversi).
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.35), value: packState)
                 }
-            else {
-                ZStack {
-                    if packState == .tearing {
-                        ZStack {
-                            SceneKitPacketView(
-                                museumId: selectedMuseumId,
-                                packetImageName: MuseumConfig.shared.museums.first(where: { $0.id == selectedMuseumId })?.packetImageName ?? "uffizi_pacchetto",
-                                raised: packRaised,
-                                onTearComplete: {
-                                    showOpeningEffect = true
-                                    triggerShake()
-                                    withAnimation(.easeOut(duration: 0.02)) { flashOpacity = 0.8 }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-                                        withAnimation(.easeIn(duration: 0.28)) { flashOpacity = 0.0 }
-                                    }
-                                    SoundManager.shared.playSound(named: "san sebastiano")
-                                },
-                                onOpen: { completeOpening() }
-                            )
-                            .ignoresSafeArea()
 
-                            if packState == .tearing && showTearHint && !showOpeningEffect && !packRaised {
-                                PackTearHintView()
-                                    .allowsHitTesting(false)
-                                    .transition(.opacity)
-                            }
-                        }
-                        .offset(x: packSwayX, y: packRaised ? -UIScreen.main.bounds.height * 0.15 : 0)  // un filo più in alto; il pieno lo dà l'inquadratura
-                        .allowsHitTesting(!packRaised)              // strappo solo dopo la discesa
-                        .ignoresSafeArea()
-                        .transition(.opacity)
-                        .zIndex(10)
-                    }
-
-                    // Bottone OPEN: stesso pacchetto, premi -> scende LINEARE alla posizione del tearing
-                    if packState == .tearing && packRaised {
-                        Button(action: {
-                            HapticManager.shared.triggerImpact(style: .heavy)
-                            withAnimation(.spring(response: 0.52, dampingFraction: 0.78)) { packRaised = false }
-                        }) {
-                            Text("OPEN")
-                                .font(.custom("Helvetica-BoldOblique", size: 20))
-                                .foregroundColor(.black)
-                                .frame(width: 180, height: 56)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 28)
-                                        .fill(LinearGradient(colors: [.white, Color(hex: "EAEAEA")],
-                                                             startPoint: .top, endPoint: .bottom))
-                                        .shadow(color: .black.opacity(0.50), radius: 24, y: 8)
-                                )
-                        }
-                        .position(x: UIScreen.main.bounds.width / 2, y: UIScreen.main.bounds.height * 0.82)
-                        .transition(.opacity)
-                        .zIndex(60)
-                    }
-
-                    if packState == .opened {
+                if packState == .opened {
                         VStack {
                             Spacer()
 
@@ -248,10 +268,8 @@ struct PackOpeningView: View {
                             }
                         }
                         .zIndex(20)
+                        .offset(x: shakeOffset)
                     }
-                }
-                .offset(x: shakeOffset)
-            }
 
             if let card = inspectedCard {
                 CardInspectionView(card: card) {
@@ -1446,6 +1464,8 @@ struct PackOpeningFlashView: View {
 // MARK: - PackTearHintView — striscia luminosa + frecce per guidare l'apertura
 
 struct PackTearHintView: View {
+    var packetZoom: CGFloat = 2.0
+    
     @State private var shimmerX: CGFloat = -180
     @State private var glowOpacity: Double = 0.2
     @State private var handOffset: CGFloat = -40
@@ -1514,7 +1534,7 @@ struct PackTearHintView: View {
                 .frame(height: 8)
                 .clipped()
                 .padding(.horizontal, 24)
-                .position(x: screenWidth / 2, y: screenHeight * 0.55)
+                .position(x: screenWidth / 2, y: screenHeight * 0.5 + (screenHeight * 0.05) * (packetZoom / 2.0))
             }
             .frame(width: screenWidth, height: screenHeight)
             .onAppear {

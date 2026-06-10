@@ -32,6 +32,7 @@ struct ArtImageView: View {
             } else if let img = localImage {
                 Image(uiImage: img)
                     .resizable()
+                    .aspectRatio(contentMode: .fill)
             } else {
                 ZStack {
                     CardDatabase.gradientFor(name: cardName)

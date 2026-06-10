@@ -88,6 +88,18 @@ struct CollectionAlbumView: View {
         return "GLOBAL COLLECTION"
     }
 
+    var museumCity: String {
+        guard let loc = museumLocation,
+              let museum = MuseumConfig.shared.museums.first(where: { $0.id == loc.lowercased() })
+        else { return "" }
+        return museum.city
+    }
+
+    var collectionProgress: Double {
+        guard !filteredArtworks.isEmpty else { return 0 }
+        return Double(revealedCards.count) / Double(filteredArtworks.count)
+    }
+
     var filteredArtworks: [String] {
         if let loc = museumLocation {
             return CardDatabase.artworksFor(location: loc)
@@ -170,31 +182,41 @@ struct CollectionAlbumView: View {
                             tapExperienceCard()
                         }
                     } else {
-                        ZStack {
-                            // Dark background
-                            RoundedRectangle(cornerRadius: 24)
-                                .fill(Color(hex: "0D0D0F"))
+                        Group {
+                            if museumLocation == "moma" {
+                                Image("dasbloccare")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 180, height: 270)
+                                    .clipShape(RoundedRectangle(cornerRadius: 24))
+                            } else {
+                                ZStack {
+                                    // Dark background
+                                    RoundedRectangle(cornerRadius: 24)
+                                        .fill(Color(hex: "0D0D0F"))
 
-                            // Keepsy Gold Logo
-                            Image("LogoKeepsy")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 70, height: 70)
+                                    // Keepsy Gold Logo
+                                    Image("LogoKeepsy")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 70, height: 70)
 
-                            // Orange border stroke
-                            RoundedRectangle(cornerRadius: 24)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [Color(hex: "FF9000"), Color(hex: "FF5100")],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 3
-                                )
+                                    // Orange border stroke
+                                    RoundedRectangle(cornerRadius: 24)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [Color(hex: "FF9000"), Color(hex: "FF5100")],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 3
+                                        )
+                                }
+                                .frame(width: 180, height: 270)
+                                .shadow(color: Color(hex: "FF5100").opacity(0.35), radius: 25, x: 0, y: 10)
+                            }
                         }
-                        .frame(width: 180, height: 270)
                         .opacity(animatingCardName == experienceCardName ? cellCardOpacity : 1.0)
-                        .shadow(color: Color(hex: "FF5100").opacity(0.35), radius: 25, x: 0, y: 10)
                         .background(
                             GeometryReader { geo in
                                 Color.clear
@@ -272,7 +294,53 @@ struct CollectionAlbumView: View {
                             }
                             .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
                             .offset(y: offsetY)
-                            
+
+                            // Header dentro lo sheet: anello progress + titolo museo + città.
+                            // Si muove insieme allo sheet (stesso offsetY) e resta visibile
+                            // sopra la grid.
+                            HStack(alignment: .center, spacing: 0) {
+                                // Progress ring 90%
+                                ZStack {
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 3)
+                                    Circle()
+                                        .trim(from: 0, to: collectionProgress)
+                                        .stroke(Color.white,
+                                                style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                                        .rotationEffect(.degrees(-90))
+                                    Text("\(Int(collectionProgress * 100))%")
+                                        .font(.custom("Helvetica-BoldOblique", size: 11))
+                                        .foregroundColor(.white)
+                                }
+                                .frame(width: 44, height: 44)
+
+                                Spacer()
+
+                                VStack(spacing: 2) {
+                                    Text(headerTitle)
+                                        .font(.custom("Helvetica-BoldOblique", size: 26))
+                                        .foregroundStyle(
+                                            LinearGradient(
+                                                colors: [Color(hex: "FF7A00"), Color(hex: "FFB800")],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                    Text(museumCity)
+                                        .font(.system(size: 14, weight: .regular).italic())
+                                        .foregroundColor(.white.opacity(0.7))
+                                }
+
+                                Spacer()
+
+                                // Bilancia il ring così il titolo resta centrato
+                                Color.clear.frame(width: 44, height: 44)
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.top, 28)
+                            .offset(y: offsetY)
+                            .allowsHitTesting(false)
+
                             StickerGridView(
                                 artworks: filteredArtworks,
                                 foundCards: foundCards,
@@ -295,12 +363,12 @@ struct CollectionAlbumView: View {
                                 startPullAnimation(for: name)
                             }
                             .equatable()
-                            .padding(.top, 28)
+                            .padding(.top, 110)
                             .padding(.bottom, 24)
                             .padding(.horizontal, 16)
                             .mask(
                                 Rectangle()
-                                    .padding(.top, offsetY + 28)
+                                    .padding(.top, offsetY + 110)
                             )
                         }
                         .frame(width: sheetWidth)

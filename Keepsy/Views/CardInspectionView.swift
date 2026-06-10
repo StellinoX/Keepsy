@@ -17,7 +17,6 @@ struct CardInspectionView: View {
 
     enum SheetState {
         case collapsed
-        case medium
         case expanded
     }
     @State private var sheetState: SheetState = .collapsed
@@ -137,20 +136,31 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                         )
 
                         if (card.name.contains("_experience") || card.name == "vale") && !isCollectionCompleteFor(card.name) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 24)
-                                    .fill(LinearGradient(
-                                        colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
-                                        startPoint: .topLeading, endPoint: .bottomTrailing
-                                    ))
-                                Text("?")
-                                    .font(.system(size: 110, weight: .black))
-                                    .foregroundColor(.white)
+                            Group {
+                                if card.name == "vale" {
+                                    Image("dasbloccare")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                } else {
+                                    ZStack {
+                                        RoundedRectangle(cornerRadius: 24)
+                                            .fill(LinearGradient(
+                                                colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
+                                                startPoint: .topLeading, endPoint: .bottomTrailing
+                                            ))
+                                        Text("?")
+                                            .font(.system(size: 110, weight: .black))
+                                            .foregroundColor(.white)
+                                    }
+                                }
                             }
                             .frame(width: cardW, height: cardH)
                             .clipShape(RoundedRectangle(cornerRadius: 24))
                             .shadow(color: Color(hex: "5168C4").opacity(0.4), radius: 30, x: 0, y: 15)
+                            .scaleEffect(sheetState == .expanded ? 0.85 : 1.0)
                             .position(x: geometry.size.width / 2, y: cardTopY + cardH / 2)
+                            .offset(y: sheetState == .expanded ? -30 : 0)
+                            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: sheetState)
                         } else {
                             ArtworkCardFrontView(
                                 name: card.name,
@@ -161,25 +171,26 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                 isRevealed: isRevealed,
                                 goldBorder: goldBorder
                             )
-                            .position(x: geometry.size.width / 2, y: cardTopY + cardH / 2)
-                            .opacity(1.0)
-                            .contentShape(Rectangle().size(CGSize(width: cardW, height: cardH)))
+                            .contentShape(Rectangle())
                             .onTapGesture {
                                 HapticManager.shared.triggerImpact(style: .medium)
                                 withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                                     showFullDetail = true
                                 }
                             }
+                            .position(x: geometry.size.width / 2, y: cardTopY + cardH / 2)
+                            .scaleEffect(sheetState == .expanded ? 0.85 : 1.0)
+                            .offset(y: sheetState == .expanded ? -30 : 0)
+                            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: sheetState)
+                            .opacity(1.0)
                         }
 
                         // Mini-sheet
                         let collapsedY = screenHeight - sheetPeekHeight
-                        let mediumY    = screenHeight * 0.42
-                        let expandedY  = 140.0
+                        let expandedY  = screenHeight * 0.42
                         let sheetY: CGFloat = {
                             switch sheetState {
                             case .collapsed: return collapsedY
-                            case .medium:    return mediumY
                             case .expanded:  return expandedY
                             }
                         }()
@@ -251,13 +262,14 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                     let drag = v.translation.height
                                     withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
                                         miniSheetDrag = 0
-                                        if drag < -60 {
-                                            if sheetState == .collapsed { sheetState = .medium }
-                                            else if sheetState == .medium { sheetState = .expanded }
-                                        } else if drag > 60 {
-                                            if sheetState == .expanded { sheetState = .medium }
-                                            else if sheetState == .medium { sheetState = .collapsed }
-                                            else { closeAction() }
+                                        if drag < -40 {
+                                            sheetState = .expanded
+                                        } else if drag > 40 {
+                                            if sheetState == .expanded {
+                                                sheetState = .collapsed
+                                            } else {
+                                                closeAction()
+                                            }
                                         }
                                     }
                                 }
@@ -316,8 +328,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                     .offset(y: isZoomingFromAlbum ? -50 : 0)
                     .scaleEffect(1.0)
                     .opacity(1.0)
-                    // ← contentShape limita il tap all'area fisica della carta
-                    .contentShape(Rectangle().size(CGSize(width: cardWidth, height: cardHeight)))
+                    .contentShape(Rectangle())
                     .onTapGesture {
                         SoundManager.shared.playSound(named: "giro_carta")
                         withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) {
@@ -453,8 +464,7 @@ struct CardFullDetailView: View {
             }
             .scaleEffect(animateContent ? 1.0 : 0.85)
             .opacity(animateContent ? 1.0 : 0.0)
-            // ← solo l'area fisica della carta gira, tutto fuori chiude
-            .contentShape(Rectangle().size(CGSize(width: cardWidth, height: cardHeight)))
+            .contentShape(Rectangle())
             .onTapGesture {
                 SoundManager.shared.playSound(named: "giro_carta")
                 withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) {

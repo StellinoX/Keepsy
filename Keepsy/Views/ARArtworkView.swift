@@ -99,7 +99,7 @@ struct ARArtworkView: View {
                                 guard !isAlreadyUnlocked else { return }
                                 
                                 let cleanedName = CardDatabase.cleanedArtworkName(dbName)
-                                detectedArtwork = "Sbloccata: \(cleanedName)!"
+                                detectedArtwork = "Unlocked: \(cleanedName)!"
                                 isTargetUnlocked = true
                                 triggerUnlockAnimation = dbName
                             },
@@ -122,7 +122,7 @@ struct ARArtworkView: View {
                                                         sessionFoundCards.contains(target)
                                 if !isAlreadyUnlocked && !isAnimatingUnlock && triggerUnlockAnimation == nil {
                                     let cleanedName = CardDatabase.cleanedArtworkName(target)
-                                    detectedArtwork = "Sbloccata: \(cleanedName)!"
+                                    detectedArtwork = "Unlocked: \(cleanedName)!"
                                     isTargetUnlocked = true
                                     triggerUnlockAnimation = target
                                 }
@@ -134,7 +134,7 @@ struct ARArtworkView: View {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .scaleEffect(1.5)
-                            Text("Verifica vicinanza al museo...")
+                            Text("Verifying museum proximity...")
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundColor(.white.opacity(0.8))
                         }
@@ -195,6 +195,8 @@ struct ARArtworkView: View {
                         Spacer()
                             .allowsHitTesting(false)
 
+                        // MARK: - GUEST MODE (DEV ONLY)
+                        // TODO: Remove this entire block before production if no longer needed
                         #if DEBUG
                         if !isAnimatingUnlock && !isTargetUnlocked {
                             Button(action: {
@@ -205,7 +207,7 @@ struct ARArtworkView: View {
                                                             sessionFoundCards.contains(target)
                                     if !isAlreadyUnlocked && triggerUnlockAnimation == nil {
                                         let cleanedName = CardDatabase.cleanedArtworkName(target)
-                                        detectedArtwork = "Sbloccata: \(cleanedName)!"
+                                        detectedArtwork = "Unlocked: \(cleanedName)!"
                                         isTargetUnlocked = true
                                         triggerUnlockAnimation = target
                                     }
@@ -222,7 +224,7 @@ struct ARArtworkView: View {
                         #endif
 
                         if CardDatabase.isActivePackAllDuplicates() {
-                            Text("Tutte già nella collezione")
+                            Text("All already collected")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.7))
                                 .padding(.bottom, 12)
@@ -313,7 +315,7 @@ struct ARArtworkView: View {
                                     ScannerCardView(name: cardName, width: cardWidth, height: cardHeight)
                                         .overlay(
                                             RoundedRectangle(cornerRadius: cardCorner)
-                                                .stroke(Color(hex: "6DB832"), lineWidth: showGreenBorder ? (isThisCardUnlocking ? 4.0 : 2.5) : 0)
+                                                .stroke(Color(hex: "6DB832"), lineWidth: showGreenBorder ? (isThisCardUnlocking ? 3.0 : 2.0) : 0)
                                                 .padding(-8)
                                                 .shadow(color: Color(hex: "6DB832").opacity(showGreenBorder ? 0.85 : 0), radius: 10, x: 0, y: 0)
                                         )
@@ -349,7 +351,7 @@ struct ARArtworkView: View {
                                             if selectedTargetCard == cardName && !isTargetUnlocked {
                                                 let dbName = cardName
                                                 let cleanedName = CardDatabase.cleanedArtworkName(dbName)
-                                                detectedArtwork = "Sbloccata: \(cleanedName)!"
+                                                detectedArtwork = "Unlocked: \(cleanedName)!"
                                                 isTargetUnlocked = true
                                                 triggerUnlockAnimation = dbName
                                                 return
@@ -1018,6 +1020,8 @@ struct ARArtworkView: View {
                         .padding(.horizontal, 24)
                 }
                 
+                // MARK: - GUEST MODE (DEV ONLY)
+                // TODO: Remove this entire block before production if no longer needed
                 #if DEBUG
                 Spacer().frame(height: 16)
                 Button(action: {

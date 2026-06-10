@@ -1181,10 +1181,7 @@ public class PacketCoordinator: NSObject {
             let key = "activePackTearMask_\(city)"
             DispatchQueue.global(qos: .utility).async {
                 if let lastMask = maskToSave, let pngData = lastMask.pngData() {
-                    print("DEBUG: Tear mask successfully saved to UserDefaults, size: \(pngData.count) bytes")
                     UserDefaults.standard.set(pngData, forKey: key)
-                } else {
-                    print("DEBUG: Tear mask failed to convert to pngData or lastMask is nil")
                 }
             }
             
