@@ -649,17 +649,7 @@ struct ARArtworkView: View {
         .onAppear {
             locationManager.startHighAccuracyTracking()
 
-            // Mostra popup se l'app era stata chiusa con carte non salvate
-            let autoCount = UserDefaults.standard.integer(forKey: "autoKeptCardsCount")
-            if autoCount > 0 {
-                autoKeptCount = autoCount
-                UserDefaults.standard.removeObject(forKey: "autoKeptCardsCount")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        showAutoKeptPopup = true
-                    }
-                }
-            }
+            // Rimosso popup da qui perché viene mostrato in ContentView
 
             if let active = CardDatabase.getActivePack(), !active.isEmpty {
                 let dupes = CardDatabase.getDuplicatesInActivePack()
@@ -893,7 +883,7 @@ struct ARArtworkView: View {
         for name in sessionFoundCards {
             CardDatabase.addRevealedCard(name)
         }
-        UserDefaults.standard.set(Array(sessionFoundCards), forKey: "recentlyCompletedPackCards")
+        // Rimossa l'impostazione di recentlyCompletedPackCards per non triggerare l'animazione nella collezione
         CardDatabase.clearActivePackIfNeeded()
         sessionFoundCards.removeAll()
         UserDefaults.standard.set(count, forKey: "autoKeptCardsCount")

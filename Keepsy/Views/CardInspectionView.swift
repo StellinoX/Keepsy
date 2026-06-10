@@ -215,7 +215,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                     .foregroundColor(.white)
                                     .lineLimit(3)
 
-                                Text("\(artistName); \(creationYear)")
+                                Text(artistName)
                                     .font(.system(size: 15).italic())
                                     .foregroundColor(.white.opacity(0.65))
 
