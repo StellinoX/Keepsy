@@ -77,7 +77,7 @@ struct ARArtworkView: View {
             let safeTop = geometry.safeAreaInsets.top
             let cardWidth: CGFloat = screenWidth * 0.44
             let cardHeight: CGFloat = cardWidth * (168.0 / 111.0)
-            let cardCorner = cardWidth * 12.0 / 111.0
+            let cardCorner = cardWidth * 3.0 / 111.0
 
             ZStack {
                 Color.black.ignoresSafeArea()
@@ -113,22 +113,6 @@ struct ARArtworkView: View {
                         )
                         .ignoresSafeArea()
                         .blur(radius: isAnimatingUnlock ? 15 : 0)
-                        #if DEBUG
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if let target = selectedTargetCard {
-                                let isAlreadyUnlocked = revealedCards.contains(target) ||
-                                                        duplicatesInPack.contains(target) ||
-                                                        sessionFoundCards.contains(target)
-                                if !isAlreadyUnlocked && !isAnimatingUnlock && triggerUnlockAnimation == nil {
-                                    let cleanedName = CardDatabase.cleanedArtworkName(target)
-                                    detectedArtwork = "Unlocked: \(cleanedName)!"
-                                    isTargetUnlocked = true
-                                    triggerUnlockAnimation = target
-                                }
-                            }
-                        }
-                        #endif
                     } else if locationManager.lastKnownLocation == nil && locationManager.authorizationStatus != .denied && locationManager.authorizationStatus != .restricted {
                         VStack(spacing: 20) {
                             ProgressView()
@@ -315,8 +299,8 @@ struct ARArtworkView: View {
                                     ScannerCardView(name: cardName, width: cardWidth, height: cardHeight)
                                         .overlay(
                                             RoundedRectangle(cornerRadius: cardCorner)
-                                                .stroke(Color(hex: "6DB832"), lineWidth: showGreenBorder ? (isThisCardUnlocking ? 3.0 : 2.0) : 0)
-                                                .padding(-8)
+                                                .stroke(Color(hex: "6DB832"), lineWidth: showGreenBorder ? (isThisCardUnlocking ? 1.5 : 1.0) : 0)
+                                                .padding(-6)
                                                 .shadow(color: Color(hex: "6DB832").opacity(showGreenBorder ? 0.85 : 0), radius: 10, x: 0, y: 0)
                                         )
                                         .overlay(alignment: .topTrailing) {
@@ -345,18 +329,6 @@ struct ARArtworkView: View {
                                         .onTapGesture {
                                             guard !isAnimatingUnlock, opacity > 0 else { return }
                                             HapticManager.shared.triggerImpact(style: .medium)
-                                            
-                                            #if DEBUG
-                                            // If tapped on the already selected card, trigger simulation of finding it
-                                            if selectedTargetCard == cardName && !isTargetUnlocked {
-                                                let dbName = cardName
-                                                let cleanedName = CardDatabase.cleanedArtworkName(dbName)
-                                                detectedArtwork = "Unlocked: \(cleanedName)!"
-                                                isTargetUnlocked = true
-                                                triggerUnlockAnimation = dbName
-                                                return
-                                            }
-                                            #endif
                                             
                                             // Tapping changes target selection and smoothly moves the carousel to center this card!
                                             let targetIndex = displayCards.firstIndex(of: cardName) ?? 0
@@ -1004,7 +976,7 @@ struct ARArtworkView: View {
                         .padding(.horizontal, 24)
                 } else {
                     Text("Remember! Keepsy lets you find and collect artworks whenever you're **inside** the museum. Plan your visit and Keep'em all!")
-                        .font(.custom("Helvetica", size: 12))
+                        .font(.custom("Helvetica", size: 14))
                         .lineSpacing(2)
                         .foregroundColor(.white.opacity(0.65))
                         .padding(.horizontal, 24)

@@ -492,6 +492,7 @@ public class PacketCoordinator: NSObject {
     var interactive: Bool
     var museumId: String?
     var firstCardName: String?
+    var tearY: Float = 3.0
     
     let bodyNode: SCNNode
     let flapNode: SCNNode
@@ -548,6 +549,8 @@ public class PacketCoordinator: NSObject {
         self.firstCardName = firstCardName
         self.onTearComplete = onTearComplete
         self.onOpen = onOpen
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        self.tearY = (city == "capodimonte" || city == "uffizi") ? 3.15 : 3.0
         scene = SCNScene()
         
         // 1. Camera Setup
@@ -710,8 +713,9 @@ public class PacketCoordinator: NSObject {
         float2 uv = _surface.diffuseTexcoord;
         float3 n = _surface.normal;
         
-        float isCrimp = step(0.88, uv.y) + step(uv.y, 0.12);
-        float ridge = sin(uv.y * 350.0) * 0.4;
+        float h = crimpHeight > 0.0 ? crimpHeight : 0.12;
+        float isCrimp = step(1.0 - h, uv.y) + step(uv.y, h);
+        float ridge = sin(uv.y * (crimpFrequency > 0.0 ? crimpFrequency : 350.0)) * 0.4;
         n.y += isCrimp * ridge;
         
         float wrinkleX = sin(uv.y * 20.0 + uv.x * 10.0) * cos(uv.x * 35.0) * 0.12;
@@ -725,6 +729,8 @@ public class PacketCoordinator: NSObject {
         let bodySurface = """
         #pragma arguments
         texture2d<float, access::sample> maskTex;
+        float crimpFrequency;
+        float crimpHeight;
         
         #pragma transparent
         #pragma body
@@ -739,12 +745,14 @@ public class PacketCoordinator: NSObject {
         """ + foilShader + """
         
         // Add Premium Glow at the cut edge (Laser / Sparks effect)
-        _surface.emission = float4(1.0, 0.4, 0.0, 1.0) * in.edgeGlow * 8.0;
+        _surface.emission = float4(1.0, 0.5, 0.1, 1.0) * in.edgeGlow * 20.0;
         """
         
         let flapSurface = """
         #pragma arguments
         texture2d<float, access::sample> maskTex;
+        float crimpFrequency;
+        float crimpHeight;
         
         #pragma transparent
         #pragma body
@@ -760,7 +768,7 @@ public class PacketCoordinator: NSObject {
         
         // Add Premium Glow at the cut edge (Laser / Sparks effect)
         // Add Premium Glow at the cut edge (Laser / Sparks effect)
-        _surface.emission = float4(1.0, 0.4, 0.0, 1.0) * in.edgeGlow * 8.0;
+        _surface.emission = float4(1.0, 0.5, 0.1, 1.0) * in.edgeGlow * 20.0;
         """
         
         // ==========================================
@@ -828,6 +836,8 @@ public class PacketCoordinator: NSObject {
         let backBodySurface = """
         #pragma arguments
         texture2d<float, access::sample> maskTex;
+        float crimpFrequency;
+        float crimpHeight;
         
         #pragma transparent
         #pragma body
@@ -842,6 +852,8 @@ public class PacketCoordinator: NSObject {
         let backFlapSurface = """
         #pragma arguments
         texture2d<float, access::sample> maskTex;
+        float crimpFrequency;
+        float crimpHeight;
         
         #pragma transparent
         #pragma body
@@ -855,6 +867,13 @@ public class PacketCoordinator: NSObject {
         
         bodyNode.geometry?.shaderModifiers = [.geometry: bodyGeometryShader, .surface: bodySurface]
         flapNode.geometry?.shaderModifiers = [.geometry: flapGeometryShader, .surface: flapSurface]
+        
+        let crimpFreq: Float = (city == "capodimonte" || city == "uffizi") ? 250.0 : 300.0
+        let crimpHeightVal: Float = (city == "capodimonte" || city == "uffizi") ? 0.08 : 0.10
+        bodyNode.geometry?.setValue(crimpFreq, forKey: "crimpFrequency")
+        bodyNode.geometry?.setValue(crimpHeightVal, forKey: "crimpHeight")
+        flapNode.geometry?.setValue(crimpFreq, forKey: "crimpFrequency")
+        flapNode.geometry?.setValue(crimpHeightVal, forKey: "crimpHeight")
         
         // --- RIGID GROUPS & TILT CONTAINER ---
         tiltContainerNode = SCNNode()
@@ -936,6 +955,11 @@ public class PacketCoordinator: NSObject {
         backBodyNode.geometry?.shaderModifiers = [.geometry: backBodyGeometryShader, .surface: backBodySurface]
         backFlapNode.geometry?.shaderModifiers = [.geometry: backFlapGeometryShader, .surface: backFlapSurface]
         
+        backBodyNode.geometry?.setValue(crimpFreq, forKey: "crimpFrequency")
+        backBodyNode.geometry?.setValue(crimpHeightVal, forKey: "crimpHeight")
+        backFlapNode.geometry?.setValue(crimpFreq, forKey: "crimpFrequency")
+        backFlapNode.geometry?.setValue(crimpHeightVal, forKey: "crimpHeight")
+        
         // 6. Card inside the 3D packet
         let cardGeo = SCNPlane(width: 4.5, height: 6.82) // Aspect ratio matches 111x168
         cardGeo.cornerRadius = 0.15
@@ -976,7 +1000,7 @@ public class PacketCoordinator: NSObject {
         flareGeo.materials = [flareMat]
         
         flareNode = SCNNode(geometry: flareGeo)
-        flareNode.position = SCNVector3(0, 3.0, 0.3) // Slightly in front of packet and cards
+        flareNode.position = SCNVector3(0, tearY, 0.3) // Slightly in front of packet and cards
         flareNode.opacity = 0.0
         tiltContainerNode.addChildNode(flareNode)
         
@@ -1091,7 +1115,7 @@ public class PacketCoordinator: NSObject {
             // LIMIT CUT ZONE: Allow freeform wavy tearing, but restricted to a specific horizontal "tear strip" band.
             // We allow the Y coordinate to freely move between 2.6 and 3.4 (just below the seal).
             // If the user goes outside this band, the cut will smoothly clamp to the edges of the strip.
-            local.y = max(2.6, min(3.4, local.y))
+            local.y = max(tearY - 0.4, min(tearY + 0.4, local.y))
             
             let u = (CGFloat(local.x) + 3.0) / 6.0
             // UIKit Y is 0 at top. Local Y is +4.5 at top.
@@ -1245,7 +1269,7 @@ public class PacketCoordinator: NSObject {
 
         // === PARTICLES ===
         let particleNode = SCNNode()
-        particleNode.position = SCNVector3(0, 3.0, 0.2)
+        particleNode.position = SCNVector3(0, tearY, 0.2)
         particleNode.addParticleSystem(createTearParticleSystem())
         particleNode.addParticleSystem(createCenterBlastParticleSystem())
         tiltContainerNode.addChildNode(particleNode)

@@ -80,7 +80,7 @@ struct PackOpeningView: View {
             .position(x: scrW / 2, y: lowered ? restY : raisedY)
 
             if packState == .tearing && showTearHint && !showOpeningEffect && !packRaised {
-                PackTearHintView(packetZoom: lowered ? restZoom : raisedZoom)
+                PackTearHintView(museumId: selectedMuseumId, packetZoom: lowered ? restZoom : raisedZoom)
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
@@ -375,8 +375,7 @@ struct PackOpeningView: View {
                 inspectedCard = cards[index]
             }
         } else {
-            // Retro: suono + dettaglio (copia già girata). Girata applicata alla chiusura.
-            SoundManager.shared.playSound(named: "giro_carta")
+            // Retro: dettaglio (copia già girata). Girata applicata alla chiusura.
             var flipped = cards[index]
             flipped.isFlipped = true
             pendingFlipIndex = index
@@ -473,7 +472,17 @@ struct PackOpeningView: View {
             remainingArtworks.append(contentsOf: alreadyRevealed.prefix(needed))
         }
         
-        let selectedArtworks = Array(remainingArtworks.shuffled().prefix(5))
+        var selectedArtworks = Array(remainingArtworks.shuffled().prefix(5))
+        
+        if selectedMuseumId == "capodimonte" {
+            let flagellationKey = "14 - Caravaggio_Flagellazione di Cristo_Capodimonte_ph.L.Romano_10780"
+            let found = CardDatabase.getFoundCards()
+            if !revealed.contains(flagellationKey) && !found.contains(flagellationKey) {
+                if !selectedArtworks.contains(flagellationKey) && !selectedArtworks.isEmpty {
+                    selectedArtworks[selectedArtworks.count - 1] = flagellationKey
+                }
+            }
+        }
 
         self.cards = selectedArtworks.map {
             ArtworkCard(
@@ -828,9 +837,9 @@ struct SingleScrollPackView: View {
                     Text(isSelectedActive ? "CONTINUE" : "START")
                         .font(.custom("Helvetica-BoldOblique", size: 18))
                         .foregroundColor(.black)
-                        .frame(width: isSelectedActive ? 150 : 150, height: 44)
+                        .frame(width: 134, height: 44)
                         .background(
-                            RoundedRectangle(cornerRadius: 19)
+                            Capsule()
                                 .fill(LinearGradient(
                                     colors: [.white, Color(hex: "EAEAEA")],
                                     startPoint: .top,
@@ -1464,6 +1473,7 @@ struct PackOpeningFlashView: View {
 // MARK: - PackTearHintView — striscia luminosa + frecce per guidare l'apertura
 
 struct PackTearHintView: View {
+    let museumId: String
     var packetZoom: CGFloat = 2.0
     
     @State private var shimmerX: CGFloat = -180
@@ -1506,18 +1516,27 @@ struct PackTearHintView: View {
                 ZStack {
                     // Glow halo behind the line
                     Rectangle()
-                        .fill(Color(hex: "FF7A00").opacity(0.25))
-                        .frame(maxWidth: .infinity, maxHeight: 8)
-                        .blur(radius: 4)
+                        .fill(Color(hex: "FF7A00").opacity(0.55))
+                        .frame(maxWidth: .infinity, maxHeight: 12)
+                        .blur(radius: 5)
                         .opacity(glowOpacity)
 
                     // Main bold orange line
                     Rectangle()
                         .fill(LinearGradient(
-                            colors: [.clear, Color(hex: "FF7A00").opacity(0.55), Color(hex: "FF7A00").opacity(0.95), Color(hex: "FF7A00").opacity(0.55), .clear],
+                            colors: [.clear, Color(hex: "FF7A00").opacity(0.85), Color(hex: "FF7A00").opacity(1.0), Color(hex: "FF7A00").opacity(0.85), .clear],
                             startPoint: .leading, endPoint: .trailing
                         ))
-                        .frame(maxWidth: .infinity, maxHeight: 3)
+                        .frame(maxWidth: .infinity, maxHeight: 4)
+                        .opacity(glowOpacity)
+
+                    // Core bright white line for a neon glowing effect
+                    Rectangle()
+                        .fill(LinearGradient(
+                            colors: [.clear, Color.white.opacity(0.95), Color.white, Color.white.opacity(0.95), .clear],
+                            startPoint: .leading, endPoint: .trailing
+                        ))
+                        .frame(maxWidth: .infinity, maxHeight: 1.5)
                         .opacity(glowOpacity)
 
                     // Yellow/Orange Shimmer sweep
@@ -1534,7 +1553,7 @@ struct PackTearHintView: View {
                 .frame(height: 8)
                 .clipped()
                 .padding(.horizontal, 24)
-                .position(x: screenWidth / 2, y: screenHeight * 0.5 + (screenHeight * 0.05) * (packetZoom / 2.0))
+                .position(x: screenWidth / 2, y: screenHeight * 0.5 + (screenHeight * 0.05) * (packetZoom / 2.0) + ((museumId == "capodimonte" || museumId == "uffizi") ? -13 : 0))
             }
             .frame(width: screenWidth, height: screenHeight)
             .onAppear {

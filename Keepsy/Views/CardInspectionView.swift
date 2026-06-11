@@ -71,9 +71,7 @@ struct CardInspectionView: View {
             if !isCollectionCompleteFor(card.name) { return "????" }
             return "2026"
         }
-        guard let raw = artwork?.createdAt else { return "Unknown Date" }
-        if raw.contains("-") && raw.count > 10 { return String(raw.prefix(4)) }
-        return raw
+        return artwork?.date ?? "Unknown Date"
     }
 
     private var descriptionText: String {
@@ -126,7 +124,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                         let cardW: CGFloat = min(geometry.size.width - 48, 300)
                         let cardH: CGFloat = cardW * (470.0 / 310.0)
                         let sheetPeekHeight: CGFloat = 160
-                        let cardTopY: CGFloat = max(140, (screenHeight - cardH - sheetPeekHeight) / 2 + 10)
+                        let cardTopY: CGFloat = max(135, (screenHeight - cardH - sheetPeekHeight) / 2 + 10)
 
                         let index = CardDatabase.allArtworkNames.firstIndex(of: card.name)
                         let goldBorder = LinearGradient(
@@ -139,6 +137,11 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                             Group {
                                 if card.name == "vale" {
                                     Image("dasbloccare")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .scaleEffect(1.43)
+                                } else if card.name == "prado_experience" {
+                                    Image("prado_locked")
                                         .resizable()
                                         .aspectRatio(contentMode: .fit)
                                 } else {
@@ -187,7 +190,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
 
                         // Mini-sheet
                         let collapsedY = screenHeight - sheetPeekHeight
-                        let expandedY  = screenHeight * 0.42
+                        let expandedY: CGFloat = 135
                         let sheetY: CGFloat = {
                             switch sheetState {
                             case .collapsed: return collapsedY
@@ -215,7 +218,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                     .foregroundColor(.white)
                                     .lineLimit(3)
 
-                                Text(artistName)
+                                Text("\(artistName); \(creationYear)")
                                     .font(.system(size: 15).italic())
                                     .foregroundColor(.white.opacity(0.65))
 
@@ -252,23 +255,32 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                         )
                         .shadow(color: .black.opacity(0.5), radius: 30, x: 0, y: -4)
                         .position(x: geometry.size.width / 2, y: sheetY + miniSheetDrag + sheetHeight / 2)
-                        .offset(y: 0)
+                        .offset(y: animateSheet ? 0 : screenHeight)
                         .gesture(
                             DragGesture()
                                 .onChanged { v in
-                                    miniSheetDrag = min(max(v.translation.height, -200), 200)
+                                    let trans = v.translation.height
+                                    if sheetState == .expanded && trans < 0 {
+                                        // Elastic rubber-banding above the expanded top limit
+                                        miniSheetDrag = -log(1 + abs(trans)) * 10
+                                    } else {
+                                        miniSheetDrag = trans
+                                    }
                                 }
                                 .onEnded { v in
                                     let drag = v.translation.height
                                     withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
                                         miniSheetDrag = 0
-                                        if drag < -40 {
-                                            sheetState = .expanded
-                                        } else if drag > 40 {
-                                            if sheetState == .expanded {
-                                                sheetState = .collapsed
-                                            } else {
+                                        if sheetState == .collapsed {
+                                            if drag < -60 {
+                                                sheetState = .expanded
+                                            } else if drag > 60 {
                                                 closeAction()
+                                            }
+                                        } else {
+                                            // sheetState == .expanded
+                                            if drag > 100 {
+                                                sheetState = .collapsed
                                             }
                                         }
                                     }
@@ -290,9 +302,9 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                         width: cardWidth,
                         height: cardHeight,
                         isEnabled: isFrontShowing,
-                        tiltX: Double(dragOffset.width) / (cardWidth / 2.0),
-                        tiltY: Double(dragOffset.height) / (cardHeight / 2.0),
-                        customRotationX: Double(-dragOffset.height) / 10.0,
+                        tiltX: 0,
+                        tiltY: 0,
+                        customRotationX: 0,
                         customRotationY: currentRotation
                     ) {
                         ZStack {
@@ -325,7 +337,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                         }
                     }
                     .matchedGeometryEffectOptional(id: "card_\(card.name)", in: isZoomingFromAlbum ? nil : namespace, isSource: false)
-                    .offset(y: isZoomingFromAlbum ? -50 : 0)
+                    .offset(x: dragOffset.width, y: (isZoomingFromAlbum ? -50 : 0) + dragOffset.height)
                     .scaleEffect(1.0)
                     .opacity(1.0)
                     .contentShape(Rectangle())
@@ -391,8 +403,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
     }
 
     private var currentRotation: Double {
-        let dragRotation = Double(dragOffset.width) / 4.0
-        return accumulatedRotation + dragRotation
+        accumulatedRotation
     }
 }
 
@@ -420,7 +431,7 @@ struct CardFullDetailView: View {
     }
 
     private var currentRotation: Double {
-        accumulatedRotation + Double(dragOffset.width) / 4.0
+        accumulatedRotation
     }
 
     var body: some View {
@@ -432,9 +443,9 @@ struct CardFullDetailView: View {
             SilverMetalCardView(
                 width: cardWidth, height: cardHeight,
                 isEnabled: isFrontShowing,
-                tiltX: Double(dragOffset.width) / (cardWidth / 2.0),
-                tiltY: Double(dragOffset.height) / (cardHeight / 2.0),
-                customRotationX: Double(-dragOffset.height) / 10.0,
+                tiltX: 0,
+                tiltY: 0,
+                customRotationX: 0,
                 customRotationY: currentRotation
             ) {
                 ZStack {
@@ -464,6 +475,7 @@ struct CardFullDetailView: View {
             }
             .scaleEffect(animateContent ? 1.0 : 0.85)
             .opacity(animateContent ? 1.0 : 0.0)
+            .offset(x: dragOffset.width, y: dragOffset.height)
             .contentShape(Rectangle())
             .onTapGesture {
                 SoundManager.shared.playSound(named: "giro_carta")

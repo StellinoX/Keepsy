@@ -68,11 +68,11 @@ struct CollectionAlbumView: View {
     @State private var scrollOffset: CGFloat = 0
 
     var pinY: CGFloat {
-        showCloseButton ? 140 : 80
+        showCloseButton ? 135 : 80
     }
 
     var defaultY: CGFloat {
-        showCloseButton ? 470 : 410
+        showCloseButton ? 465 : 410
     }
 
     var offsetY: CGFloat {
@@ -97,7 +97,8 @@ struct CollectionAlbumView: View {
 
     var collectionProgress: Double {
         guard !filteredArtworks.isEmpty else { return 0 }
-        return Double(revealedCards.count) / Double(filteredArtworks.count)
+        let foundCount = filteredArtworks.filter { revealedCards.contains($0) }.count
+        return Double(foundCount) / Double(filteredArtworks.count)
     }
 
     var filteredArtworks: [String] {
@@ -126,7 +127,7 @@ struct CollectionAlbumView: View {
         let w: CGFloat = min(sw - 48, 300)
         let h: CGFloat = w * (470.0 / 310.0)
         let sheetPeek: CGFloat = 160
-        let cardTopY: CGFloat = max(140, (sh - h - sheetPeek) / 2 + 10)
+        let cardTopY: CGFloat = max(135, (sh - h - sheetPeek) / 2 + 10)
         return CGRect(x: (sw - w) / 2, y: cardTopY, width: w, height: h)
     }
     
@@ -145,7 +146,7 @@ struct CollectionAlbumView: View {
             // ── BACKGROUND LAYER: EXPERIENCE CARD ────────────────────────
             VStack(spacing: 0) {
                 // Spacer for the top navigation bar area
-                Spacer().frame(height: showCloseButton ? 140 : 80)
+                Spacer().frame(height: showCloseButton ? 135 : 80)
                 
                 // ── EXPERIENCE CARD SECTION ──────────────────────────────
                 VStack(spacing: 12) {
@@ -186,8 +187,14 @@ struct CollectionAlbumView: View {
                             if museumLocation == "moma" {
                                 Image("dasbloccare")
                                     .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 180, height: 270)
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 230, height: 345)
+                                    .clipShape(RoundedRectangle(cornerRadius: 24))
+                            } else if museumLocation == "prado" {
+                                Image("prado_locked")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: 230, height: 345)
                                     .clipShape(RoundedRectangle(cornerRadius: 24))
                             } else {
                                 ZStack {
@@ -265,7 +272,7 @@ struct CollectionAlbumView: View {
                             Color.clear
                                 .frame(width: 180, height: 270)
                                 .contentShape(Rectangle())
-                                .padding(.top, showCloseButton ? 140 : 80)
+                                .padding(.top, showCloseButton ? 135 : 80)
                                 .onTapGesture {
                                     tapExperienceCard()
                                 }

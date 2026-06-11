@@ -33,6 +33,8 @@ struct ArtImageView: View {
                 Image(uiImage: img)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
+                    .scaleEffect(cardName == "vale" ? 1.43 : 1.0)
+                    .clipped()
             } else {
                 ZStack {
                     CardDatabase.gradientFor(name: cardName)

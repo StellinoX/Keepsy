@@ -221,7 +221,9 @@ struct CardDatabase {
     }
 
     static func downloadImages(for artworks: [String]) async {
-        await syncWithCloud()
+        if remoteArtworks.isEmpty {
+            await syncWithCloud()
+        }
         
         let dir = artworksDirectoryURL
         let artworksToDownload = artworks.filter { name in
