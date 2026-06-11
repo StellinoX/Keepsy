@@ -6,7 +6,7 @@ struct ARArtworkView: View {
     @Binding var activeView: ContentView.ActiveView
     @State private var detectedArtwork: String = ""
     @State private var isTargetUnlocked: Bool = false
-    @State private var diagnosticMessage: String = "Avvio ARKit..."
+    @State private var diagnosticMessage: String = "Starting ARKit..."
     @State private var selectedTargetCard: String? = nil
     @State private var dragOffset: CGFloat = 0
     @State private var sessionFoundCards: Set<String> = []
@@ -14,7 +14,7 @@ struct ARArtworkView: View {
     @State private var devBypassGeofence = false
 
     @State private var imagesReady: Bool = false
-    @State private var downloadProgress: String = "Scaricamento immagini..."
+    @State private var downloadProgress: String = "Downloading images..."
     
     // Proximity / Location variables
     @StateObject private var locationManager = LocationManager()
@@ -105,7 +105,7 @@ struct ARArtworkView: View {
                             },
                             onWrongArtworkDetected: { dbName in
                                 let cleanedTargetName = CardDatabase.cleanedArtworkName(selectedTargetCard ?? "")
-                                detectedArtwork = "Non e' la carta selezionata! Trova \(cleanedTargetName)."
+                                detectedArtwork = "Not the selected card! Find \(cleanedTargetName)."
                             },
                             onDiagnosticMessageUpdated: { msg in
                                 diagnosticMessage = msg
@@ -336,7 +336,7 @@ struct ARArtworkView: View {
                                                 selectedTargetCard = cardName
                                                 carouselOffset = CGFloat(targetIndex)
                                                 isTargetUnlocked = revealedCards.contains(cardName) || duplicatesInPack.contains(cardName) || sessionFoundCards.contains(cardName)
-                                                detectedArtwork = isTargetUnlocked ? "" : "Trova l'opera per sbloccarla!"
+                                                detectedArtwork = isTargetUnlocked ? "" : "Find the artwork to unlock it!"
                                             }
                                         }
                                         .allowsHitTesting(!isAnimatingUnlock && opacity > 0)
@@ -367,7 +367,7 @@ struct ARArtworkView: View {
                                                 HapticManager.shared.triggerSelection()
                                                 selectedTargetCard = newCard
                                                 isTargetUnlocked = revealedCards.contains(newCard) || duplicatesInPack.contains(newCard) || sessionFoundCards.contains(newCard)
-                                                detectedArtwork = isTargetUnlocked ? "" : "Trova l'opera per sbloccarla!"
+                                                detectedArtwork = isTargetUnlocked ? "" : "Find the artwork to unlock it!"
                                             }
                                         }
                                     }
@@ -399,7 +399,7 @@ struct ARArtworkView: View {
                                                 if newIndex >= 0 && newIndex < displayCards.count {
                                                     selectedTargetCard = displayCards[newIndex]
                                                     isTargetUnlocked = revealedCards.contains(displayCards[newIndex]) || duplicatesInPack.contains(displayCards[newIndex]) || sessionFoundCards.contains(displayCards[newIndex])
-                                                    detectedArtwork = isTargetUnlocked ? "" : "Trova l'opera per sbloccarla!"
+                                                    detectedArtwork = isTargetUnlocked ? "" : "Find the artwork to unlock it!"
                                                 }
                                             }
                                             dragOffset = 0
@@ -702,7 +702,7 @@ struct ARArtworkView: View {
             selectedTargetCard = cardName
             isTargetUnlocked = revealedCards.contains(cardName) || duplicatesInPack.contains(cardName)
             // Niente testo "già sbloccata": lo stato è comunicato dalla spunta verde sulla carta.
-            detectedArtwork = isTargetUnlocked ? "" : "Trova l'opera per sbloccarla!"
+            detectedArtwork = isTargetUnlocked ? "" : "Find the artwork to unlock it!"
         }
     }
     
@@ -836,11 +836,11 @@ struct ARArtworkView: View {
         if !missing.isEmpty {
             await MainActor.run {
                 imagesReady = false
-                downloadProgress = "Scaricamento \(missing.count) immagini..."
+                downloadProgress = "Downloading \(missing.count) images..."
             }
             await CardDatabase.downloadImages(for: missing)
             await MainActor.run {
-                downloadProgress = "Pronto!"
+                downloadProgress = "Ready!"
             }
         }
 
@@ -1204,7 +1204,7 @@ struct ARViewContainer: UIViewRepresentable {
         
         guard !targetArtworks.isEmpty else {
             DispatchQueue.main.async {
-                onDiagnosticMessageUpdated("Nessuna foto scaricata! (\(totalKnown) totali sul server). Apri prima la collezione.")
+                onDiagnosticMessageUpdated("No images downloaded! (\(totalKnown) total on server). Open the collection first.")
             }
             arView.session.run(configuration)
             return arView
@@ -1224,13 +1224,13 @@ struct ARViewContainer: UIViewRepresentable {
             if !dynamicImages.isEmpty {
                 configuration.trackingImages = dynamicImages
                 configuration.maximumNumberOfTrackedImages = 1
-                onDiagnosticMessageUpdated("✅ ARKit pronto: \(dynamicImages.count)/\(totalKnown) foto caricate.")
+                onDiagnosticMessageUpdated("✅ ARKit ready: \(dynamicImages.count)/\(totalKnown) images loaded.")
             } else if let fallbackImages = ARReferenceImage.referenceImages(inGroupNamed: "AR Resources", bundle: nil) {
                 configuration.trackingImages = fallbackImages
                 configuration.maximumNumberOfTrackedImages = 1
-                onDiagnosticMessageUpdated("Uso \(fallbackImages.count) foto base da Xcode.")
+                onDiagnosticMessageUpdated("Using \(fallbackImages.count) base images from Xcode.")
             } else {
-                onDiagnosticMessageUpdated("❌ Nessuna foto trovata nel telefono!")
+                onDiagnosticMessageUpdated("❌ No images found on the device!")
             }
             
             // Avvia la sessione AR una sola volta per evitare freeze della fotocamera
@@ -1252,7 +1252,7 @@ struct ARViewContainer: UIViewRepresentable {
                    name == targetName {
                     DispatchQueue.main.async {
                         onArtworkDetected(name)
-                        onDiagnosticMessageUpdated("Trovato: \(name)!")
+                        onDiagnosticMessageUpdated("Found: \(name)!")
                     }
                 }
             }
@@ -1327,7 +1327,7 @@ class ARViewCoordinator: NSObject, ARSCNViewDelegate {
                 } else {
                     self.parent.onWrongArtworkDetected(dbName)
                 }
-                self.parent.onDiagnosticMessageUpdated("Trovato: \(dbName)!")
+                self.parent.onDiagnosticMessageUpdated("Found: \(dbName)!")
             }
         }
     }
@@ -1342,7 +1342,7 @@ class ARViewCoordinator: NSObject, ARSCNViewDelegate {
             DispatchQueue.main.async {
                 if dbName == capturedTargetName {
                     self.parent.onArtworkDetected(dbName)
-                    self.parent.onDiagnosticMessageUpdated("Trovato: \(dbName)!")
+                    self.parent.onDiagnosticMessageUpdated("Found: \(dbName)!")
                 }
             }
         }
