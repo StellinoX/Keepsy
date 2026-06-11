@@ -8,7 +8,7 @@ struct CardInspectionView: View {
     var externalOpacity: Double = 1.0
     let onClose: () -> Void
 
-    @State private var dragOffset: CGSize = .zero
+    @State private var tilt: CGSize = .zero
     @State private var accumulatedRotation: Double = 0.0
     @State private var animateContent: Bool = false
     @State private var animateSheet: Bool = false
@@ -302,10 +302,10 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                         width: cardWidth,
                         height: cardHeight,
                         isEnabled: isFrontShowing,
-                        tiltX: 0,
-                        tiltY: 0,
-                        customRotationX: 0,
-                        customRotationY: currentRotation
+                        tiltX: tilt.width,
+                        tiltY: tilt.height,
+                        customRotationX: tilt.height * -14,
+                        customRotationY: currentRotation + tilt.width * 14
                     ) {
                         ZStack {
                             Image("retro")
@@ -337,7 +337,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                         }
                     }
                     .matchedGeometryEffectOptional(id: "card_\(card.name)", in: isZoomingFromAlbum ? nil : namespace, isSource: false)
-                    .offset(x: dragOffset.width, y: (isZoomingFromAlbum ? -50 : 0) + dragOffset.height)
+                    .offset(x: 0, y: (isZoomingFromAlbum ? -50 : 0))
                     .scaleEffect(1.0)
                     .opacity(1.0)
                     .contentShape(Rectangle())
@@ -349,17 +349,22 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                     }
                     .gesture(
                         DragGesture()
-                            .onChanged { value in dragOffset = value.translation }
+                            .onChanged { value in
+                                // tilt limitato ~±0.6 (Pokémon Pocket style)
+                                let maxTilt: CGFloat = 1.0
+                                let tx = max(-maxTilt, min(maxTilt, value.translation.width / 110))
+                                let ty = max(-maxTilt, min(maxTilt, value.translation.height / 150))
+                                tilt = CGSize(width: tx, height: ty)
+                            }
                             .onEnded { value in
-                                withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                                    if value.translation.width > 80 {
+                                let flipped = abs(value.translation.width) > 150
+                                let dir: Double = value.translation.width > 0 ? 1 : -1
+                                withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                                    tilt = .zero
+                                    if flipped {
                                         SoundManager.shared.playSound(named: "giro_carta")
-                                        accumulatedRotation += 180
-                                    } else if value.translation.width < -80 {
-                                        SoundManager.shared.playSound(named: "giro_carta")
-                                        accumulatedRotation -= 180
+                                        accumulatedRotation += 180 * dir
                                     }
-                                    dragOffset = .zero
                                 }
                             }
                     )
@@ -414,7 +419,7 @@ struct CardFullDetailView: View {
     var namespace: Namespace.ID? = nil
     let onClose: () -> Void
 
-    @State private var dragOffset: CGSize = .zero
+    @State private var tilt: CGSize = .zero
     @State private var accumulatedRotation: Double = 0.0
     @State private var animateContent: Bool = false
 
@@ -443,10 +448,10 @@ struct CardFullDetailView: View {
             SilverMetalCardView(
                 width: cardWidth, height: cardHeight,
                 isEnabled: isFrontShowing,
-                tiltX: 0,
-                tiltY: 0,
-                customRotationX: 0,
-                customRotationY: currentRotation
+                tiltX: tilt.width,
+                tiltY: tilt.height,
+                customRotationX: tilt.height * -14,
+                customRotationY: currentRotation + tilt.width * 14
             ) {
                 ZStack {
                     Image("retro")
@@ -475,7 +480,7 @@ struct CardFullDetailView: View {
             }
             .scaleEffect(animateContent ? 1.0 : 0.85)
             .opacity(animateContent ? 1.0 : 0.0)
-            .offset(x: dragOffset.width, y: dragOffset.height)
+            .offset(x: 0, y: 0)
             .contentShape(Rectangle())
             .onTapGesture {
                 SoundManager.shared.playSound(named: "giro_carta")
@@ -485,17 +490,21 @@ struct CardFullDetailView: View {
             }
             .gesture(
                 DragGesture()
-                    .onChanged { dragOffset = $0.translation }
+                    .onChanged { value in
+                        let maxTilt: CGFloat = 1.0
+                        let tx = max(-maxTilt, min(maxTilt, value.translation.width / 110))
+                        let ty = max(-maxTilt, min(maxTilt, value.translation.height / 150))
+                        tilt = CGSize(width: tx, height: ty)
+                    }
                     .onEnded { v in
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
-                            if v.translation.width > 80 {
+                        let flipped = abs(v.translation.width) > 150
+                        let dir: Double = v.translation.width > 0 ? 1 : -1
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                            tilt = .zero
+                            if flipped {
                                 SoundManager.shared.playSound(named: "giro_carta")
-                                accumulatedRotation += 180
-                            } else if v.translation.width < -80 {
-                                SoundManager.shared.playSound(named: "giro_carta")
-                                accumulatedRotation -= 180
+                                accumulatedRotation += 180 * dir
                             }
-                            dragOffset = .zero
                         }
                     }
             )
