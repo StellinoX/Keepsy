@@ -139,13 +139,11 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                         if (card.name.contains("_experience") || card.name == "vale") && !isCollectionCompleteFor(card.name) {
                             Group {
                                 if card.name == "vale" {
-                                    Image("dasbloccare")
-                                        .resizable()
+                                    CachedRemoteImage(assetName: "dasbloccare")
                                         .aspectRatio(contentMode: .fill)
                                         .scaleEffect(1.43)
                                 } else if card.name == "prado_experience" {
-                                    Image("prado_locked")
-                                        .resizable()
+                                    CachedRemoteImage(assetName: "prado_locked")
                                         .aspectRatio(contentMode: .fit)
                                 } else {
                                     ZStack {

@@ -256,7 +256,7 @@ fileprivate func createHorizontalFlareTexture() -> UIImage {
 fileprivate func createTearParticleSystem() -> SCNParticleSystem {
     let ps = SCNParticleSystem()
     ps.loops = false
-    ps.birthRate = 650
+    ps.birthRate = 1000
     ps.emissionDuration = 0.22
     ps.particleLifeSpan = 0.75
     ps.particleLifeSpanVariation = 0.25
@@ -270,14 +270,14 @@ fileprivate func createTearParticleSystem() -> SCNParticleSystem {
     ps.dampingFactor = 1.2
     ps.acceleration = SCNVector3(0, -6.0, 0) // pulls down like gravity
     
-    ps.particleSize = 0.12
-    ps.particleSizeVariation = 0.06
+    ps.particleSize = 0.10
+    ps.particleSizeVariation = 0.05
     ps.particleImage = createSparkTexture()
     
     // Add particle spin for shimmering twinkle
     ps.particleAngleVariation = CGFloat.pi * 2
-    ps.particleAngularVelocity = 3.0
-    ps.particleAngularVelocityVariation = 1.5
+    ps.particleAngularVelocity = 5.0
+    ps.particleAngularVelocityVariation = 2.5
     
     let sizeController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "size"))
     if let sizeAnim = sizeController.animation as? CAKeyframeAnimation {
@@ -294,10 +294,10 @@ fileprivate func createTearParticleSystem() -> SCNParticleSystem {
     let colorController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "color"))
     if let colorAnim = colorController.animation as? CAKeyframeAnimation {
         colorAnim.values = [
-            UIColor.white.cgColor,
-            UIColor(red: 1.0, green: 0.85, blue: 0.3, alpha: 1.0).cgColor,
-            UIColor(red: 0.9, green: 0.45, blue: 0.1, alpha: 0.7).cgColor,
-            UIColor(red: 0.4, green: 0.1, blue: 0.05, alpha: 0.0).cgColor
+            UIColor.white,
+            UIColor(red: 1.0, green: 0.85, blue: 0.3, alpha: 1.0),
+            UIColor(red: 0.9, green: 0.45, blue: 0.1, alpha: 0.75),
+            UIColor(red: 0.4, green: 0.1, blue: 0.05, alpha: 0.0)
         ]
         colorAnim.keyTimes = [0.0, 0.2, 0.7, 1.0]
     }
@@ -316,28 +316,30 @@ fileprivate func createTearParticleSystem() -> SCNParticleSystem {
 fileprivate func createCenterBlastParticleSystem() -> SCNParticleSystem {
     let ps = SCNParticleSystem()
     ps.loops = false
-    ps.birthRate = 800
-    ps.emissionDuration = 0.12
-    ps.particleLifeSpan = 0.85
-    ps.particleLifeSpanVariation = 0.35
+    ps.birthRate = 250
+    ps.emissionDuration = 0.08
+    ps.particleLifeSpan = 0.42
+    ps.particleLifeSpanVariation = 0.15
     
-    ps.emitterShape = SCNSphere(radius: 0.15)
-    ps.particleVelocity = 8.0
-    ps.particleVelocityVariation = 4.0
-    ps.dampingFactor = 1.5
-    ps.acceleration = SCNVector3(0, -2.0, 0)
+    ps.emitterShape = SCNSphere(radius: 0.05)
+    ps.emittingDirection = SCNVector3(0, 0, 1)
+    ps.spreadingAngle = 180
+    ps.particleVelocity = 14.0
+    ps.particleVelocityVariation = 6.0
+    ps.dampingFactor = 2.0
+    ps.acceleration = SCNVector3(0, 0, 0)
     
-    ps.particleSize = 0.15
-    ps.particleSizeVariation = 0.08
+    ps.particleSize = 0.08
+    ps.particleSizeVariation = 0.04
     ps.particleImage = createSparkTexture()
     
     ps.particleAngleVariation = CGFloat.pi * 2
-    ps.particleAngularVelocity = 5.0
+    ps.particleAngularVelocity = 8.0
     
     let sizeController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "size"))
     if let sizeAnim = sizeController.animation as? CAKeyframeAnimation {
-        sizeAnim.values = [0.2, 1.5, 0.0]
-        sizeAnim.keyTimes = [0.0, 0.25, 1.0]
+        sizeAnim.values = [1.0, 0.2, 0.0]
+        sizeAnim.keyTimes = [0.0, 0.8, 1.0]
     }
     
     let opacityController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "opacity"))
@@ -349,12 +351,12 @@ fileprivate func createCenterBlastParticleSystem() -> SCNParticleSystem {
     let colorController = SCNParticlePropertyController(animation: CAKeyframeAnimation(keyPath: "color"))
     if let colorAnim = colorController.animation as? CAKeyframeAnimation {
         colorAnim.values = [
-            UIColor.white.cgColor,
-            UIColor(red: 0.2, green: 0.8, blue: 1.0, alpha: 1.0).cgColor,
-            UIColor(red: 0.1, green: 0.3, blue: 0.9, alpha: 0.6).cgColor,
-            UIColor(red: 0.05, green: 0.0, blue: 0.4, alpha: 0.0).cgColor
+            UIColor.white,
+            UIColor(red: 1.0, green: 0.85, blue: 0.3, alpha: 1.0),
+            UIColor(red: 0.9, green: 0.45, blue: 0.1, alpha: 0.5),
+            UIColor.clear
         ]
-        colorAnim.keyTimes = [0.0, 0.25, 0.75, 1.0]
+        colorAnim.keyTimes = [0.0, 0.3, 0.7, 1.0]
     }
     
     ps.propertyControllers = [

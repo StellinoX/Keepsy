@@ -41,17 +41,12 @@ struct CardView: View {
 
     var body: some View {
         ZStack {
-            // Retro: visibile quando non flippata
-            cardBack
-                .opacity(card.isFlipped ? 0 : 1)
-                .rotation3DEffect(.degrees(card.isFlipped ? 180 : 0), axis: (x: 0, y: 1, z: 0))
+            if card.isFlipped {
+                cardFront
+            } else {
+                cardBack
+            }
 
-            // Fronte: visibile quando flippata, parte già ruotata di 180 e torna a 0
-            cardFront
-                .opacity(card.isFlipped ? 1 : 0)
-                .rotation3DEffect(.degrees(card.isFlipped ? 0 : -180), axis: (x: 0, y: 1, z: 0))
-
-            // Checkmark
             if card.isFlipped && showCheckmark {
                 VStack {
                     HStack {

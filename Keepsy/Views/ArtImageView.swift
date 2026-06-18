@@ -21,15 +21,7 @@ struct ArtImageView: View {
     
     var body: some View {
         Group {
-            if cardName.contains("_experience") {
-                ZStack {
-                    CardDatabase.goldGradient
-                    Image("LogoKeepsy")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding(25)
-                }
-            } else if let img = localImage {
+            if let img = localImage {
                 Image(uiImage: img)
                     .resizable()
                     .aspectRatio(contentMode: .fill)

@@ -35,6 +35,15 @@ struct PackOpeningView: View {
     @State private var nextButtonScale: CGFloat = 0
     @State private var isDealt = false
 
+    // Hero card flight state
+    @State private var cardFrames: [Int: CGRect] = [:]
+    @State private var flyingCard: ArtworkCard? = nil
+    @State private var flyingCardIndex: Int? = nil
+    @State private var flyingPos: CGPoint = .zero
+    @State private var flyingScale: CGFloat = 1.0
+    @State private var flyingRotation: Double = -180
+    @State private var flyingDimOpacity: Double = 0.0
+
     // Pack del tearing estratto in una proprietà: viene montato sia in .packSelection
     // (pre-warm, nascosto dietro il rullo) sia in .tearing, mantenendo la STESSA identità
     // di view → la scena SceneKit non si re-inizializza e non c'è frame vuoto all'handoff.
@@ -55,7 +64,10 @@ struct PackOpeningView: View {
             SceneKitPacketView(
                 museumId: selectedMuseumId,
                 packetImageName: MuseumConfig.shared.museums.first(where: { $0.id == selectedMuseumId })?.packetImageName ?? "uffizi_pacchetto",
-                raised: false,
+                // raised = pacchetto ANCORA in alto (preview): contenuto 3D centrato a scala 1.0,
+                // identico a come lo incornicia il rullo → all'handoff non c'è scatto/zoom improvviso.
+                // Quando si abbassa (lowered), passa alla cornice "tearing" (shiftato + 1.18).
+                raised: !lowered,
                 onTearComplete: {
                     showOpeningEffect = true
                     triggerShake()
@@ -115,6 +127,7 @@ struct PackOpeningView: View {
                 if packState == .selecting {
                     SingleScrollPackView(
                         activeView: $activeView,
+                        locationManager: locationManager,
                         currentCity: locationManager.currentCity,
                         selectedMuseumId: $selectedMuseumId,
                         onStart: {
@@ -188,8 +201,16 @@ struct PackOpeningView: View {
                                         .offset(x: cardOffsetX[index], y: cardOffsetY[index])
                                         .rotationEffect(.degrees(cardRotation[index]))
                                         .scaleEffect(cardScale[index])
-                                        .opacity(cardOpacity[index])
-                                        .allowsHitTesting(cardOpacity[index] > 0)
+                                        .opacity(flyingCardIndex == index ? 0 : cardOpacity[index])
+                                        .allowsHitTesting(cardOpacity[index] > 0 && flyingCard == nil)
+                                        .background(
+                                            GeometryReader { geo in
+                                                Color.clear.preference(
+                                                    key: GridCardFrameKey.self,
+                                                    value: [index: geo.frame(in: .global)]
+                                                )
+                                            }
+                                        )
                                     }
                                 }
                                 // Riga 2: carte 3,4
@@ -202,8 +223,16 @@ struct PackOpeningView: View {
                                         .offset(x: cardOffsetX[index], y: cardOffsetY[index])
                                         .rotationEffect(.degrees(cardRotation[index]))
                                         .scaleEffect(cardScale[index])
-                                        .opacity(cardOpacity[index])
-                                        .allowsHitTesting(cardOpacity[index] > 0)
+                                        .opacity(flyingCardIndex == index ? 0 : cardOpacity[index])
+                                        .allowsHitTesting(cardOpacity[index] > 0 && flyingCard == nil)
+                                        .background(
+                                            GeometryReader { geo in
+                                                Color.clear.preference(
+                                                    key: GridCardFrameKey.self,
+                                                    value: [index: geo.frame(in: .global)]
+                                                )
+                                            }
+                                        )
                                     }
                                 }
                             }
@@ -274,7 +303,7 @@ struct PackOpeningView: View {
                         }
                     }
                     .id(card.name)
-                    .transition(.asymmetric(insertion: .opacity, removal: .identity))
+                    .transition(.asymmetric(insertion: .scale(scale: 0.6).combined(with: .opacity), removal: .identity))
                     .zIndex(100)
                 }
 
@@ -304,6 +333,57 @@ struct PackOpeningView: View {
             } // Nested ZStack
             .blur(radius: showCompletionModal ? 20 : 0)
             .allowsHitTesting(!showCompletionModal)
+            .onPreferenceChange(GridCardFrameKey.self) { frames in
+                cardFrames = frames
+            }
+
+            // Hero flight overlays (outer ZStack = full screen due to .ignoresSafeArea)
+            if flyingCard != nil {
+                Color.black.opacity(flyingDimOpacity)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .zIndex(75)
+            }
+            if let fc = flyingCard {
+                let cardW: CGFloat = 310
+                let cardH: CGFloat = 470
+                let isRevealed = CardDatabase.getRevealedCards().contains(fc.name)
+                let absRot = abs(flyingRotation.truncatingRemainder(dividingBy: 360))
+                let isFront = !(absRot > 90 && absRot < 270)
+                let goldBorder = LinearGradient(
+                    colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
+                             Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+                SilverMetalCardView(
+                    width: cardW, height: cardH,
+                    isEnabled: isFront,
+                    tiltX: 0, tiltY: 0,
+                    customRotationX: 0,
+                    customRotationY: flyingRotation
+                ) {
+                    ZStack {
+                        Image("retro")
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: cardW, height: cardH)
+                            .clipped()
+                            .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                        ArtworkCardFrontView(
+                            name: fc.name, title: fc.title,
+                            cardIndex: nil,
+                            width: cardW, height: cardH,
+                            isRevealed: isRevealed,
+                            goldBorder: goldBorder
+                        )
+                        .opacity(isFront ? 1 : 0)
+                    }
+                }
+                .scaleEffect(flyingScale)
+                .position(flyingPos)
+                .allowsHitTesting(false)
+                .zIndex(80)
+            }
 
             if showCompletionModal {
                 completionModal
@@ -313,7 +393,7 @@ struct PackOpeningView: View {
         }
         .ignoresSafeArea()
         .fullScreenCover(isPresented: $showCitySelector) {
-            CitySelectorView(selectedMuseumId: $selectedMuseumId)
+            CitySelectorView(locationManager: locationManager, selectedMuseumId: $selectedMuseumId)
         }
         .task {
             await CardDatabase.syncWithCloud()
@@ -344,11 +424,21 @@ struct PackOpeningView: View {
         .onChange(of: selectedMuseumId) { _, newValue in
             UserDefaults.standard.set(newValue, forKey: "lastSelectedMuseumId")
         }
+        .onChange(of: locationManager.lastKnownLocation) { _, newLocation in
+            guard newLocation != nil else { return }
+            // Auto-select the closest museum if there is no active pack in progress
+            if !CardDatabase.hasActivePack(),
+               let closest = locationManager.closestMuseum(from: MuseumConfig.shared.museums) {
+                selectedMuseumId = closest.id
+            }
+        }
         .onAppear {
             // Open the pager on the active pack's museum, if one is in progress.
             if CardDatabase.hasActivePack(),
                let activeMuseum = UserDefaults.standard.string(forKey: "currentCity") {
                 selectedMuseumId = activeMuseum
+            } else if let closest = locationManager.closestMuseum(from: MuseumConfig.shared.museums) {
+                selectedMuseumId = closest.id
             } else if let lastSelected = UserDefaults.standard.string(forKey: "lastSelectedMuseumId") {
                 selectedMuseumId = lastSelected
             }
@@ -360,20 +450,52 @@ struct PackOpeningView: View {
 
     func handleCardTap(index: Int) {
         guard index < cards.count else { return }
-        guard inspectedCard == nil else { return }
+        guard inspectedCard == nil, flyingCard == nil else { return }
 
         if cards[index].isFlipped {
-            // Già fronte: solo dettaglio, NIENTE suono
             withAnimation(.easeOut(duration: 0.25)) {
                 inspectedCard = cards[index]
             }
         } else {
-            // Retro: dettaglio (copia già girata). Girata applicata alla chiusura.
-            var flipped = cards[index]
-            flipped.isFlipped = true
-            pendingFlipIndex = index
-            withAnimation(.easeOut(duration: 0.25)) {
-                inspectedCard = flipped
+            SoundManager.shared.playSound(named: "giro_carta")
+            HapticManager.shared.triggerImpact(style: .light)
+
+            guard let startFrame = cardFrames[index] else {
+                cards[index].isFlipped = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    guard index < self.cards.count else { return }
+                    withAnimation(.easeOut(duration: 0.28)) { self.inspectedCard = self.cards[index] }
+                }
+                return
+            }
+
+            let scrW = UIScreen.mainBounds.width
+            let scrH = UIScreen.mainBounds.height
+
+            flyingCard = cards[index]
+            flyingCardIndex = index
+            flyingPos = CGPoint(x: startFrame.midX, y: startFrame.midY)
+            flyingScale = 111.0 / 310.0
+            flyingRotation = -180
+
+            withAnimation(.easeIn(duration: 0.18)) { flyingDimOpacity = 0.85 }
+            withAnimation(.easeInOut(duration: 0.45)) {
+                flyingPos = CGPoint(x: scrW / 2, y: scrH / 2)
+                flyingScale = 1.0
+                flyingRotation = 0
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                guard index < self.cards.count else { return }
+                self.cards[index].isFlipped = true
+                var t = Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) {
+                    self.flyingCard = nil
+                    self.flyingCardIndex = nil
+                    self.flyingDimOpacity = 0.0
+                    self.inspectedCard = self.cards[index]
+                }
             }
         }
     }
@@ -642,6 +764,13 @@ struct PackOpeningView: View {
             )
             .shadow(color: .black.opacity(0.6), radius: 40, x: 0, y: 20)
         }
+    }
+}
+
+private struct GridCardFrameKey: PreferenceKey {
+    static var defaultValue: [Int: CGRect] = [:]
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue()) { $1 }
     }
 }
 

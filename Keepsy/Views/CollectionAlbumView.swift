@@ -181,14 +181,12 @@ struct CollectionAlbumView: View {
                     } else {
                         Group {
                             if museumLocation == "moma" {
-                                Image("dasbloccare")
-                                    .resizable()
+                                CachedRemoteImage(assetName: "dasbloccare")
                                     .aspectRatio(contentMode: .fill)
                                     .frame(width: 230, height: 345)
                                     .clipShape(RoundedRectangle(cornerRadius: 24))
                             } else if museumLocation == "prado" {
-                                Image("prado_locked")
-                                    .resizable()
+                                CachedRemoteImage(assetName: "prado_locked")
                                     .aspectRatio(contentMode: .fill)
                                     .frame(width: 230, height: 345)
                                     .clipShape(RoundedRectangle(cornerRadius: 24))
@@ -303,6 +301,43 @@ struct CollectionAlbumView: View {
                             .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
                             .offset(y: offsetY)
 
+                            StickerGridView(
+                                artworks: filteredArtworks,
+                                foundCards: foundCards,
+                                revealedCards: revealedCards,
+                                recentlyCompletedPack: recentlyCompletedPack,
+                                animatedCompletedCards: animatedCompletedCards,
+                                hasSyncedWithCloud: hasSyncedWithCloud,
+                                animatingCardName: animatingCardName,
+                                cellCardOpacity: cellCardOpacity,
+                                animationPhase: animationPhase,
+                                hideCellPocket: hideCellPocket,
+                                frameTracker: frameTracker,
+                                frameRefreshToken: frameRefreshToken,
+                                columns: columns
+                            ) { name, f in
+                                let figFrame = CGRect(x: f.minX + 7, y: f.minY + 5, width: 58, height: 84)
+                                sourceFrame = figFrame
+                                pocketFrame = CGRect(x: f.minX, y: f.minY + 5, width: 72, height: 94)
+                                pulledSourceFrame = CGRect(x: figFrame.minX, y: figFrame.minY - pullDistance, width: figFrame.width, height: figFrame.height)
+                                startPullAnimation(for: name)
+                            }
+                            .equatable()
+                            .padding(.top, 110)
+                            .padding(.bottom, 24)
+                            .padding(.horizontal, 16)
+                            .mask(
+                                Rectangle()
+                                    .padding(.top, offsetY + 110)
+                            )
+
+                            // Touch blocker for the header area to prevent tapping cards that have scrolled underneath it
+                            Color.clear
+                                .frame(height: 110)
+                                .contentShape(Rectangle())
+                                .onTapGesture {} // Consumes taps, preventing them from reaching cards underneath
+                                .offset(y: offsetY)
+
                             // Header dentro lo sheet: anello progress + titolo museo + città.
                             // Si muove insieme allo sheet (stesso offsetY) e resta visibile
                             // sopra la grid.
@@ -351,36 +386,6 @@ struct CollectionAlbumView: View {
                             .padding(.top, 28)
                             .offset(y: offsetY)
                             .allowsHitTesting(false)
-
-                            StickerGridView(
-                                artworks: filteredArtworks,
-                                foundCards: foundCards,
-                                revealedCards: revealedCards,
-                                recentlyCompletedPack: recentlyCompletedPack,
-                                animatedCompletedCards: animatedCompletedCards,
-                                hasSyncedWithCloud: hasSyncedWithCloud,
-                                animatingCardName: animatingCardName,
-                                cellCardOpacity: cellCardOpacity,
-                                animationPhase: animationPhase,
-                                hideCellPocket: hideCellPocket,
-                                frameTracker: frameTracker,
-                                frameRefreshToken: frameRefreshToken,
-                                columns: columns
-                            ) { name, f in
-                                let figFrame = CGRect(x: f.minX + 7, y: f.minY + 5, width: 58, height: 84)
-                                sourceFrame = figFrame
-                                pocketFrame = CGRect(x: f.minX, y: f.minY + 5, width: 72, height: 94)
-                                pulledSourceFrame = CGRect(x: figFrame.minX, y: figFrame.minY - pullDistance, width: figFrame.width, height: figFrame.height)
-                                startPullAnimation(for: name)
-                            }
-                            .equatable()
-                            .padding(.top, 110)
-                            .padding(.bottom, 24)
-                            .padding(.horizontal, 16)
-                            .mask(
-                                Rectangle()
-                                    .padding(.top, offsetY + 110)
-                            )
                         }
                         .frame(width: sheetWidth)
                         .padding(.bottom, 40)

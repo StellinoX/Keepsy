@@ -19,6 +19,7 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
         self.authorizationStatus = manager.authorizationStatus
+        self.lastKnownLocation = manager.location
 
         if manager.authorizationStatus == .notDetermined {
             manager.requestWhenInUseAuthorization()
@@ -48,6 +49,24 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     func isUserNear(museum: Museum) -> Bool {
         guard let dist = distanceTo(museum: museum) else { return false }
         return dist <= museum.geofenceRadius
+    }
+
+    func closestMuseum(from museums: [Museum]) -> Museum? {
+        guard let userLoc = lastKnownLocation else { return nil }
+        return museums.min(by: { m1, m2 in
+            let loc1 = CLLocation(latitude: m1.latitude, longitude: m1.longitude)
+            let loc2 = CLLocation(latitude: m2.latitude, longitude: m2.longitude)
+            return userLoc.distance(from: loc1) < userLoc.distance(from: loc2)
+        })
+    }
+
+    func sortedMuseums(_ museums: [Museum]) -> [Museum] {
+        guard let userLoc = lastKnownLocation else { return museums }
+        return museums.sorted { m1, m2 in
+            let loc1 = CLLocation(latitude: m1.latitude, longitude: m1.longitude)
+            let loc2 = CLLocation(latitude: m2.latitude, longitude: m2.longitude)
+            return userLoc.distance(from: loc1) < userLoc.distance(from: loc2)
+        }
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

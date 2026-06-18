@@ -11,7 +11,6 @@ struct ARArtworkView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var sessionFoundCards: Set<String> = []
     @State private var showQuitDialog: Bool = false
-    @State private var devBypassGeofence = false
 
     @State private var imagesReady: Bool = false
     @State private var downloadProgress: String = "Downloading images..."
@@ -104,7 +103,7 @@ struct ARArtworkView: View {
                 Color.black.ignoresSafeArea()
 
                 // ── CAMERA / GEOLOCATION CHECK ──────────────────────────────
-                if isBlocked && !devBypassGeofence {
+                if isBlocked {
                     geofenceWarningOverlay(geometry: geometry)
                 } else {
                     if imagesReady {
@@ -199,34 +198,6 @@ struct ARArtworkView: View {
                     VStack(spacing: 0) {
                         Spacer()
                             .allowsHitTesting(false)
-
-                        // MARK: - GUEST MODE (DEV ONLY)
-                        // TODO: Remove this entire block before production if no longer needed
-                        #if DEBUG
-                        if !isAnimatingUnlock && !isTargetUnlocked {
-                            Button(action: {
-                                HapticManager.shared.triggerImpact(style: .medium)
-                                if let target = selectedTargetCard {
-                                    let isAlreadyUnlocked = revealedCards.contains(target) ||
-                                                            duplicatesInPack.contains(target) ||
-                                                            sessionFoundCards.contains(target)
-                                    if !isAlreadyUnlocked && triggerUnlockAnimation == nil {
-                                        let cleanedName = CardDatabase.cleanedArtworkName(target)
-                                        detectedArtwork = "Unlocked: \(cleanedName)!"
-                                        isTargetUnlocked = true
-                                        triggerUnlockAnimation = target
-                                    }
-                                }
-                            }) {
-                                Text("Guest Mode")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.35))
-                                .frame(width: 80, height: 24)
-                                .background(Capsule().fill(Color.white.opacity(0.10)))
-                            }
-                            .padding(.bottom, 14)
-                        }
-                        #endif
 
                         if CardDatabase.isActivePackAllDuplicates() {
                             Text("All already collected")
@@ -654,20 +625,13 @@ struct ARArtworkView: View {
             }
             
             // Now check if blocked
-            if !isBlocked || devBypassGeofence {
+            if !isBlocked {
                 await checkAndDownloadImages()
             }
         }
         .onChange(of: triggerUnlockAnimation) { _, newValue in
             if let cardName = newValue {
                 startUnlockAnimation(for: cardName)
-            }
-        }
-        .onChange(of: devBypassGeofence) { _, newValue in
-            if newValue {
-                Task {
-                    await checkAndDownloadImages()
-                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
@@ -807,7 +771,7 @@ struct ARArtworkView: View {
 
     private func checkAndDownloadImages() async {
         // If blocked, don't download yet
-        if isBlocked && !devBypassGeofence && locationManager.lastKnownLocation != nil {
+        if isBlocked && locationManager.lastKnownLocation != nil {
             return
         }
         
@@ -970,25 +934,6 @@ struct ARArtworkView: View {
                         .foregroundStyle(.white.opacity(0.65))
                         .padding(.horizontal, 24)
                 }
-                
-                // MARK: - GUEST MODE (DEV ONLY)
-                // TODO: Remove this entire block before production if no longer needed
-                #if DEBUG
-                Spacer().frame(height: 16)
-                Button(action: {
-                    HapticManager.shared.triggerImpact(style: .light)
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
-                        devBypassGeofence = true
-                    }
-                }) {
-                    Text("Guest Mode")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .frame(width: 110, height: 32)
-                        .background(Capsule().fill(Color.white.opacity(0.12)))
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                #endif
                 
                 Spacer()
             }

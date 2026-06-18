@@ -1,7 +1,9 @@
 import SwiftUI
+import CoreLocation
 
 struct SingleScrollPackView: View {
     @Binding var activeView: ContentView.ActiveView
+    let locationManager: LocationManager
     let currentCity: String
     @Binding var selectedMuseumId: String
     let onStart: () -> Void
@@ -13,7 +15,9 @@ struct SingleScrollPackView: View {
     @State private var baseScrollPosition: CGFloat = 0.0
     @State private var isDragging: Bool = false
 
-    private var museums: [Museum] { MuseumConfig.shared.museums }
+    private var museums: [Museum] {
+        locationManager.sortedMuseums(MuseumConfig.shared.museums)
+    }
 
     private var selectedIndex: Int {
         museums.firstIndex(where: { $0.id == selectedMuseumId }) ?? 0
@@ -195,6 +199,13 @@ struct SingleScrollPackView: View {
                         scrollPosition = targetPos
                     }
                 }
+            }
+        }
+        .onChange(of: locationManager.lastKnownLocation) { _, _ in
+            // Re-align the scroll position if the museums list is re-sorted
+            if let index = museums.firstIndex(where: { $0.id == selectedMuseumId }) {
+                scrollPosition = CGFloat(index)
+                baseScrollPosition = CGFloat(index)
             }
         }
     }

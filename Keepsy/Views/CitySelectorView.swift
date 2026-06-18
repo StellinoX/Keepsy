@@ -1,6 +1,8 @@
 import SwiftUI
+import CoreLocation
 
 struct CitySelectorView: View {
+    let locationManager: LocationManager
     @Binding var selectedMuseumId: String
     @Environment(\.dismiss) private var dismiss
     
@@ -22,6 +24,17 @@ struct CitySelectorView: View {
         CityItem(name: "Madrid",   flag: "🇪🇸", museumsCountText: "1 Museum", museumId: "prado"),
         CityItem(name: "New York", flag: "🇺🇸", museumsCountText: "1 Museum", museumId: "moma"),
     ]
+    
+    private var sortedCities: [CityItem] {
+        guard let userLoc = locationManager.lastKnownLocation else { return cities }
+        return cities.sorted { c1, c2 in
+            guard let mId1 = c1.museumId, let m1 = MuseumConfig.shared.museums.first(where: { $0.id == mId1 }) else { return false }
+            guard let mId2 = c2.museumId, let m2 = MuseumConfig.shared.museums.first(where: { $0.id == mId2 }) else { return true }
+            let dist1 = userLoc.distance(from: CLLocation(latitude: m1.latitude, longitude: m1.longitude))
+            let dist2 = userLoc.distance(from: CLLocation(latitude: m2.latitude, longitude: m2.longitude))
+            return dist1 < dist2
+        }
+    }
     
     var body: some View {
         ZStack {
@@ -53,7 +66,6 @@ struct CitySelectorView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 64)
                 .padding(.bottom, 35)
-
                 
                 // Title and Subtitle
                 VStack(alignment: .leading, spacing: 8) {
@@ -109,7 +121,7 @@ struct CitySelectorView: View {
                 
                 // City List Container Card
                 VStack(spacing: 0) {
-                    let filteredCities = cities.filter {
+                    let filteredCities = sortedCities.filter {
                         searchText.isEmpty || $0.name.lowercased().contains(searchText.lowercased())
                     }
                     
