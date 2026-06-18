@@ -17,7 +17,7 @@ struct ARArtworkView: View {
     @State private var downloadProgress: String = "Downloading images..."
     
     // Proximity / Location variables
-    @StateObject private var locationManager = LocationManager()
+    @State private var locationManager = LocationManager()
     @State private var carouselOffset: CGFloat = 2.0
     
     // Triumph unlock animation states
@@ -58,7 +58,7 @@ struct ARArtworkView: View {
             return true
         }
         
-        guard let lastLocation = locationManager.lastKnownLocation else {
+        guard locationManager.lastKnownLocation != nil else {
             return false // not blocked yet, wait for location
         }
         
@@ -69,12 +69,33 @@ struct ARArtworkView: View {
         guard let museum = activeMuseum else { return nil }
         return locationManager.distanceTo(museum: museum)
     }
-    
+
+    // Pre-composed Text pieces keep the type-checker from solving one giant
+    // interpolated literal (caused an "unable to type-check in reasonable time"
+    // archive failure on slower CI machines).
+    private var congratsSubtitle: Text {
+        let p1 = Text("You just ").font(.custom("Helvetica-Oblique", size: 16))
+        let kept = Text("Kept").font(.custom("Helvetica-BoldOblique", size: 16))
+        let p2 = Text(" an artwork").font(.custom("Helvetica-Oblique", size: 16))
+        return Text("\(p1)\(kept)\(p2)")
+    }
+
+    private var autoKeptMessage: Text {
+        let semibold = Font.system(size: 15, weight: .semibold)
+        let black = Font.system(size: 15, weight: .black)
+        let countText = "\(autoKeptCount) \(autoKeptCount == 1 ? "card" : "cards")"
+        let p1 = Text("You closed the app with ").font(semibold).italic()
+        let count = Text(countText).font(black).italic()
+        let p2 = Text(" not yet in your collection.\nDon't worry — we ").font(semibold).italic()
+        let kept = Text("Kept").font(black).italic()
+        let p3 = Text(" them for you.").font(semibold).italic()
+        return Text("\(p1)\(count)\(p2)\(kept)\(p3)")
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let screenWidth = geometry.size.width
             let screenHeight = geometry.size.height
-            let safeTop = geometry.safeAreaInsets.top
             let cardWidth: CGFloat = screenWidth * 0.44
             let cardHeight: CGFloat = cardWidth * (168.0 / 111.0)
             let cardCorner = cardWidth * 3.0 / 111.0
@@ -120,7 +141,7 @@ struct ARArtworkView: View {
                                 .scaleEffect(1.5)
                             Text("Verifying museum proximity...")
                                 .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundStyle(.white.opacity(0.8))
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
@@ -130,7 +151,7 @@ struct ARArtworkView: View {
                                 .scaleEffect(1.5)
                             Text(downloadProgress)
                                 .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundStyle(.white.opacity(0.8))
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 40)
                         }
@@ -166,7 +187,7 @@ struct ARArtworkView: View {
                             Text("Back")
                                 .font(.system(size: 16, weight: .regular))
                         }
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
                         .background(Capsule().fill(Color.white.opacity(0.12)))
@@ -199,7 +220,7 @@ struct ARArtworkView: View {
                             }) {
                                 Text("Guest Mode")
                                 .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.white.opacity(0.35))
+                                .foregroundStyle(.white.opacity(0.35))
                                 .frame(width: 80, height: 24)
                                 .background(Capsule().fill(Color.white.opacity(0.10)))
                             }
@@ -210,7 +231,7 @@ struct ARArtworkView: View {
                         if CardDatabase.isActivePackAllDuplicates() {
                             Text("All already collected")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundStyle(.white.opacity(0.7))
                                 .padding(.bottom, 12)
                         }
 
@@ -218,8 +239,6 @@ struct ARArtworkView: View {
                         if !displayCards.isEmpty {
                             ZStack(alignment: .bottom) {
                                 ForEach(Array(displayCards.enumerated()), id: \.element) { index, cardName in
-                                    let isSelected = cardName == selectedTargetCard
-                                    
                                     // Determina se questa specifica carta si sta sbloccando
                                     let isThisCardUnlocking = isAnimatingUnlock && cardName == foundCardName
                                     
@@ -280,18 +299,6 @@ struct ARArtworkView: View {
                                     }()
 
                                     // NIENTE rotationZ né rotationY — carte sempre frontali
-                                    let rotationZ: Double = {
-                                        if isThisCardUnlocking { return 0.0 }
-                                        let angle = diff * 6.0
-                                        return max(-6.0, min(6.0, angle))
-                                    }()
-                                    
-                                    let rotationY: Double = {
-                                        if isThisCardUnlocking { return 0.0 }
-                                        let angle = diff * 35.0
-                                        return max(-35.0, min(35.0, angle))
-                                    }()
- 
                                     let isUnlocked = duplicatesInPack.contains(cardName) || revealedCards.contains(cardName) || sessionFoundCards.contains(cardName)
                                     let showGreenBorder = isThisCardUnlocking || isUnlocked
                                     let cardScale = cardWidth / 111.0
@@ -445,15 +452,8 @@ struct ARArtworkView: View {
                                 )
                                 .shadow(color: .black.opacity(0.35), radius: 4, x: 0, y: 2)
 
-                            (
-                                Text("You just ")
-                                    .font(.custom("Helvetica-Oblique", size: 16))
-                                + Text("Kept")
-                                    .font(.custom("Helvetica-BoldOblique", size: 16))
-                                + Text(" an artwork")
-                                    .font(.custom("Helvetica-Oblique", size: 16))
-                            )
-                            .foregroundColor(.white)
+                            congratsSubtitle
+                            .foregroundStyle(.white)
                             .shadow(color: .black.opacity(0.35), radius: 2, x: 0, y: 1)
                         }
                         .scaleEffect(catturataScale)
@@ -477,14 +477,14 @@ struct ARArtworkView: View {
                             Text("QUIT EXPERIENCE?")
                                 .font(.system(size: 26, weight: .black))
                                 .italic()
-                                .foregroundColor(Color(hex: "DD611B"))
+                                .foregroundStyle(Color(hex: "DD611B"))
                                 .multilineTextAlignment(.center)
                                 .padding(.top, 8)
                             
                             Text("Are you sure you want to quit the experience?\nYour progress **will be saved**")
                                 .font(.system(size: 15, weight: .semibold))
                                 .italic()
-                                .foregroundColor(.white.opacity(0.85))
+                                .foregroundStyle(.white.opacity(0.85))
                                 .multilineTextAlignment(.center)
                                 .lineSpacing(4)
                                 .padding(.horizontal, 16)
@@ -500,7 +500,7 @@ struct ARArtworkView: View {
                                     Text("DISCARD")
                                         .font(.system(size: 18, weight: .black))
                                         .italic()
-                                        .foregroundColor(.black)
+                                        .foregroundStyle(.black)
                                         .frame(maxWidth: .infinity)
                                         .frame(height: 54)
                                         .background(Capsule().fill(Color(hex: "E5E5EA")))
@@ -527,7 +527,7 @@ struct ARArtworkView: View {
                                     Text("CONFIRM")
                                         .font(.system(size: 18, weight: .black))
                                         .italic()
-                                        .foregroundColor(.white)
+                                        .foregroundStyle(.white)
                                         .frame(maxWidth: .infinity)
                                         .frame(height: 54)
                                         .background(Capsule().fill(Color(hex: "3A3A3C")))
@@ -563,23 +563,12 @@ struct ARArtworkView: View {
                             Text("WE KEPT 'EM")
                                 .font(.system(size: 26, weight: .black))
                                 .italic()
-                                .foregroundColor(Color(hex: "FF7A00"))
+                                .foregroundStyle(Color(hex: "FF7A00"))
                                 .multilineTextAlignment(.center)
                                 .padding(.top, 8)
 
-                            (
-                                Text("You closed the app with ")
-                                    .font(.system(size: 15, weight: .semibold)).italic()
-                                + Text("\(autoKeptCount) \(autoKeptCount == 1 ? "card" : "cards")")
-                                    .font(.system(size: 15, weight: .black)).italic()
-                                + Text(" not yet in your collection.\nDon't worry — we ")
-                                    .font(.system(size: 15, weight: .semibold)).italic()
-                                + Text("Kept")
-                                    .font(.system(size: 15, weight: .black)).italic()
-                                + Text(" them for you.")
-                                    .font(.system(size: 15, weight: .semibold)).italic()
-                            )
-                            .foregroundColor(.white.opacity(0.85))
+                            autoKeptMessage
+                            .foregroundStyle(.white.opacity(0.85))
                             .multilineTextAlignment(.center)
                             .lineSpacing(4)
                             .padding(.horizontal, 16)
@@ -593,7 +582,7 @@ struct ARArtworkView: View {
                                 Text("NICE, THANKS")
                                     .font(.system(size: 18, weight: .black))
                                     .italic()
-                                    .foregroundColor(.black)
+                                    .foregroundStyle(.black)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 54)
                                     .background(Capsule().fill(Color(hex: "E5E5EA")))
@@ -925,7 +914,7 @@ struct ARArtworkView: View {
                     }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(.white)
                             .frame(width: 44, height: 44)
                             .background(Circle().fill(Color(hex: "383838")))
                     }
@@ -940,7 +929,7 @@ struct ARArtworkView: View {
                 // OOOPS... Badge
                 Text("OOOPS...")
                     .font(.custom("Helvetica-BoldOblique", size: 11))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(
@@ -972,13 +961,13 @@ struct ARArtworkView: View {
                     Text("Location services are required to verify you are at the museum. Please enable location permissions in Settings.")
                         .font(.custom("Helvetica", size: 12))
                         .lineSpacing(2)
-                        .foregroundColor(.white.opacity(0.65))
+                        .foregroundStyle(.white.opacity(0.65))
                         .padding(.horizontal, 24)
                 } else {
                     Text("Remember! Keepsy lets you find and collect artworks whenever you're **inside** the museum. Plan your visit and Keep'em all!")
                         .font(.custom("Helvetica", size: 14))
                         .lineSpacing(2)
-                        .foregroundColor(.white.opacity(0.65))
+                        .foregroundStyle(.white.opacity(0.65))
                         .padding(.horizontal, 24)
                 }
                 
@@ -994,7 +983,7 @@ struct ARArtworkView: View {
                 }) {
                     Text("Guest Mode")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white.opacity(0.45))
+                        .foregroundStyle(.white.opacity(0.45))
                         .frame(width: 110, height: 32)
                         .background(Capsule().fill(Color.white.opacity(0.12)))
                 }

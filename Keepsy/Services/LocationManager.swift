@@ -1,59 +1,58 @@
 import Foundation
 import CoreLocation
-import Combine
+import Observation
 @preconcurrency import MapKit
 
-class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+@Observable
+class LocationManager: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
-    
-    // Lazy geocoder marked as deprecated to avoid warnings in newer iOS versions
+
     @available(iOS, deprecated: 26.0)
     private lazy var geocoder: CLGeocoder? = CLGeocoder()
-    
-    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
-    @Published var currentCity: String = "NAPLES"
-    @Published var isInNaples: Bool = true
-    @Published var lastKnownLocation: CLLocation? = nil
-    
+
+    var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    var currentCity: String = "NAPLES"
+    var isInNaples: Bool = true
+    var lastKnownLocation: CLLocation? = nil
+
     private var isHighAccuracyMode = false
-    
+
     override init() {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
         self.authorizationStatus = manager.authorizationStatus
-        
-        // Request authorization if not determined
+
         if manager.authorizationStatus == .notDetermined {
             manager.requestWhenInUseAuthorization()
         } else {
             manager.startUpdatingLocation()
         }
     }
-    
+
     func startHighAccuracyTracking() {
         isHighAccuracyMode = true
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.startUpdatingLocation()
     }
-    
+
     func stopTracking() {
         isHighAccuracyMode = false
         manager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
         manager.stopUpdatingLocation()
     }
-    
+
     func distanceTo(museum: Museum) -> CLLocationDistance? {
         guard let userLoc = lastKnownLocation else { return nil }
         let museumLoc = CLLocation(latitude: museum.latitude, longitude: museum.longitude)
         return userLoc.distance(from: museumLoc)
     }
-    
+
     func isUserNear(museum: Museum) -> Bool {
         guard let dist = distanceTo(museum: museum) else { return false }
         return dist <= museum.geofenceRadius
     }
-    
+
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         DispatchQueue.main.async {
             self.authorizationStatus = manager.authorizationStatus
@@ -62,18 +61,18 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         }
     }
-    
+
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        
+
         DispatchQueue.main.async {
             self.lastKnownLocation = location
         }
-        
+
         if !isHighAccuracyMode {
             manager.stopUpdatingLocation()
         }
-        
+
         if #available(iOS 26.0, *) {
             Task {
                 if let city = await reverseGeocode(location: location) {
@@ -86,7 +85,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             performLegacyGeocoding(location: location)
         }
     }
-    
+
     nonisolated private func reverseGeocode(location: CLLocation) async -> String? {
         if #available(iOS 26.0, *) {
             if let request = MKReverseGeocodingRequest(location: location) {
@@ -100,7 +99,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
         return nil
     }
-    
+
     @available(iOS, deprecated: 26.0)
     private func performLegacyGeocoding(location: CLLocation) {
         geocoder?.reverseGeocodeLocation(location) { [weak self] placemarks, error in
@@ -114,7 +113,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         }
     }
-    
+
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("Location manager failed: \(error.localizedDescription)")
     }
