@@ -88,7 +88,7 @@ class NetworkService {
             // SwiftUI's .onReceive asserts main queue — post on main thread.
             await MainActor.run {
                 NotificationCenter.default.post(
-                    name: NSNotification.Name("ArtworkImageDownloaded"),
+                    name: .artworkImageDownloaded,
                     object: nil,
                     userInfo: ["internalName": name]
                 )

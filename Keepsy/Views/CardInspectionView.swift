@@ -108,6 +108,9 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                         .ignoresSafeArea()
                         .contentShape(Rectangle())
                         .onTapGesture { closeAction() }
+                        .accessibilityLabel("Dismiss card")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityHint("Double-tap to close")
 
                     if showFullDetail {
                         CardFullDetailView(
@@ -153,7 +156,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                             ))
                                         Text("?")
                                             .font(.system(size: 110, weight: .black))
-                                            .foregroundColor(.white)
+                                            .foregroundStyle(.white)
                                     }
                                 }
                             }
@@ -205,24 +208,26 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                 .frame(width: 36, height: 5)
                                 .padding(.top, 12)
                                 .padding(.bottom, 18)
+                                .accessibilityHidden(true)
 
                             VStack(alignment: .leading, spacing: 14) {
                                 Text(categoryName.uppercased())
                                     .font(.system(size: 11, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.75))
+                                    .foregroundStyle(.white.opacity(0.75))
                                     .padding(.horizontal, 10).padding(.vertical, 5)
                                     .background(Capsule().fill(Color.white.opacity(0.12)))
 
                                 Text((card.name.contains("_experience") || card.name == "vale") && !isCollectionCompleteFor(card.name) ? "Locked Experience" : card.title)
                                     .font(.system(size: 26, weight: .black))
-                                    .foregroundColor(.white)
+                                    .foregroundStyle(.white)
                                     .lineLimit(3)
 
                                 Text("\(artistName); \(creationYear)")
                                     .font(.system(size: 15).italic())
-                                    .foregroundColor(.white.opacity(0.65))
+                                    .foregroundStyle(.white.opacity(0.65))
 
                                 Color.white.opacity(0.1).frame(height: 1).padding(.vertical, 4)
+                                    .accessibilityHidden(true)
                             }
                             .padding(.horizontal, 24)
                             .padding(.bottom, 10)
@@ -231,7 +236,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                 VStack(alignment: .leading, spacing: 0) {
                                     Text(descriptionText)
                                         .font(.system(size: 15))
-                                        .foregroundColor(Color(hex: "D1D1D6"))
+                                        .foregroundStyle(Color(hex: "D1D1D6"))
                                         .lineSpacing(4)
                                 }
                                 .padding(.horizontal, 24)
@@ -294,8 +299,11 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                     // Sfondo scuro — tap fuori dalla carta chiude
                     Color.black
                         .opacity(0.85)
-                        .edgesIgnoringSafeArea(.all)
+                        .ignoresSafeArea()
                         .onTapGesture { closeAction() }
+                        .accessibilityLabel("Dismiss card")
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityHint("Double-tap to close")
 
                     // Carta con effetto metallico
                     SilverMetalCardView(
@@ -368,9 +376,12 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                 }
                             }
                     )
+                    .accessibilityLabel(isFrontShowing ? card.title : "Card back")
+                    .accessibilityHint("Double-tap to flip card")
+                    .accessibilityAddTraits(.isButton)
                 }
             }
-            .edgesIgnoringSafeArea(.all)
+            .ignoresSafeArea()
             .onAppear {
                 if isZoomingFromAlbum {
                     animateContent = true
@@ -444,6 +455,9 @@ struct CardFullDetailView: View {
             Color.black.opacity(animateContent ? 0.88 : 0.0)
                 .ignoresSafeArea()
                 .onTapGesture { closeDetail() }
+                .accessibilityLabel("Dismiss card")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Double-tap to close")
 
             SilverMetalCardView(
                 width: cardWidth, height: cardHeight,
@@ -508,6 +522,9 @@ struct CardFullDetailView: View {
                         }
                     }
             )
+            .accessibilityLabel(isFrontShowing ? card.title : "Card back")
+            .accessibilityHint("Double-tap to flip card")
+            .accessibilityAddTraits(.isButton)
         }
         .ignoresSafeArea()
         .onAppear {

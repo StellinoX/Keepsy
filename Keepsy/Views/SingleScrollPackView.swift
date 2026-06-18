@@ -44,10 +44,10 @@ struct SingleScrollPackView: View {
                 VStack(alignment: .leading, spacing: -4) {
                     Text("Hello,")
                         .font(.custom("Helvetica-Light", size: 24))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                     Text("Keeper")
                         .font(.custom("Helvetica-BoldOblique", size: 38))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
@@ -143,7 +143,7 @@ struct SingleScrollPackView: View {
                 Button(action: isSelectedActive ? onTapActivePack : onStart) {
                     Text(isSelectedActive ? "CONTINUE" : "START")
                         .font(.custom("Helvetica-BoldOblique", size: 18))
-                        .foregroundColor(.black)
+                        .foregroundStyle(.black)
                         .frame(width: 134, height: 44)
                         .background(
                             Capsule()
@@ -208,7 +208,7 @@ struct SingleScrollPackView: View {
                     .shadow(color: .black.opacity(0.45), radius: 8, x: 0, y: 4)
                 Image(systemName: "location.north.fill")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .rotationEffect(.degrees(45))
             }
             .frame(width: 20, height: 20)
@@ -216,7 +216,7 @@ struct SingleScrollPackView: View {
 
             Text(displayedCity)
                 .font(.custom("Helvetica-BoldOblique", size: 11))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.trailing, 10)
         }

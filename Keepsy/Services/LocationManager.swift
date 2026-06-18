@@ -7,9 +7,6 @@ import Observation
 class LocationManager: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
 
-    @available(iOS, deprecated: 26.0)
-    private lazy var geocoder: CLGeocoder? = CLGeocoder()
-
     var authorizationStatus: CLAuthorizationStatus = .notDetermined
     var currentCity: String = "NAPLES"
     var isInNaples: Bool = true
@@ -73,44 +70,22 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
             manager.stopUpdatingLocation()
         }
 
-        if #available(iOS 26.0, *) {
-            Task {
-                if let city = await reverseGeocode(location: location) {
-                    let upperCity = city.uppercased()
-                    self.currentCity = upperCity
-                    self.isInNaples = (upperCity == "NAPLES" || upperCity == "NAPOLI")
-                }
+        Task {
+            if let city = await reverseGeocode(location: location) {
+                let upperCity = city.uppercased()
+                self.currentCity = upperCity
+                self.isInNaples = (upperCity == "NAPLES" || upperCity == "NAPOLI")
             }
-        } else {
-            performLegacyGeocoding(location: location)
         }
     }
 
     nonisolated private func reverseGeocode(location: CLLocation) async -> String? {
-        if #available(iOS 26.0, *) {
-            if let request = MKReverseGeocodingRequest(location: location) {
-                do {
-                    let mapItems = try await request.mapItems
-                    return mapItems.first?.addressRepresentations?.cityName
-                } catch {
-                    return nil
-                }
-            }
-        }
-        return nil
-    }
-
-    @available(iOS, deprecated: 26.0)
-    private func performLegacyGeocoding(location: CLLocation) {
-        geocoder?.reverseGeocodeLocation(location) { [weak self] placemarks, error in
-            guard let self = self else { return }
-            if let placemark = placemarks?.first, let city = placemark.locality {
-                DispatchQueue.main.async {
-                    let upperCity = city.uppercased()
-                    self.currentCity = upperCity
-                    self.isInNaples = (upperCity == "NAPLES" || upperCity == "NAPOLI")
-                }
-            }
+        guard let request = MKReverseGeocodingRequest(location: location) else { return nil }
+        do {
+            let mapItems = try await request.mapItems
+            return mapItems.first?.addressRepresentations?.cityName
+        } catch {
+            return nil
         }
     }
 

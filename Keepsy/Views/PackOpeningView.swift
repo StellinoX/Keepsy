@@ -40,8 +40,8 @@ struct PackOpeningView: View {
     // di view → la scena SceneKit non si re-inizializza e non c'è frame vuoto all'handoff.
     @ViewBuilder
     private var tearingPackView: some View {
-        let scrW = UIScreen.main.bounds.width
-        let scrH = UIScreen.main.bounds.height
+        let scrW = UIScreen.mainBounds.width
+        let scrH = UIScreen.mainBounds.height
         let pW = scrW * 0.90
         let pH = pW * (350.0 / 230.0)
         // Al SWAP (rullo → tearing) il pack DEVE essere identico al rullo: scale 2.0,
@@ -93,12 +93,12 @@ struct PackOpeningView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .edgesIgnoringSafeArea(.all)
+                .ignoresSafeArea()
                 GridBackground()
 
                 // Flash bianco all'apertura
                 Color.white
-                    .edgesIgnoringSafeArea(.all)
+                    .ignoresSafeArea()
                     .opacity(flashOpacity)
                     .blendMode(.screen)
                     .allowsHitTesting(false)
@@ -236,7 +236,7 @@ struct PackOpeningView: View {
                             }) {
                                 Text("KEEP'EM")
                                     .font(.custom("Helvetica-BoldOblique", size: 20))
-                                    .foregroundColor(.black)
+                                    .foregroundStyle(.black)
                                     .frame(width: 232, height: 54)
                                     .background(
                                         RoundedRectangle(cornerRadius: 30)
@@ -291,7 +291,7 @@ struct PackOpeningView: View {
                             Text("Back")
                                 .font(.system(size: 16, weight: .regular))
                         }
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .frame(width: 85, height: 44)
                         .background(
                             Capsule().fill(Color(hex: "383838"))
@@ -567,7 +567,7 @@ struct PackOpeningView: View {
     private var completionModal: some View {
         ZStack {
             Color.black.opacity(0.4)
-                .edgesIgnoringSafeArea(.all)
+                .ignoresSafeArea()
                 .onTapGesture {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showCompletionModal = false
@@ -591,27 +591,17 @@ struct PackOpeningView: View {
                 VStack(spacing: 6) {
                     Text("Looks like you're having a great time exploring!")
                         .font(.custom("Helvetica-Oblique", size: 15))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
 
                     Text("You've already completed this collection.")
                         .font(.custom("Helvetica-Oblique", size: 15))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundStyle(.white.opacity(0.7))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
 
-                    (
-                        Text("Go ")
-                            .font(.custom("Helvetica-Oblique", size: 15))
-                            .foregroundColor(.white.opacity(0.7))
-                        + Text("Keep")
-                            .font(.custom("Helvetica-BoldOblique", size: 15))
-                            .foregroundColor(.white)
-                        + Text(" another one!")
-                            .font(.custom("Helvetica-Oblique", size: 15))
-                            .foregroundColor(.white.opacity(0.7))
-                    )
+                    Text("\(Text("Go ").font(.custom("Helvetica-Oblique", size: 15)).foregroundStyle(.white.opacity(0.7)))\(Text("Keep").font(.custom("Helvetica-BoldOblique", size: 15)).foregroundStyle(.white))\(Text(" another one!").font(.custom("Helvetica-Oblique", size: 15)).foregroundStyle(.white.opacity(0.7)))")
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 }
@@ -625,7 +615,7 @@ struct PackOpeningView: View {
                 }) {
                     Text("KEEP EXPLORING")
                         .font(.custom("Helvetica-BoldOblique", size: 15))
-                        .foregroundColor(.black)
+                        .foregroundStyle(.black)
                         .frame(width: 240, height: 50)
                         .background(
                             Capsule().fill(Color(hex: "D8D8D8"))

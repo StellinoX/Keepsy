@@ -1,4 +1,16 @@
 import SwiftUI
+import UIKit
+
+extension UIScreen {
+    /// Non-deprecated replacement for `UIScreen.main.bounds`.
+    /// Reads the bounds from the active window scene's screen.
+    static var mainBounds: CGRect {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.screen.bounds
+            ?? CGRect(x: 0, y: 0, width: 393, height: 852)
+    }
+}
 
 extension Color {
     init(hex: String) {

@@ -14,12 +14,12 @@ struct CardDatabase {
     private static var _artworksByMuseum: [String: [String]] = loadMuseumMapFromCache()
 
     static var remoteArtworks: [String: NetworkArtwork] {
-        get { dictLock.lock(); defer { dictLock.unlock() }; return _remoteArtworks }
-        set { dictLock.lock(); _remoteArtworks = newValue; dictLock.unlock() }
+        get { dictLock.withLock { _remoteArtworks } }
+        set { dictLock.withLock { _remoteArtworks = newValue } }
     }
     static var artworksByMuseum: [String: [String]] {
-        get { dictLock.lock(); defer { dictLock.unlock() }; return _artworksByMuseum }
-        set { dictLock.lock(); _artworksByMuseum = newValue; dictLock.unlock() }
+        get { dictLock.withLock { _artworksByMuseum } }
+        set { dictLock.withLock { _artworksByMuseum = newValue } }
     }
     
     private static let mapCacheKey = "CachedMuseumMap"
@@ -278,7 +278,7 @@ struct CardDatabase {
             // Post notification on main thread so UI updates immediately
             await MainActor.run {
                 NotificationCenter.default.post(
-                    name: NSNotification.Name("ArtworkImageDownloaded"),
+                    name: .artworkImageDownloaded,
                     object: nil,
                     userInfo: ["internalName": name]
                 )
@@ -327,14 +327,8 @@ struct CardDatabase {
         guard let dimensions = remoteArtworks[name]?.dimensions, !dimensions.isEmpty else {
             return 0.5
         }
-        // Find first integer/decimal number in the string
-        let pattern = #"(\d+(?:[.,]\d+)?)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: dimensions, range: NSRange(dimensions.startIndex..., in: dimensions)),
-              let range = Range(match.range(at: 1), in: dimensions) else {
-            return 0.5
-        }
-        let valueStr = dimensions[range].replacingOccurrences(of: ",", with: ".")
+        guard let match = dimensions.firstMatch(of: /(\d+(?:[.,]\d+)?)/) else { return 0.5 }
+        let valueStr = String(match.1).replacingOccurrences(of: ",", with: ".")
         guard let cm = Double(valueStr), cm > 5 else { return 0.5 }
         // Convert cm to meters, clamp to sensible museum painting range (0.1–3.0m)
         return CGFloat(min(max(cm / 100.0, 0.1), 3.0))
@@ -378,10 +372,7 @@ struct CardDatabase {
         }
         
         var cleaned = name
-        if let regexPrefix = try? NSRegularExpression(pattern: "^[0-9]+\\s*-\\s*", options: []) {
-            let range = NSRange(location: 0, length: cleaned.utf16.count)
-            cleaned = regexPrefix.stringByReplacingMatches(in: cleaned, options: [], range: range, withTemplate: "")
-        }
+        cleaned = cleaned.replacing(/^\d+\s*-\s*/, with: "")
         if let index = cleaned.lowercased().range(of: "_ph.") {
             cleaned = String(cleaned[..<index.lowerBound])
         }
@@ -660,23 +651,5 @@ struct CardDatabase {
     ]
 }
 
-// Spostata qui da PackOpeningView per renderla accessibile in tutta l'app
-extension Color {
-    init(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 3: // RGB (12-bit)
-            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
-        case 6: // RGB (24-bit)
-            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: // ARGB (32-bit)
-            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default:
-            (a, r, g, b) = (1, 1, 1, 0)
-        }
-        self.init(.sRGB, red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255, opacity: Double(a) / 255)
-    }
-}
+// `Color(hex:)` now lives in Components/Color+Hex.swift so it can be shared
+// across the whole app without duplicating the implementation here.

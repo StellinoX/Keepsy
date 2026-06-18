@@ -18,7 +18,7 @@ struct CircularProgressView: View {
 
             Text(percentText)
                 .font(.system(size: 9, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
         }
         .frame(width: 32, height: 32)
     }
@@ -101,7 +101,7 @@ struct PackExpansionRow: View {
 
                 Text(subtitle)
                     .font(.custom("Helvetica-Oblique", size: 12))
-                    .foregroundColor(Color.white.opacity(0.6))
+                    .foregroundStyle(Color.white.opacity(0.6))
             }
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top, 2)
@@ -117,7 +117,7 @@ struct PackExpansionRow: View {
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(Color.white.opacity(0.6))
+                    .foregroundStyle(Color.white.opacity(0.6))
             }
         }
     }

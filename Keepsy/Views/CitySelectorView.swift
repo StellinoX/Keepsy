@@ -31,7 +31,7 @@ struct CitySelectorView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .edgesIgnoringSafeArea(.all)
+            .ignoresSafeArea()
             
             GridBackground()
             
@@ -44,7 +44,7 @@ struct CitySelectorView: View {
                     }) {
                         Image(systemName: "xmark")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(.white)
                             .frame(width: 44, height: 44)
                             .background(Circle().fill(Color(hex: "383838")))
                     }
@@ -72,7 +72,7 @@ struct CitySelectorView: View {
                     
                     Text("Always updating...")
                         .font(.custom("Helvetica-Oblique", size: 12))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundStyle(.white.opacity(0.6))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
@@ -81,11 +81,11 @@ struct CitySelectorView: View {
                 // Search Bar
                 HStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
+                        .foregroundStyle(.gray)
                         .font(.system(size: 18))
                     
-                    TextField("", text: $searchText, prompt: Text("Your city").foregroundColor(.white.opacity(0.5)))
-                        .foregroundColor(.white)
+                    TextField("", text: $searchText, prompt: Text("Your city").foregroundStyle(.white.opacity(0.5)))
+                        .foregroundStyle(.white)
                         .font(.custom("Helvetica", size: 16))
                 }
                 .padding(.horizontal, 16)
@@ -122,11 +122,11 @@ struct CitySelectorView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("\(city.name) \(city.flag)")
                                         .font(.custom("Helvetica-Bold", size: 18))
-                                        .foregroundColor(.white)
+                                        .foregroundStyle(.white)
                                     
                                     Text(city.museumsCountText)
                                         .font(.custom("Helvetica-Oblique", size: 11))
-                                        .foregroundColor(.white.opacity(0.5))
+                                        .foregroundStyle(.white.opacity(0.5))
                                 }
                                 
                                 Spacer()
@@ -195,7 +195,7 @@ struct CitySelectorView: View {
                 }) {
                     Text("CONFIRM")
                         .font(.custom("Helvetica-BoldOblique", size: 18))
-                        .foregroundColor(.black)
+                        .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
                         .background(

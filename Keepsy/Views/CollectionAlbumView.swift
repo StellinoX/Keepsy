@@ -1,9 +1,5 @@
 import SwiftUI
 
-enum CardAnimationPhase {
-    case idle, pulling, zooming, open, closing
-}
-
 class FrameTracker {
     var cellFrames: [String: CGRect] = [:]
     var floatingCardFrames: [String: CGRect] = [:]
@@ -276,6 +272,10 @@ struct CollectionAlbumView: View {
                                 .onTapGesture {
                                     tapExperienceCard()
                                 }
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(isCollectionComplete ? "Experience card" : "Special card, locked")
+                                .accessibilityHint(isCollectionComplete ? "Double-tap to open experience card" : "Complete collection to unlock")
+                                .accessibilityAddTraits(.isButton)
                         }
                         
                         // ── ALBUM GRID CONTAINER ─────────────────────────────────
@@ -298,6 +298,7 @@ struct CollectionAlbumView: View {
                                     .fill(Color(white: 0.28))
                                     .frame(width: 36, height: 5)
                                     .padding(.top, 10)
+                                    .accessibilityHidden(true)
                             }
                             .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
                             .offset(y: offsetY)
@@ -317,9 +318,12 @@ struct CollectionAlbumView: View {
                                         .rotationEffect(.degrees(-90))
                                     Text("\(Int(collectionProgress * 100))%")
                                         .font(.custom("Helvetica-BoldOblique", size: 11))
-                                        .foregroundColor(.white)
+                                        .foregroundStyle(.white)
                                 }
                                 .frame(width: 44, height: 44)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel("\(Int(collectionProgress * 100)) percent of collection revealed")
+                                .accessibilityAddTraits(.isStaticText)
 
                                 Spacer()
 
@@ -335,7 +339,7 @@ struct CollectionAlbumView: View {
                                         )
                                     Text(museumCity)
                                         .font(.system(size: 14, weight: .regular).italic())
-                                        .foregroundColor(.white.opacity(0.7))
+                                        .foregroundStyle(.white.opacity(0.7))
                                 }
 
                                 Spacer()
@@ -411,7 +415,7 @@ struct CollectionAlbumView: View {
                         Text("Back")
                             .font(.system(size: 16, weight: .regular))
                     }
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .frame(width: 85, height: 44)
                     .background(
                         Capsule().fill(Color(hex: "383838"))
@@ -420,6 +424,7 @@ struct CollectionAlbumView: View {
                 .position(x: 30 + 85/2, y: 83 + 44/2)
                 .blur(radius: showSpecialCardLockModal ? 20 : 0)
                 .allowsHitTesting(!showSpecialCardLockModal)
+                .accessibilityHint("Returns to pack selection")
             }
 
 
@@ -520,7 +525,6 @@ struct CollectionAlbumView: View {
     func flyingCardView(for name: String) -> some View {
         if (name.contains("_experience") || name == "vale") && !isCollectionComplete {
             let finalW: CGFloat = destinationFrame.width
-            let finalH: CGFloat = destinationFrame.height
             let scale = flyingFrame.width / finalW
 
             ZStack {
@@ -612,13 +616,14 @@ struct CollectionAlbumView: View {
         ZStack {
             // Semi-transparent dim background
             Color.black.opacity(0.4)
-                .edgesIgnoringSafeArea(.all)
+                .ignoresSafeArea()
                 .onTapGesture {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showSpecialCardLockModal = false
                     }
                 }
                 .transition(.opacity)
+                .accessibilityHidden(true)
 
             // Dialog Card
             VStack(spacing: 28) {
@@ -641,13 +646,13 @@ struct CollectionAlbumView: View {
                 VStack(spacing: 6) {
                     Text("An exclusive reward awaits.")
                         .font(.custom("Helvetica-Oblique", size: 15))
-                        .foregroundColor(.white.opacity(0.85))
+                        .foregroundStyle(.white.opacity(0.85))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                     
                     Text("Complete the collection to reveal it.")
                         .font(.custom("Helvetica-Oblique", size: 15))
-                        .foregroundColor(.white.opacity(0.85))
+                        .foregroundStyle(.white.opacity(0.85))
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                 }
@@ -662,7 +667,7 @@ struct CollectionAlbumView: View {
                 }) {
                     Text("KEEP EXPLORING")
                         .font(.custom("Helvetica-BoldOblique", size: 15))
-                        .foregroundColor(.black)
+                        .foregroundStyle(.black)
                         .frame(width: 240, height: 50)
                         .background(
                             Capsule()
@@ -929,164 +934,4 @@ struct CollectionAlbumView: View {
     }
     
     // placeNextStickerFromTop REMOVED - WE NOW USE THE HIGH-FIDELITY ANIMATENEXTSTICKER ZOOM INTRO NATIVELY!
-}
-
-// MARK: - AlbumCardCell
-
-struct AlbumCardCell: View {
-    let name: String
-    let index: Int
-    let isFound: Bool
-    let isRevealed: Bool
-    let hasSynced: Bool
-    let cardOpacity: Double
-    let isAnimating: Bool
-    let hidePocket: Bool   // true only during final descent so flying card lands cleanly
-
-    private var remoteURL: URL? {
-        if let urlString = CardDatabase.remoteArtworks[name]?.imageUrl {
-            return URL(string: urlString)
-        }
-        return nil
-    }
-
-    var body: some View {
-        ZStack {
-            if isFound {
-                ZStack(alignment: .top) {
-                    let borderGrad = CardDatabase.borderGradientFor(name: name)
-                    ArtworkCardFrontView(
-                        name: name,
-                        title: CardDatabase.remoteArtworks[name]?.title ?? CardDatabase.cleanedArtworkName(name),
-                        cardIndex: index,
-                        width: 58,
-                        height: 84,
-                        isRevealed: isRevealed,
-                        goldBorder: borderGrad
-                    )
-                    .opacity(cardOpacity)
-
-                    // Hide pocket only during final descent (phase B) so the flying card
-                    // lands cleanly. During pull-up and zoom the pocket stays visible.
-                    if !(isAnimating && hidePocket) {
-                        Image("pocket_outline")
-                            .resizable()
-                            .frame(width: 72, height: 94)
-                            .padding(.top, 5)
-                    }
-                }
-                .frame(width: 72, height: 103)
-
-            } else {
-                ZStack(alignment: .top) {
-                    ZStack(alignment: .center) {
-                        Text(String(format: "%02d", index + 1))
-                            .font(.custom("Helvetica-BoldOblique", size: 17))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [Color(hex: "000000"), Color(hex: "6F6F6F")],
-                                    startPoint: .topTrailing,
-                                    endPoint: .bottomLeading
-                                )
-                            )
-                            .shadow(color: Color.black.opacity(0.25), radius: 1, x: 0, y: 1)
-                            .padding(.top, 4)
-
-                        if !isAnimating {
-                            Image("pocket_outline")
-                                .resizable()
-                        }
-                    }
-                    .frame(width: 72, height: 94)
-                    .padding(.top, 5)
-                }
-                .frame(width: 72, height: 103)
-            }
-        }
-    }
-}
-
-// MARK: - Cell Frame Preference Key (replacement for per-cell GeometryReader)
-
-struct CellFramePreference: Equatable {
-    let name: String
-    let frame: CGRect
-}
-
-struct CellFramePreferenceKey: PreferenceKey {
-    static var defaultValue: [CellFramePreference] = []
-    static func reduce(value: inout [CellFramePreference], nextValue: () -> [CellFramePreference]) {
-        value.append(contentsOf: nextValue())
-    }
-}
-
-struct StickerGridView: View, Equatable {
-    let artworks: [String]
-    let foundCards: Set<String>
-    let revealedCards: Set<String>
-    let recentlyCompletedPack: [String]
-    let animatedCompletedCards: Set<String>
-    let hasSyncedWithCloud: Bool
-    let animatingCardName: String?
-    let cellCardOpacity: Double
-    let animationPhase: CardAnimationPhase
-    let hideCellPocket: Bool
-    let frameTracker: FrameTracker
-    let frameRefreshToken: Int
-    let columns: [GridItem]
-    let onTapCard: (String, CGRect) -> Void
-
-    static func == (lhs: StickerGridView, rhs: StickerGridView) -> Bool {
-        lhs.artworks == rhs.artworks &&
-        lhs.foundCards == rhs.foundCards &&
-        lhs.revealedCards == rhs.revealedCards &&
-        lhs.recentlyCompletedPack == rhs.recentlyCompletedPack &&
-        lhs.animatedCompletedCards == rhs.animatedCompletedCards &&
-        lhs.hasSyncedWithCloud == rhs.hasSyncedWithCloud &&
-        lhs.animatingCardName == rhs.animatingCardName &&
-        lhs.cellCardOpacity == rhs.cellCardOpacity &&
-        lhs.animationPhase == rhs.animationPhase &&
-        lhs.hideCellPocket == rhs.hideCellPocket &&
-        lhs.frameRefreshToken == rhs.frameRefreshToken
-    }
-
-    var body: some View {
-        LazyVGrid(columns: columns, spacing: 18) {
-            ForEach(Array(artworks.enumerated()), id: \.offset) { index, name in
-                AlbumCardCell(
-                    name: name,
-                    index: index,
-                    isFound: revealedCards.contains(name) || recentlyCompletedPack.contains(name),
-                    isRevealed: revealedCards.contains(name) && !recentlyCompletedPack.contains(name) ? true : animatedCompletedCards.contains(name),
-                    hasSynced: hasSyncedWithCloud,
-                    cardOpacity: (animatingCardName == name) ? cellCardOpacity : (recentlyCompletedPack.contains(name) && !animatedCompletedCards.contains(name) ? 0.0 : 1.0),
-                    isAnimating: animatingCardName == name,
-                    hidePocket: (animatingCardName == name) && hideCellPocket
-                )
-                .contentShape(Rectangle())
-                .background(
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: CellFramePreferenceKey.self,
-                            value: [CellFramePreference(name: name, frame: geo.frame(in: .named("root")))]
-                        )
-                    }
-                )
-                .onTapGesture {
-                    guard recentlyCompletedPack.isEmpty else { return }
-                    guard revealedCards.contains(name), animationPhase == .idle else { return }
-                    if let f = frameTracker.cellFrames[name] {
-                        onTapCard(name, f)
-                    }
-                }
-                .frame(width: 72, height: 103)
-                .id(name)
-            }
-        }
-        .onPreferenceChange(CellFramePreferenceKey.self) { preferences in
-            for pref in preferences {
-                frameTracker.cellFrames[pref.name] = pref.frame
-            }
-        }
-    }
 }

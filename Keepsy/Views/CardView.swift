@@ -28,6 +28,17 @@ struct CardView: View {
         return isRevealed || isAlreadyOwned
     }
 
+    private var voiceOverLabel: String {
+        if card.isFlipped {
+            var parts = [card.title]
+            if let a = artwork?.artist, !a.isEmpty { parts.append("by \(a)") }
+            if let d = artwork?.date, !d.isEmpty { parts.append(d) }
+            if showCheckmark { parts.append("already in your collection") }
+            return parts.joined(separator: ", ")
+        }
+        return "Card face down"
+    }
+
     var body: some View {
         ZStack {
             // Retro: visibile quando non flippata
@@ -48,6 +59,7 @@ struct CardView: View {
                             .resizable()
                             .frame(width: 27, height: 27)
                             .offset(x: -8, y: -8)
+                            .accessibilityHidden(true)
                         Spacer()
                     }
                     Spacer()
@@ -60,6 +72,10 @@ struct CardView: View {
         .onTapGesture {
             onTap?()
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(voiceOverLabel)
+        .accessibilityHint("Double-tap to inspect")
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Card Back (unrevealed)
@@ -132,7 +148,7 @@ struct ArtworkCardFrontView: View {
                     // Title Box
                     Text(title)
                         .font(.system(size: 5.5 * scale, weight: .bold))
-                        .foregroundColor(.black)
+                        .foregroundStyle(.black)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                         .padding(.horizontal, 5 * scale)
@@ -157,7 +173,7 @@ struct ArtworkCardFrontView: View {
                     if !authorText.isEmpty {
                         Text(authorText)
                             .font(.system(size: 3.2 * scale).italic())
-                            .foregroundColor(Color(white: 0.45))
+                            .foregroundStyle(Color(white: 0.45))
                             .lineLimit(1)
                             .padding(.horizontal, 4 * scale)
                             .frame(height: 7 * scale)

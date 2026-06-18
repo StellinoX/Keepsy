@@ -85,7 +85,7 @@ struct ArtImageView: View {
                         }
                     }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ArtworkImageDownloaded"))) { notification in
+                .onReceive(NotificationCenter.default.publisher(for: .artworkImageDownloaded)) { notification in
                     if let name = notification.userInfo?["internalName"] as? String, name == cardName {
                         Task(priority: .utility) {
                             if let img = await CardDatabase.localImageAsync(for: cardName) {

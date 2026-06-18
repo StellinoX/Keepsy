@@ -8,9 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		713F009A2FCB597900F85055 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 713F00992FCB597900F85055 /* FirebaseFirestore */; };
+		71A8CD682FDDBAC500D18890 /* Notifications+Names.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71A8CD672FDDBAC500D18890 /* Notifications+Names.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		71A8CD672FDDBAC500D18890 /* Notifications+Names.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Notifications+Names.swift"; sourceTree = "<group>"; };
 		813692EB2FCE4032001CD99F /* Keepsy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Keepsy.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -39,6 +41,7 @@
 			children = (
 				8157FDAC2FB47BCD00D69127 /* Keepsy */,
 				813692EB2FCE4032001CD99F /* Keepsy.app */,
+				71A8CD672FDDBAC500D18890 /* Notifications+Names.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -120,6 +123,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				71A8CD682FDDBAC500D18890 /* Notifications+Names.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

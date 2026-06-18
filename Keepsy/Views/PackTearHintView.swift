@@ -18,21 +18,21 @@ struct PackTearHintView: View {
                 VStack(spacing: 6) {
                     Text("SWIPE RIGHT")
                         .font(.custom("Helvetica-BoldOblique", size: 20))
-                        .foregroundColor(Color(hex: "FF7A00"))
+                        .foregroundStyle(Color(hex: "FF7A00"))
                         .italic()
                         .bold()
                         .shadow(color: Color(hex: "FF7A00").opacity(0.3), radius: 4)
 
                     Text("TO OPEN")
                         .font(.custom("Helvetica-BoldOblique", size: 20))
-                        .foregroundColor(Color(hex: "FF7A00"))
+                        .foregroundStyle(Color(hex: "FF7A00"))
                         .italic()
                         .bold()
                         .shadow(color: Color(hex: "FF7A00").opacity(0.3), radius: 4)
 
                     Image(systemName: "hand.point.up.left.fill")
                         .font(.system(size: 26))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundStyle(.white.opacity(0.8))
                         .offset(x: handOffset)
                         .padding(.top, 4)
                 }

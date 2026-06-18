@@ -14,8 +14,8 @@ struct PackSelectionView: View {
 
     private let renderRadius = 10
 
-    private let W = UIScreen.main.bounds.width
-    private let H = UIScreen.main.bounds.height
+    private let W = UIScreen.mainBounds.width
+    private let H = UIScreen.mainBounds.height
     private let baseZoom: CGFloat = 2.0
     private var packWidth:  CGFloat { W * 0.90 }
     private var packHeight: CGFloat { packWidth * (350.0 / 230.0) }
@@ -95,7 +95,7 @@ struct PackSelectionView: View {
                             )
                         Text(museum.city)
                             .font(.system(size: 16, weight: .regular, design: .default).italic())
-                            .foregroundColor(.white.opacity(0.75))
+                            .foregroundStyle(.white.opacity(0.75))
                     }
                 }
                 .background(
@@ -210,26 +210,28 @@ struct PackSelectionView: View {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             let totalFrames = max(30, Int(abs(totalDelta) * 15))
-            var frame = 0
+            nonisolated(unsafe) var frame = 0
             let scrollStart = self.scrollPosition
 
             self.spinTimer?.invalidate()
-            self.spinTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { timer in
-                frame += 1
-                let progress = CGFloat(frame) / CGFloat(totalFrames)
-                let eased: CGFloat = progress < 0.5
-                    ? 4 * progress * progress * progress
-                    : 1 - pow(-2 * progress + 2, 3) / 2
+            self.spinTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { _ in
+                MainActor.assumeIsolated {
+                    frame += 1
+                    let progress = CGFloat(frame) / CGFloat(totalFrames)
+                    let eased: CGFloat = progress < 0.5
+                        ? 4 * progress * progress * progress
+                        : 1 - pow(-2 * progress + 2, 3) / 2
 
-                let newScroll = scrollStart + totalDelta * eased
-                self.scrollPosition     = newScroll
-                self.baseScrollPosition = newScroll
+                    let newScroll = scrollStart + totalDelta * eased
+                    self.scrollPosition     = newScroll
+                    self.baseScrollPosition = newScroll
 
-                if frame >= totalFrames {
-                    timer.invalidate()
-                    self.scrollPosition     = targetScroll
-                    self.baseScrollPosition = targetScroll
-                    self.isSpinning = false
+                    if frame >= totalFrames {
+                        self.spinTimer?.invalidate()
+                        self.scrollPosition     = targetScroll
+                        self.baseScrollPosition = targetScroll
+                        self.isSpinning = false
+                    }
                 }
             }
         }
