@@ -82,7 +82,7 @@ struct ARArtworkView: View {
     private var autoKeptMessage: Text {
         let semibold = Font.system(size: 15, weight: .semibold)
         let black = Font.system(size: 15, weight: .black)
-        let countText = "\(autoKeptCount) \(autoKeptCount == 1 ? "card" : "cards")"
+        let countText = LocalizationManager.shared.string("\(autoKeptCount) cards")
         let p1 = Text("You closed the app with ").font(semibold).italic()
         let count = Text(countText).font(black).italic()
         let p2 = Text(" not yet in your collection.\nDon't worry — we ").font(semibold).italic()
@@ -844,26 +844,33 @@ struct ARArtworkView: View {
             }
             .ignoresSafeArea()
             
-            // Bottom Overlapping Museum Packets (larger, zoomed in, and lower down)
+            // Bottom Overlapping Museum Packets (three packets cascading from left/back to right/front)
             ZStack(alignment: .bottom) {
-                // Background packet
+                // Back packet (left-most)
                 Image(activeMuseum?.packetImageName ?? "capodimonte_pacchetto")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: screenWidth * 0.70)
-                    .rotationEffect(.degrees(-8))
-                    .offset(x: -screenWidth * 0.18, y: screenHeight * 0.14)
-                    .opacity(0.65)
+                    .frame(width: screenWidth * 0.75)
+                    .rotationEffect(.degrees(-6))
+                    .offset(x: -screenWidth * 0.03, y: screenHeight * 0.115)
                 
-                // Foreground packet
+                // Middle packet
                 Image(activeMuseum?.packetImageName ?? "capodimonte_pacchetto")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: screenWidth * 0.80)
-                    .rotationEffect(.degrees(5))
-                    .offset(x: screenWidth * 0.14, y: screenHeight * 0.10)
+                    .frame(width: screenWidth * 0.75)
+                    .rotationEffect(.degrees(-2))
+                    .offset(x: 0, y: screenHeight * 0.095)
+                
+                // Front packet (right-most)
+                Image(activeMuseum?.packetImageName ?? "capodimonte_pacchetto")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: screenWidth * 0.75)
+                    .rotationEffect(.degrees(2))
+                    .offset(x: screenWidth * 0.03, y: screenHeight * 0.10)
             }
-            .frame(width: screenWidth, height: screenHeight * 0.40, alignment: .bottom)
+            .frame(width: screenWidth, height: screenHeight * 0.50, alignment: .bottom)
             .ignoresSafeArea(edges: .bottom)
             
             // Main UI content overlay

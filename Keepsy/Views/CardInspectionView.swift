@@ -138,24 +138,15 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
 
                         if (card.name.contains("_experience") || card.name == "vale") && !isCollectionCompleteFor(card.name) {
                             Group {
-                                if card.name == "vale" {
-                                    CachedRemoteImage(assetName: "dasbloccare")
-                                        .aspectRatio(contentMode: .fill)
-                                        .scaleEffect(1.43)
-                                } else if card.name == "prado_experience" {
-                                    CachedRemoteImage(assetName: "prado_locked")
-                                        .aspectRatio(contentMode: .fit)
-                                } else {
-                                    ZStack {
-                                        RoundedRectangle(cornerRadius: 24)
-                                            .fill(LinearGradient(
-                                                colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
-                                                startPoint: .topLeading, endPoint: .bottomTrailing
-                                            ))
-                                        Text("?")
-                                            .font(.system(size: 110, weight: .black))
-                                            .foregroundStyle(.white)
-                                    }
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 24)
+                                        .fill(LinearGradient(
+                                            colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
+                                            startPoint: .topLeading, endPoint: .bottomTrailing
+                                        ))
+                                    Text("?")
+                                        .font(.system(size: 110, weight: .black))
+                                        .foregroundStyle(.white)
                                 }
                             }
                             .frame(width: cardW, height: cardH)

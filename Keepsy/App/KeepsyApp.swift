@@ -10,6 +10,8 @@ import FirebaseCore
 
 @main
 struct KeepsyApp: App {
+    @State private var localization = LocalizationManager.shared
+
     init() {
         FirebaseApp.configure()
     }
@@ -17,6 +19,8 @@ struct KeepsyApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(localization)
+                .environment(\.locale, localization.locale)
         }
     }
 }

@@ -180,42 +180,30 @@ struct CollectionAlbumView: View {
                         }
                     } else {
                         Group {
-                            if museumLocation == "moma" {
-                                CachedRemoteImage(assetName: "dasbloccare")
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 230, height: 345)
-                                    .clipShape(RoundedRectangle(cornerRadius: 24))
-                            } else if museumLocation == "prado" {
-                                CachedRemoteImage(assetName: "prado_locked")
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 230, height: 345)
-                                    .clipShape(RoundedRectangle(cornerRadius: 24))
-                            } else {
-                                ZStack {
-                                    // Dark background
-                                    RoundedRectangle(cornerRadius: 24)
-                                        .fill(Color(hex: "0D0D0F"))
+                            ZStack {
+                                // Dark background
+                                RoundedRectangle(cornerRadius: 24)
+                                    .fill(Color(hex: "0D0D0F"))
 
-                                    // Keepsy Gold Logo
-                                    Image("LogoKeepsy")
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fit)
-                                        .frame(width: 70, height: 70)
+                                // Keepsy Gold Logo
+                                Image("LogoKeepsy")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 70, height: 70)
 
-                                    // Orange border stroke
-                                    RoundedRectangle(cornerRadius: 24)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [Color(hex: "FF9000"), Color(hex: "FF5100")],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 3
-                                        )
-                                }
-                                .frame(width: 180, height: 270)
-                                .shadow(color: Color(hex: "FF5100").opacity(0.35), radius: 25, x: 0, y: 10)
+                                // Orange border stroke
+                                RoundedRectangle(cornerRadius: 24)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [Color(hex: "FF9000"), Color(hex: "FF5100")],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 3
+                                    )
                             }
+                            .frame(width: 180, height: 270)
+                            .shadow(color: Color(hex: "FF5100").opacity(0.35), radius: 25, x: 0, y: 10)
                         }
                         .opacity(animatingCardName == experienceCardName ? cellCardOpacity : 1.0)
                         .background(
