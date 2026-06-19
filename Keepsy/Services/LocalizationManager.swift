@@ -47,26 +47,9 @@ final class LocalizationManager {
         }
     }
 
-    private static let storageKey = "appLanguage"
+    var language: AppLanguage = .english
 
-    var language: AppLanguage {
-        didSet {
-            guard oldValue != language else { return }
-            UserDefaults.standard.set(language.rawValue, forKey: Self.storageKey)
-        }
-    }
-
-    private init() {
-        if let stored = UserDefaults.standard.string(forKey: Self.storageKey),
-           let lang = AppLanguage(rawValue: stored) {
-            self.language = lang
-        } else if let preferred = Bundle.main.preferredLocalizations.first,
-                  let lang = AppLanguage(rawValue: String(preferred.prefix(2))) {
-            self.language = lang
-        } else {
-            self.language = .english
-        }
-    }
+    private init() {}
 
     /// Locale injected into the SwiftUI environment so `Text` literals localize live.
     var locale: Locale { Locale(identifier: language.rawValue) }

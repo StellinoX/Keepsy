@@ -11,7 +11,6 @@ import SwiftUI
 // MARK: - Collection Reward
 
 struct OnboardingCollectionRewardStep: View {
-    let onBack: () -> Void
     let onContinue: () -> Void
 
     var body: some View {
@@ -44,8 +43,6 @@ struct OnboardingCollectionRewardStep: View {
 
                 OnboardingPrimaryButton(title: "CONTINUE", action: onContinue)
             }
-            
-            OnboardingBackHeader(onBack: onBack)
         }
         .ignoresSafeArea()
     }

@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var showAutoKeptPopup: Bool = false
     @State private var autoKeptCount: Int = 0
     @State private var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+    @State private var openingInsertionEdge: Edge = .leading
 
     enum ActiveView: Equatable {
         case opening, arScanner
@@ -24,13 +25,18 @@ struct ContentView: View {
             if !hasCompletedOnboarding {
                 OnboardingView(localization: localization) { _ in
                     UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
+                    openingInsertionEdge = .trailing
                     withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) {
                         hasCompletedOnboarding = true
                     }
                 }
-                .transition(.opacity)
+                .transition(.asymmetric(
+                    insertion: .identity,
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
             } else {
                 mainContent
+                    .transition(.identity)
             }
         }
         .onAppear {
@@ -65,12 +71,13 @@ struct ContentView: View {
         switch activeView {
         case .opening:
             PackOpeningView(activeView: $activeView)
-                .transition(.asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .leading)))
+                .transition(.asymmetric(insertion: .move(edge: openingInsertionEdge), removal: .move(edge: .leading)))
         case .arScanner:
             ARArtworkView(activeView: $activeView)
                 .transition(.opacity)
         case .collection(let city):
             CollectionAlbumView(museumLocation: city, showCloseButton: true) {
+                openingInsertionEdge = .leading
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                     activeView = .opening
                 }

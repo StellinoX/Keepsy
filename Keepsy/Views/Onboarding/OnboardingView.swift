@@ -17,18 +17,19 @@ struct OnboardingView: View {
     let onFinish: (String) -> Void
 
     @State private var step: Int = 0
+    @State private var isMovingForward: Bool = true
     @State private var locationManager = LocationManager()
     @State private var selectedMuseumId: String = MuseumConfig.shared.museums.first?.id ?? "capodimonte"
 
-    private let lastStep = 4
+    private let lastStep = 3
 
     var body: some View {
         ZStack {
             content
                 .id(step)
                 .transition(.asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .move(edge: .leading).combined(with: .opacity)
+                    insertion: .move(edge: isMovingForward ? .trailing : .leading).combined(with: .opacity),
+                    removal: .move(edge: isMovingForward ? .leading : .trailing).combined(with: .opacity)
                 ))
         }
         .onAppear {
@@ -47,21 +48,10 @@ struct OnboardingView: View {
     private var content: some View {
         switch step {
         case 0:
-            OnboardingCollectionRewardStep(onBack: back, onContinue: advance)
+            OnboardingCollectionRewardStep(onContinue: advance)
         case 1:
             OnboardingProgressStep(onBack: back, onContinue: advance)
         case 2:
-            OnboardingSelectionStep(
-                title: "LANGUAGE YOU FEEL\nCOMFORTABLE WITH",
-                subtitle: "Always updating...",
-                searchPrompt: "Your language",
-                options: languageOptions,
-                selectedID: languageBinding,
-                buttonTitle: "CONFIRM",
-                onBack: back,
-                onConfirm: advance
-            )
-        case 3:
             OnboardingSelectionStep(
                 title: "WHERE SHOULD YOUR\nEXPERIENCE START?",
                 subtitle: "Always updating...",
@@ -78,19 +68,6 @@ struct OnboardingView: View {
     }
 
     // MARK: - Options
-
-    private var languageOptions: [OnboardingOption] {
-        LocalizationManager.AppLanguage.allCases.map {
-            OnboardingOption(id: $0.rawValue, title: "\($0.displayName) \($0.flag)", subtitle: $0.nativeName)
-        }
-    }
-
-    private var languageBinding: Binding<String> {
-        Binding(
-            get: { localization.language.rawValue },
-            set: { localization.language = LocalizationManager.AppLanguage(rawValue: $0) ?? .english }
-        )
-    }
 
     private var cityOptions: [OnboardingOption] {
         // One option per city; cities ordered closest-first when a location is known.
@@ -126,12 +103,14 @@ struct OnboardingView: View {
     // MARK: - Navigation
 
     private func advance() {
+        isMovingForward = true
         withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) {
             step = min(lastStep, step + 1)
         }
     }
 
     private func back() {
+        isMovingForward = false
         withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) {
             step = max(0, step - 1)
         }

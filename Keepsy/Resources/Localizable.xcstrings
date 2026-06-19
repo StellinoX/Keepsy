@@ -614,6 +614,7 @@
       }
     },
     "LANGUAGE YOU FEEL\nCOMFORTABLE WITH" : {
+      "extractionState" : "stale",
       "localizations" : {
         "it" : {
           "stringUnit" : {
@@ -976,6 +977,7 @@
       }
     },
     "Your language" : {
+      "extractionState" : "stale",
       "localizations" : {
         "it" : {
           "stringUnit" : {
