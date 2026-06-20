@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 import AVFoundation
 
-class SoundManager: NSObject, AVAudioPlayerDelegate {
+nonisolated final class SoundManager: NSObject, AVAudioPlayerDelegate, @unchecked Sendable {
     static let shared = SoundManager()
     
     private var activePlayers = Set<AVAudioPlayer>()
