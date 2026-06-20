@@ -15,6 +15,7 @@ struct PackOpeningView: View {
     @State private var packTearOffset: CGFloat = 0
     @State private var packOpacity: Double = 1.0
     @State private var inspectedCard: ArtworkCard? = nil
+    @State private var inspectedCardWasAlreadyRevealed = false
     @State private var hasSyncedWithCloud = false
     @State private var pendingFlipIndex: Int? = nil
     @State private var flashOpacity: Double = 0.0
@@ -75,7 +76,7 @@ struct PackOpeningView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
                         withAnimation(.easeIn(duration: 0.28)) { flashOpacity = 0.0 }
                     }
-                    SoundManager.shared.playSound(named: "san sebastiano")
+                    SoundManager.shared.playSound(named: "pack_open")
                 },
                 onOpen: { completeOpening() }
             )
@@ -295,7 +296,10 @@ struct PackOpeningView: View {
                 }
 
                 if let card = inspectedCard {
-                    CardInspectionView(card: card) {
+                    CardInspectionView(
+                        card: card,
+                        skipEntranceAnimation: !inspectedCardWasAlreadyRevealed
+                    ) {
                         self.inspectedCard = nil
                         if let i = self.pendingFlipIndex, i < self.cards.count {
                             self.cards[i].isFlipped = true
@@ -303,33 +307,10 @@ struct PackOpeningView: View {
                         }
                     }
                     .id(card.name)
-                    .transition(.asymmetric(insertion: .scale(scale: 0.6).combined(with: .opacity), removal: .identity))
+                    .transition(inspectedCardWasAlreadyRevealed ? .opacity : .identity)
                     .zIndex(100)
                 }
 
-                if packState == .opened && inspectedCard == nil {
-                    Button(action: {
-                        HapticManager.shared.triggerImpact(style: .light)
-                        withAnimation(.easeInOut(duration: 0.35)) {
-                            resetPack()
-                        }
-                    }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 14, weight: .bold))
-                            Text("Back")
-                                .font(.system(size: 16, weight: .regular))
-                        }
-                        .foregroundStyle(.white)
-                        .frame(width: 85, height: 44)
-                        .background(
-                            Capsule().fill(Color(hex: "383838"))
-                        )
-                    }
-                    .position(x: 30 + 85/2, y: 83 + 44/2)
-                    .zIndex(150)
-                    .accessibilityHint("Returns to pack selection")
-                }
             } // Nested ZStack
             .blur(radius: showCompletionModal ? 20 : 0)
             .allowsHitTesting(!showCompletionModal)
@@ -369,6 +350,7 @@ struct PackOpeningView: View {
                             .frame(width: cardW, height: cardH)
                             .clipped()
                             .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                            .opacity(isFront ? 0.0 : 1.0)
                         ArtworkCardFrontView(
                             name: fc.name, title: fc.title,
                             cardIndex: nil,
@@ -453,10 +435,12 @@ struct PackOpeningView: View {
         guard inspectedCard == nil, flyingCard == nil else { return }
 
         if cards[index].isFlipped {
+            inspectedCardWasAlreadyRevealed = true
             withAnimation(.easeOut(duration: 0.25)) {
                 inspectedCard = cards[index]
             }
         } else {
+            inspectedCardWasAlreadyRevealed = false
             SoundManager.shared.playSound(named: "giro_carta")
             HapticManager.shared.triggerImpact(style: .light)
 

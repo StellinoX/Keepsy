@@ -130,6 +130,11 @@ struct ArtworkCardFrontView: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
+            // 0. Base card background gradient to prevent transparency/bleed-through from underlying layers (e.g. card back)
+            CardDatabase.gradientFor(name: name)
+                .frame(width: width, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: cr))
+
             // 1. Full-bleed image
             ArtImageView(cardName: name, isRevealed: isRevealed)
                 .aspectRatio(contentMode: .fill)

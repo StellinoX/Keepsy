@@ -14,6 +14,9 @@ struct SingleScrollPackView: View {
     @State private var scrollPosition: CGFloat = 0.0
     @State private var baseScrollPosition: CGFloat = 0.0
     @State private var isDragging: Bool = false
+    // True durante drag + animazione di settle. Abilita il rendering continuo dei
+    // pacchetti SceneKit solo quando si muovono; da fermi tornano on-demand (no drain GPU).
+    @State private var isScrolling: Bool = false
 
     private var museums: [Museum] {
         locationManager.sortedMuseums(MuseumConfig.shared.museums)
@@ -89,6 +92,7 @@ struct SingleScrollPackView: View {
                         MuseumPackPage(
                             museum: museum,
                             revealedCards: revealedCards,
+                            isScrolling: isScrolling,
                             onTapActivePack: onTapActivePack,
                             onTapStart: onStart
                         )
@@ -108,6 +112,7 @@ struct SingleScrollPackView: View {
                             if abs(gesture.translation.width) > abs(gesture.translation.height) {
                                 if !isDragging {
                                     isDragging = true
+                                    isScrolling = true
                                     baseScrollPosition = scrollPosition
                                 }
                                 scrollPosition = baseScrollPosition - gesture.translation.width / 190
@@ -139,6 +144,8 @@ struct SingleScrollPackView: View {
                                     scrollPosition = CGFloat(targetIndex)
                                     baseScrollPosition = scrollPosition
                                 }
+                                // Settle finito: torna a on-demand per fermare il drain GPU.
+                                isScrolling = false
                             }
                         }
                 )
@@ -195,8 +202,12 @@ struct SingleScrollPackView: View {
                 let targetPos = CGFloat(index)
                 let diff = circularDifference(index: index, scrollPosition: scrollPosition, count: museums.count)
                 if abs(diff) > 0.01 {
+                    isScrolling = true
                     withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                         scrollPosition = targetPos
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                        isScrolling = false
                     }
                 }
             }

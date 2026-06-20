@@ -4,6 +4,7 @@ struct CardInspectionView: View {
     let card: ArtworkCard
     var namespace: Namespace.ID? = nil
     var isZoomingFromAlbum: Bool = false
+    var skipEntranceAnimation: Bool = false
     var externalScale: CGFloat = 1.0
     var externalOpacity: Double = 1.0
     let onClose: () -> Void
@@ -14,6 +15,26 @@ struct CardInspectionView: View {
     @State private var animateSheet: Bool = false
     @State private var sheetOffset: CGFloat = 0
     @State private var verticalDragOffset: CGFloat = 0
+
+    init(
+        card: ArtworkCard,
+        namespace: Namespace.ID? = nil,
+        isZoomingFromAlbum: Bool = false,
+        skipEntranceAnimation: Bool = false,
+        externalScale: CGFloat = 1.0,
+        externalOpacity: Double = 1.0,
+        onClose: @escaping () -> Void
+    ) {
+        self.card = card
+        self.namespace = namespace
+        self.isZoomingFromAlbum = isZoomingFromAlbum
+        self.skipEntranceAnimation = skipEntranceAnimation
+        self.externalScale = externalScale
+        self.externalOpacity = externalOpacity
+        self.onClose = onClose
+        
+        self._animateContent = State(initialValue: skipEntranceAnimation)
+    }
 
     enum SheetState {
         case collapsed
@@ -287,7 +308,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
 
                     // Sfondo scuro — tap fuori dalla carta chiude
                     Color.black
-                        .opacity(0.85)
+                        .opacity(animateContent ? 0.85 : 0.0)
                         .ignoresSafeArea()
                         .onTapGesture { closeAction() }
                         .accessibilityLabel("Dismiss card")
@@ -311,6 +332,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                 .frame(width: cardWidth, height: cardHeight)
                                 .clipped()
                                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                                .opacity(isFrontShowing ? 0.0 : 1.0)
 
                             let index = CardDatabase.allArtworkNames.firstIndex(of: card.name)
                             let goldBorder = LinearGradient(
@@ -330,13 +352,13 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                 isRevealed: isRevealed,
                                 goldBorder: goldBorder
                             )
-                            .opacity(abs(currentRotation.truncatingRemainder(dividingBy: 360)) > 90 && abs(currentRotation.truncatingRemainder(dividingBy: 360)) < 270 ? 0 : 1)
+                            .opacity(isFrontShowing ? 1.0 : 0.0)
                         }
                     }
                     .matchedGeometryEffectOptional(id: "card_\(card.name)", in: isZoomingFromAlbum ? nil : namespace, isSource: false)
                     .offset(x: 0, y: (isZoomingFromAlbum ? -50 : 0))
-                    .scaleEffect(1.0)
-                    .opacity(1.0)
+                    .scaleEffect(animateContent ? 1.0 : 0.6)
+                    .opacity(animateContent ? 1.0 : 0.0)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         SoundManager.shared.playSound(named: "giro_carta")
@@ -395,10 +417,12 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
         if isZoomingFromAlbum {
             onClose()
         } else {
-            withAnimation(.easeOut(duration: 0.2)) {
+            withAnimation(.easeOut(duration: 0.20)) {
                 animateContent = false
             }
-            onClose()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+                onClose()
+            }
         }
     }
 
@@ -463,6 +487,7 @@ struct CardFullDetailView: View {
                         .frame(width: cardWidth, height: cardHeight)
                         .clipped()
                         .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                        .opacity(isFrontShowing ? 0.0 : 1.0)
 
                     let index = CardDatabase.allArtworkNames.firstIndex(of: card.name)
                     let goldBorder = LinearGradient(

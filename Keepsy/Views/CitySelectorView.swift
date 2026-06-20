@@ -221,6 +221,7 @@ struct CitySelectorView: View {
             }
         }
         .ignoresSafeArea()
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .onAppear {
             selectedCity = cities.first(where: { $0.museumId == selectedMuseumId })?.name ?? "Naples"
         }

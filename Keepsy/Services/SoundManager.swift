@@ -23,19 +23,24 @@ class SoundManager: NSObject, AVAudioPlayerDelegate {
             print("⚠️ Sound asset not found: \(name)")
             return
         }
-        
-        do {
-            let player = try AVAudioPlayer(data: asset.data, fileTypeHint: "mp3")
-            player.delegate = self
-            player.prepareToPlay()
-            
-            lock.lock()
-            activePlayers.insert(player)
-            lock.unlock()
-            
-            player.play()
-        } catch {
-            print("⚠️ Failed to play sound \(name): \(error.localizedDescription)")
+
+        // Off-main: NSDataAsset decode + AVAudioPlayer init + prepareToPlay possono bloccare
+        // alcuni ms. playSound viene chiamato all'apertura del pacchetto (onTearComplete),
+        // proprio quando parte l'animazione → farlo sul main causa un hitch sul primo frame.
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let player = try AVAudioPlayer(data: asset.data, fileTypeHint: "mp3")
+                player.delegate = self
+                player.prepareToPlay()
+
+                self.lock.lock()
+                self.activePlayers.insert(player)
+                self.lock.unlock()
+
+                player.play()
+            } catch {
+                print("⚠️ Failed to play sound \(name): \(error.localizedDescription)")
+            }
         }
     }
     

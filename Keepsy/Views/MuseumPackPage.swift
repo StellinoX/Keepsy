@@ -3,6 +3,7 @@ import SwiftUI
 struct MuseumPackPage: View {
     let museum: Museum
     let revealedCards: Set<String>
+    let isScrolling: Bool
     let onTapActivePack: () -> Void
     let onTapStart: () -> Void
 
@@ -34,7 +35,8 @@ struct MuseumPackPage: View {
                                        packetImageName: packetImage,
                                        firstCardName: firstCardName,
                                        isFirstCardRevealed: revealedCards.contains(firstCardName),
-                                       tearMaskImage: savedTearMask)
+                                       tearMaskImage: savedTearMask,
+                                       isScrolling: isScrolling)
                         .frame(width: 380, height: 515)
                         .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
                         .contentShape(Rectangle())
@@ -46,7 +48,8 @@ struct MuseumPackPage: View {
                 } else {
                     SceneKitPacketView(interactive: false, isTorn: false,
                                        museumId: museum.id,
-                                       packetImageName: packetImage)
+                                       packetImageName: packetImage,
+                                       isScrolling: isScrolling)
                         .frame(width: 380, height: 515)
                         .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
                         .contentShape(Rectangle())

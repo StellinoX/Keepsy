@@ -381,10 +381,15 @@ public struct SceneKitPacketView: UIViewRepresentable {
     var isFirstCardRevealed: Bool
     var tearMaskImage: UIImage?
     var raised: Bool = false
-    
-    public init(interactive: Bool = true, isTorn: Bool = false, museumId: String? = nil, packetImageName: String? = nil, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, raised: Bool = false, onTearComplete: (() -> Void)? = nil, onOpen: (() -> Void)? = nil) {
+    // Solo per il rullo (non interattivo): true mentre l'utente scorre/anima i pacchetti.
+    // Gating del rendering continuo a questo flag evita che 4 scene PBR ridisegnino a
+    // vuoto da ferme (drain GPU → lag/throttling su device deboli).
+    var isScrolling: Bool = false
+
+    public init(interactive: Bool = true, isTorn: Bool = false, museumId: String? = nil, packetImageName: String? = nil, firstCardName: String? = nil, isFirstCardRevealed: Bool = false, tearMaskImage: UIImage? = nil, raised: Bool = false, isScrolling: Bool = false, onTearComplete: (() -> Void)? = nil, onOpen: (() -> Void)? = nil) {
         self.interactive = interactive
         self.raised = raised
+        self.isScrolling = isScrolling
         self.isTorn = isTorn
         self.museumId = museumId
         self.packetImageName = packetImageName
@@ -425,7 +430,14 @@ public struct SceneKitPacketView: UIViewRepresentable {
     public func updateUIView(_ uiView: SCNView, context: Context) {
         // Applica i cambiamenti di isTorn e della maschera se la vista SwiftUI viene aggiornata senza essere ricreata
         context.coordinator.firstCardName = firstCardName
-        
+
+        // Rullo: ridisegna in continuo SOLO durante lo scroll/settle. Da fermo passa a
+        // on-demand → niente drain GPU. Il rendering continuo durante lo scroll evita il
+        // drawable nero mentre i pacchetti si spostano via transform SwiftUI.
+        if !interactive {
+            uiView.rendersContinuously = isScrolling
+        }
+
         if interactive && context.coordinator.isAnimatingOrTorn {
             return
         }
@@ -908,8 +920,10 @@ public class PacketCoordinator: NSObject {
         
         let backGeo = SCNPlane(width: 6.1, height: 9.0)
         backGeo.cornerRadius = 0.1
-        backGeo.widthSegmentCount = 100 // High tessellation for smooth curling
-        backGeo.heightSegmentCount = 100
+        // Back faces curl only during the interactive tear. Nel rullo (non interattivo)
+        // sono sempre nascosti: pochi segmenti = costruzione scena molto più leggera.
+        backGeo.widthSegmentCount = interactive ? 100 : 10
+        backGeo.heightSegmentCount = interactive ? 100 : 10
         backGeo.materials = [backMat]
         
         // Back faces nascosti — lo strappo rivela lo sfondo dell'app, non l'interno scuro
@@ -1064,6 +1078,13 @@ public class PacketCoordinator: NSObject {
             }
         case .changed:
             if !touchPoints.isEmpty {
+                // Decima i campioni: senza questo touchPoints cresce illimitato e updateMask
+                // ridisegna l'intero path su TUTTI i punti a ogni frame (O(n²)) → il lag peggiora
+                // verso la fine del taglio. 6pt di soglia mantiene il path corto e la curva liscia.
+                if let last = touchPoints.last,
+                   hypot(location.x - last.x, location.y - last.y) < 6 {
+                    return
+                }
                 touchPoints.append(location)
                 updateMask()
             }
@@ -1106,7 +1127,13 @@ public class PacketCoordinator: NSObject {
         // Because the Metal Fragment Shader uses bilinear filtering (filter::linear)
         // and evaluates smoothstep per-pixel, the final cut will still look infinitely sharp and HD!
         let texSize = CGSize(width: 256, height: 256)
-        let renderer = UIGraphicsImageRenderer(size: texSize)
+        // scale=1.0 FORZATO: di default UIGraphicsImageRenderer usa la scala schermo (2x/3x),
+        // quindi su un device 3x questa maschera veniva renderizzata a 768x768 CON shadow blur
+        // a ogni movimento del dito → hitch durante il taglio. È una data-texture campionata
+        // in linear dallo shader: 1x basta e taglia il costo di fill ~9x.
+        let maskFormat = UIGraphicsImageRendererFormat()
+        maskFormat.scale = 1.0
+        let renderer = UIGraphicsImageRenderer(size: texSize, format: maskFormat)
         
         // Convert screen touches to local UV texture coordinates
         var uvPoints = touchPoints.map { pt -> CGPoint in

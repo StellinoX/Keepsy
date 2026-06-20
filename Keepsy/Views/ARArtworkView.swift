@@ -195,6 +195,29 @@ struct ARArtworkView: View {
                     .opacity(isAnimatingUnlock ? 0.0 : 1.0)
                     .zIndex(60)
 
+                    if isDeveloperDevice {
+                        // Floating Simulate Scan Button (Guest Mode)
+                        Button(action: {
+                            HapticManager.shared.triggerImpact(style: .medium)
+                            simulateArtworkScan()
+                        }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "camera.viewfinder")
+                                    .font(.system(size: 14, weight: .bold))
+                                Text("Simulate Scan")
+                                    .font(.system(size: 16, weight: .regular))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(Color.white.opacity(0.12)))
+                        }
+                        .position(x: screenWidth - 100, y: 83 + 44/2)
+                        .opacity(isAnimatingUnlock ? 0.0 : 1.0)
+                        .zIndex(60)
+                    }
+
+
                     VStack(spacing: 0) {
                         Spacer()
                             .allowsHitTesting(false)
@@ -643,6 +666,32 @@ struct ARArtworkView: View {
         return CardDatabase.cleanedArtworkName(name)
     }
 
+    private var isDeveloperDevice: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        if let idfv = UIDevice.current.identifierForVendor?.uuidString {
+            return idfv == "5B6688E6-0464-4335-9CA3-F41F1F65EDB8" || idfv == "E44CAFC6-22C0-4FC4-8898-9BD3C039A433"
+        }
+        return false
+        #endif
+    }
+
+    private func simulateArtworkScan() {
+        guard let dbName = selectedTargetCard else { return }
+        guard !isAnimatingUnlock else { return }
+        guard triggerUnlockAnimation == nil else { return }
+        
+        let isAlreadyUnlocked = revealedCards.contains(dbName) ||
+                                duplicatesInPack.contains(dbName) ||
+                                sessionFoundCards.contains(dbName)
+        guard !isAlreadyUnlocked else { return }
+        
+        isTargetUnlocked = true
+        triggerUnlockAnimation = dbName
+    }
+
+
     private func navigateToCollection() {
         let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
         withAnimation(.easeInOut(duration: 0.35)) {
@@ -943,6 +992,8 @@ struct ARArtworkView: View {
                 }
                 
                 Spacer()
+
+
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
