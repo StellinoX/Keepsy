@@ -16,6 +16,7 @@ struct NetworkArtwork: Codable {
     let technique: String?
     let dimensions: String?
     let museumId: String?
+    let cardNumber: Int?
 }
 
 class NetworkService {
@@ -61,7 +62,8 @@ class NetworkService {
                 date: data["date"] as? String,
                 technique: data["technique"] as? String,
                 dimensions: data["dimensions"] as? String,
-                museumId: museumId
+                museumId: museumId,
+                cardNumber: data["cardNumber"] as? Int
             ))
 
             if !imageUrl.isEmpty && !internalName.isEmpty {

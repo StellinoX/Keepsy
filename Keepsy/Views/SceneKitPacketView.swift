@@ -137,7 +137,7 @@ fileprivate func createTornMask() -> UIImage {
 @MainActor
 fileprivate func createCardFrontTexture(name: String) -> UIImage {
     let title = CardDatabase.cleanedArtworkName(name)
-    let index = CardDatabase.allArtworkNames.firstIndex(of: name)
+    let index = CardDatabase.remoteArtworks[name]?.cardNumber
     let isRevealed = CardDatabase.getRevealedCards().contains(name)
     let borderGrad = CardDatabase.borderGradientFor(name: name)
     // Ensure the image is loaded into the memory cache first so ImageRenderer draws it

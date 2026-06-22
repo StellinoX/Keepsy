@@ -157,6 +157,11 @@ struct PackOpeningView: View {
                 // non compare il frame vuoto del primo render (niente sparizione).
                 if packState == .packSelection || packState == .tearing {
                     tearingPackView
+                        // Montato durante .packSelection solo per pre-warm SceneKit, ma TENUTO
+                        // invisibile: altrimenti, durante il crossfade home→packSelection (il rullo
+                        // è ancora semi-trasparente) il pack in posizione raised trapela e sembra
+                        // "dissolversi verso l'alto". Visibile solo al passaggio a .tearing.
+                        .opacity(packState == .tearing ? 1 : 0)
                         .zIndex(packState == .tearing ? 10 : 1)
                 }
 
@@ -195,7 +200,7 @@ struct PackOpeningView: View {
                                 // Riga 1: carte 0,1,2
                                 HStack(spacing: 12) {
                                     ForEach(0..<min(3, cards.count), id: \.self) { index in
-                                        CardView(card: $cards[index], cardIndex: index) {
+                                        CardView(card: $cards[index], cardIndex: CardDatabase.remoteArtworks[cards[index].name]?.cardNumber) {
                                             handleCardTap(index: index)
                                         }
                                         .id(cards[index].id)
@@ -217,7 +222,7 @@ struct PackOpeningView: View {
                                 // Riga 2: carte 3,4
                                 HStack(spacing: 12) {
                                     ForEach(3..<min(5, cards.count), id: \.self) { index in
-                                        CardView(card: $cards[index], cardIndex: index) {
+                                        CardView(card: $cards[index], cardIndex: CardDatabase.remoteArtworks[cards[index].name]?.cardNumber) {
                                             handleCardTap(index: index)
                                         }
                                         .id(cards[index].id)

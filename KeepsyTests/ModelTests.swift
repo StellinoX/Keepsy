@@ -21,7 +21,8 @@ struct ModelTests {
             date: "1544",
             technique: "Oil on canvas",
             dimensions: "120x170 cm",
-            museumId: "capodimonte"
+            museumId: "capodimonte",
+            cardNumber: 10
         )
 
         let data = try JSONEncoder().encode(original)
@@ -33,6 +34,7 @@ struct ModelTests {
         #expect(decoded.imageUrl == original.imageUrl)
         #expect(decoded.museumId == original.museumId)
         #expect(decoded.dimensions == original.dimensions)
+        #expect(decoded.cardNumber == original.cardNumber)
     }
 
     @Test func artworkCardEqualityIsByIdentity() {

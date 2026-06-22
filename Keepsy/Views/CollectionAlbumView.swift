@@ -549,7 +549,7 @@ struct CollectionAlbumView: View {
             .position(x: flyingFrame.midX, y: flyingFrame.midY)
         } else {
             let isRevealed = CardDatabase.getRevealedCards().contains(name) || name.contains("_experience") || name == "vale"
-            let index = CardDatabase.allArtworkNames.firstIndex(of: name)
+            let index = CardDatabase.remoteArtworks[name]?.cardNumber
             let goldBorder = LinearGradient(
                 colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
                          Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],

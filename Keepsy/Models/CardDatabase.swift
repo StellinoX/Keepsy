@@ -87,12 +87,13 @@ struct CardDatabase {
             
             for museum in MuseumConfig.shared.museums {
                 let fetched = try await NetworkService.shared.fetchArtworks(for: museum.id)
+                let sortedFetched = fetched.sorted { ($0.cardNumber ?? Int.max) < ($1.cardNumber ?? Int.max) }
                 var ids: [String] = []
-                for art in fetched {
+                for art in sortedFetched {
                     allArtworks[art.internalName] = art
                     ids.append(art.internalName)
                 }
-                museumMap[museum.id] = ids.sorted()
+                museumMap[museum.id] = ids
             }
             
             remoteArtworks = allArtworks

@@ -32,7 +32,8 @@ enum TestSupport {
         title: String = "Untitled",
         museumId: String? = nil,
         imageUrl: String = "",
-        dimensions: String? = nil
+        dimensions: String? = nil,
+        cardNumber: Int? = nil
     ) -> NetworkArtwork {
         NetworkArtwork(
             id: internalName,
@@ -46,7 +47,8 @@ enum TestSupport {
             date: nil,
             technique: nil,
             dimensions: dimensions,
-            museumId: museumId
+            museumId: museumId,
+            cardNumber: cardNumber
         )
     }
 }
