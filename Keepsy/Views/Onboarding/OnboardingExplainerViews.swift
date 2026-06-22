@@ -11,18 +11,19 @@ import SwiftUI
 // MARK: - Collection Reward
 
 struct OnboardingCollectionRewardStep: View {
+    let onBack: () -> Void
     let onContinue: () -> Void
 
     var body: some View {
         ZStack(alignment: .top) {
             OnboardingBackground()
-            
+
             VStack(spacing: 0) {
                 Image("modal")
                     .resizable()
                     .scaledToFit()
                     .padding(.horizontal, 16)
-                
+
                 Text("COMPLETE ANY COLLECTION\nFOR A SPECIAL REWARD!")
                     .font(.custom("Helvetica-BoldOblique", size: 26))
                     .italic()
@@ -38,11 +39,13 @@ struct OnboardingCollectionRewardStep: View {
                     .lineSpacing(4)
                     .padding(.horizontal, 24)
                     .padding(.top, 28) // Pushed slightly lower under the image
-                
+
                 Spacer()
 
                 OnboardingPrimaryButton(title: "CONTINUE", action: onContinue)
             }
+
+            OnboardingBackHeader(onBack: onBack)
         }
         .ignoresSafeArea()
     }
@@ -96,18 +99,17 @@ struct OnboardingProgressStep: View {
 // MARK: - Get Started
 
 struct OnboardingGetStartedStep: View {
-    let onBack: () -> Void
     let onStart: () -> Void
 
     var body: some View {
         ZStack(alignment: .top) {
             OnboardingBackground()
-            
+
             VStack(spacing: 0) {
                 Image("Cards+Icon")
                     .resizable()
                     .scaledToFit()
-                
+
                 Text("READY TO ENHANCE YOUR\nMUSEUM EXPERIENCE?")
                     .font(.custom("Helvetica-BoldOblique", size: 26))
                     .italic()
@@ -123,13 +125,11 @@ struct OnboardingGetStartedStep: View {
                     .lineSpacing(4)
                     .padding(.horizontal, 24)
                     .padding(.top, 28) // Spacing under the image
-                
+
                 Spacer()
 
                 OnboardingPrimaryButton(title: "GET STARTED", action: onStart)
             }
-            
-            OnboardingBackHeader(onBack: onBack)
         }
         .ignoresSafeArea()
     }

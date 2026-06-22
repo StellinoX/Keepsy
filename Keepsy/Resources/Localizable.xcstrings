@@ -189,6 +189,7 @@
       }
     },
     "%lld Museum" : {
+      "extractionState" : "stale",
       "localizations" : {
         "it" : {
           "variations" : {

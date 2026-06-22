@@ -8,7 +8,6 @@
 import SwiftUI
 
 struct ContentView: View {
-    @Environment(LocalizationManager.self) private var localization
     @State private var activeView: ActiveView = .opening
     @State private var showAutoKeptPopup: Bool = false
     @State private var autoKeptCount: Int = 0
@@ -23,7 +22,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             if !hasCompletedOnboarding {
-                OnboardingView(localization: localization) { _ in
+                OnboardingView { _ in
                     UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                     openingInsertionEdge = .trailing
                     withAnimation(.spring(response: 0.42, dampingFraction: 0.85)) {
