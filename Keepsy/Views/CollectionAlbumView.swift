@@ -21,6 +21,8 @@ struct CollectionAlbumView: View {
     @State private var revealedCards: Set<String> = []
     
     @State private var hasSyncedWithCloud = false
+    @State private var inspectedCard: ArtworkCard? = nil
+    @State private var showExperienceCardModal = false
     @State private var showSpecialCardLockModal = false
     @State private var experienceCardFrame: CGRect = .zero
     @Namespace private var albumNamespace
@@ -108,7 +110,7 @@ struct CollectionAlbumView: View {
     }
 
     var experienceCardName: String {
-        let loc = (museumLocation ?? "uffizi").lowercased()
+        let loc = (museumLocation ?? "capodimonte").lowercased()
         if loc == "moma" {
             return "vale"
         }
@@ -460,9 +462,6 @@ struct CollectionAlbumView: View {
                         card: ArtworkCard(
                             name: name,
                             imageName: name,
-                            title: CardDatabase.cleanedArtworkName(name),
-                            description: CardDatabase.remoteArtworks[name]?.description,
-                            imageUrl: URL(string: CardDatabase.remoteArtworks[name]?.imageUrl ?? ""),
                             gradient: CardDatabase.gradientFor(name: name),
                             isFlipped: true
                         ),
@@ -550,7 +549,7 @@ struct CollectionAlbumView: View {
             .position(x: flyingFrame.midX, y: flyingFrame.midY)
         } else {
             let isRevealed = CardDatabase.getRevealedCards().contains(name) || name.contains("_experience") || name == "vale"
-            let index = CardDatabase.cardIndex(for: name)
+            let index = CardDatabase.remoteArtworks[name]?.cardNumber
             let goldBorder = LinearGradient(
                 colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
                          Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],

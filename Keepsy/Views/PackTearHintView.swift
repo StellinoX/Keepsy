@@ -75,7 +75,7 @@ struct PackTearHintView: View {
                 .frame(height: 8)
                 .clipped()
                 .padding(.horizontal, 24)
-                .position(x: screenWidth / 2, y: screenHeight * 0.5 + (screenHeight * 0.05) * (packetZoom / 2.0) + (museumId == "uffizi" ? -13 : 0))
+                .position(x: screenWidth / 2, y: screenHeight * 0.5 + (screenHeight * 0.05) * (packetZoom / 2.0) + ((museumId == "capodimonte" || museumId == "uffizi") ? -13 : 0))
             }
             .frame(width: screenWidth, height: screenHeight)
             .onAppear {

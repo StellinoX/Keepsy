@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 import Observation
-@preconcurrency import UserNotifications
+import UserNotifications
 @preconcurrency import MapKit
 
 @Observable
@@ -57,19 +57,8 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         return false
     }
 
-    private var effectiveLocation: CLLocation? {
-        #if DEBUG
-        if UserDefaults.standard.bool(forKey: "debugLocationEnabled"),
-           let museumID = UserDefaults.standard.string(forKey: "debugLocationMuseumID"),
-           let museum = MuseumConfig.shared.museums.first(where: { $0.id == museumID }) {
-            return CLLocation(latitude: museum.latitude, longitude: museum.longitude)
-        }
-        #endif
-        return lastKnownLocation
-    }
-
     func distanceTo(museum: Museum) -> CLLocationDistance? {
-        guard let userLoc = effectiveLocation else { return nil }
+        guard let userLoc = lastKnownLocation else { return nil }
         if isNearDeveloperCenter() {
             return 0.0
         }
@@ -78,11 +67,6 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     }
 
     func isUserNear(museum: Museum) -> Bool {
-        #if DEBUG
-        if UserDefaults.standard.bool(forKey: "debugLocationEnabled") {
-            return true
-        }
-        #endif
         if isNearDeveloperCenter() {
             return true
         }
@@ -91,7 +75,7 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     }
 
     func closestMuseum(from museums: [Museum]) -> Museum? {
-        guard let userLoc = effectiveLocation else { return nil }
+        guard let userLoc = lastKnownLocation else { return nil }
         return museums.min(by: { m1, m2 in
             let loc1 = CLLocation(latitude: m1.latitude, longitude: m1.longitude)
             let loc2 = CLLocation(latitude: m2.latitude, longitude: m2.longitude)
@@ -100,7 +84,7 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     }
 
     func sortedMuseums(_ museums: [Museum]) -> [Museum] {
-        guard let userLoc = effectiveLocation else { return museums }
+        guard let userLoc = lastKnownLocation else { return museums }
         return museums.sorted { m1, m2 in
             let loc1 = CLLocation(latitude: m1.latitude, longitude: m1.longitude)
             let loc2 = CLLocation(latitude: m2.latitude, longitude: m2.longitude)
@@ -135,7 +119,7 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
             manager.stopUpdatingLocation()
         }
 
-        Task { @MainActor in
+        Task {
             if let city = await reverseGeocode(location: location) {
                 let upperCity = city.uppercased()
                 self.currentCity = upperCity
@@ -158,7 +142,7 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
                 content: content,
                 trigger: nil // immediate
             )
-            UNUserNotificationCenter.current().add(request) { error in
+            center.add(request) { error in
                 if let error = error {
                     print("Failed to post notification: \(error.localizedDescription)")
                 }

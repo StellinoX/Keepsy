@@ -6,7 +6,7 @@ struct CitySelectorView: View {
     @Binding var selectedMuseumId: String
     @Environment(\.dismiss) private var dismiss
     
-    @State private var selectedCity: String = "Florence"
+    @State private var selectedCity: String = "Naples"
     @State private var searchText: String = ""
     
     // Struct representing a city in the selector list
@@ -19,6 +19,7 @@ struct CitySelectorView: View {
     }
     
     private let cities = [
+        CityItem(name: "Naples",   flag: "🇮🇹", museumsCountText: "1 Museum", museumId: "capodimonte"),
         CityItem(name: "Florence", flag: "🇮🇹", museumsCountText: "1 Museum", museumId: "uffizi"),
         CityItem(name: "Madrid",   flag: "🇪🇸", museumsCountText: "1 Museum", museumId: "prado"),
         CityItem(name: "New York", flag: "🇺🇸", museumsCountText: "1 Museum", museumId: "moma"),
@@ -222,7 +223,7 @@ struct CitySelectorView: View {
         .ignoresSafeArea()
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .onAppear {
-            selectedCity = cities.first(where: { $0.museumId == selectedMuseumId })?.name ?? "Florence"
+            selectedCity = cities.first(where: { $0.museumId == selectedMuseumId })?.name ?? "Naples"
         }
     }
 }

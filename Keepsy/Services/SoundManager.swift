@@ -10,13 +10,11 @@ nonisolated final class SoundManager: NSObject, AVAudioPlayerDelegate, @unchecke
     
     private override init() {
         super.init()
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
-                try AVAudioSession.sharedInstance().setActive(true)
-            } catch {
-                print("⚠️ Failed to configure audio session: \(error)")
-            }
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("⚠️ Failed to configure audio session: \(error)")
         }
     }
     

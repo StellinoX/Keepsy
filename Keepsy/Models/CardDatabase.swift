@@ -1,10 +1,10 @@
-import Foundation
 import SwiftUI
 import UIKit
 import ARKit
 
 struct CardDatabase {
-    private static let cacheKey = "CachedRemoteArtworks_v3"
+    private static let cacheKey = "CachedRemoteArtworks"
+    private static let hiddenArtworkNamesKey = "HiddenRemoteArtworkNames"
     
     // Cache for artworks fetched from the cloud, immediately populated on app launch.
     // Backing storage is guarded by `dictLock` because it is read from background threads
@@ -23,7 +23,7 @@ struct CardDatabase {
         set { dictLock.withLock { _artworksByMuseum = newValue } }
     }
     
-    private static let mapCacheKey = "CachedMuseumMap_v3"
+    private static let mapCacheKey = "CachedMuseumMap"
     private static var lastSyncTime: Date? = nil
     
     private static func loadFromCache() -> [String: NetworkArtwork] {
@@ -56,12 +56,7 @@ struct CardDatabase {
             }
             return [:]
         }
-        return decoded.filter { name, artwork in
-            ArtworkSafetyPolicy.allows(
-                internalName: name,
-                remoteApproval: artwork.isAppStoreAllowed
-            )
-        }
+        return decoded.filter { $0.value.isAppStoreAllowed != false }
     }
     
     private static func loadMuseumMapFromCache() -> [String: [String]] {
@@ -81,8 +76,8 @@ struct CardDatabase {
         }
     }
     
-    static func syncWithCloud(force: Bool = false) async {
-        if !force, let lastSync = lastSyncTime, Date().timeIntervalSince(lastSync) < 30 {
+    static func syncWithCloud() async {
+        if let lastSync = lastSyncTime, Date().timeIntervalSince(lastSync) < 30 {
             // print("ℹ️ syncWithCloud saltato: sincronizzato di recente (\(Int(Date().timeIntervalSince(lastSync))) secondi fa)")
             return
         }
@@ -90,12 +85,17 @@ struct CardDatabase {
         do {
             var allArtworks: [String: NetworkArtwork] = [:]
             var museumMap: [String: [String]] = [:]
+            var hiddenArtworkNames: Set<String> = []
             
             for museum in MuseumConfig.shared.museums {
                 let fetched = try await NetworkService.shared.fetchArtworks(for: museum.id)
                 let sortedFetched = fetched.sorted { ($0.cardNumber ?? Int.max) < ($1.cardNumber ?? Int.max) }
                 var ids: [String] = []
                 for art in sortedFetched {
+                    guard art.isAppStoreAllowed != false else {
+                        hiddenArtworkNames.insert(art.internalName)
+                        continue
+                    }
                     allArtworks[art.internalName] = art
                     ids.append(art.internalName)
                 }
@@ -105,6 +105,7 @@ struct CardDatabase {
             remoteArtworks = allArtworks
             artworksByMuseum = museumMap
             saveToCache(allArtworks, map: museumMap)
+            UserDefaults.standard.set(Array(hiddenArtworkNames), forKey: hiddenArtworkNamesKey)
             
             lastSyncTime = Date()
             // print("Successfully synced all museums from cloud APIs")
@@ -295,6 +296,10 @@ struct CardDatabase {
         }
     }
 
+    static func prefetchImages(for location: String) async {
+        // All artwork images are already downloaded and cached during syncWithCloud() at launch
+    }
+    
     // Cache per le immagini ARKit, così ARArtworkView si carica all'istante dopo la prima volta
     static let arImageCache = NSCache<NSString, ARReferenceImage>()
     
@@ -340,51 +345,16 @@ struct CardDatabase {
     static func artworksFor(location: String) -> [String] {
         let loc = location.lowercased()
         if let list = artworksByMuseum[loc], !list.isEmpty {
-            return list.filter { ArtworkSafetyPolicy.allows(internalName: $0) }
+            return list.filter { !hiddenArtworkNames.contains($0) }
         }
         if let list = fallbackMuseumMap[loc], !list.isEmpty {
-            return list.filter { ArtworkSafetyPolicy.allows(internalName: $0) }
+            return list.filter { !hiddenArtworkNames.contains($0) }
         }
-        let filtered = remoteArtworks.values.filter {
-            $0.museumId?.lowercased() == loc
-                && ArtworkSafetyPolicy.allows(internalName: $0.internalName)
-        }
+        let filtered = remoteArtworks.values.filter { $0.museumId?.lowercased() == loc }
         if !filtered.isEmpty {
-            return filtered.sorted { ($0.cardNumber ?? Int.max) < ($1.cardNumber ?? Int.max) }.map { $0.internalName }
+            return filtered.map { $0.internalName }.sorted()
         }
         return Array(remoteArtworks.keys).sorted()
-    }
-
-    /// Zero-based display position in the current filtered museum library.
-    /// Card views add one when formatting, matching the album's 01, 02, 03… labels.
-    static func cardIndex(for name: String) -> Int? {
-        if let museumId = remoteArtworks[name]?.museumId,
-           let index = artworksFor(location: museumId).firstIndex(of: name) {
-            return index
-        }
-
-        for museum in MuseumConfig.shared.museums {
-            if let index = artworksFor(location: museum.id).firstIndex(of: name) {
-                return index
-            }
-        }
-
-        if let number = remoteArtworks[name]?.cardNumber {
-            return max(0, number - 1)
-        }
-
-        return nil
-    }
-
-    /// 1-based card number (01, 02, 03...)
-    static func cardNumber(for name: String) -> Int? {
-        if let number = remoteArtworks[name]?.cardNumber {
-            return number
-        }
-        if let index = cardIndex(for: name) {
-            return index + 1
-        }
-        return nil
     }
     
     /// Returns only artworks whose image file is already saved to disk AND is valid (>10KB). Safe to use for ARKit.
@@ -410,7 +380,7 @@ struct CardDatabase {
         }
         
         var cleaned = name
-        cleaned = cleaned.replacing(/^\\d+\\s*-\\s*/, with: "")
+        cleaned = cleaned.replacing(/^\d+\s*-\s*/, with: "")
         if let index = cleaned.lowercased().range(of: "_ph.") {
             cleaned = String(cleaned[..<index.lowerBound])
         }
@@ -446,11 +416,22 @@ struct CardDatabase {
         return gradientFor(name: name)
     }
     
+    static func colorsFor(name: String) -> [UIColor] {
+        let hash = abs(name.hashValue)
+        let colors = [
+            [UIColor(Color(hex: "DD8812")), UIColor(Color(hex: "DE611B"))],
+            [UIColor(Color(hex: "F2AB49")), UIColor(Color(hex: "D48F2A"))],
+            [UIColor(Color(hex: "C0C0C0")), UIColor(Color(hex: "8E8E93"))],
+            [UIColor(Color(hex: "6A1B9A")), UIColor(Color(hex: "4A148C"))]
+        ]
+        return colors[hash % colors.count]
+    }
+    
     static func getActivePack(for museumId: String? = nil) -> [String]? {
-        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
         let cards = UserDefaults.standard.stringArray(forKey: "activePackCards_\(city)")
             ?? UserDefaults.standard.stringArray(forKey: "activePackCards")
-        return cards?.filter { ArtworkSafetyPolicy.allows(internalName: $0) }
+        return cards?.filter { !hiddenArtworkNames.contains($0) }
     }
     
     static func hasActivePack(for museumId: String? = nil) -> Bool {
@@ -461,7 +442,7 @@ struct CardDatabase {
     }
     
     static func clearActivePackIfNeeded(for museumId: String? = nil) {
-        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
         if let active = getActivePack(for: city), !active.isEmpty {
             let revealed = getRevealedCards()
             let dupes = Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
@@ -519,7 +500,7 @@ struct CardDatabase {
     /// Legge la lista salvata UNA volta in trackDuplicates (prima di addFoundCards),
     /// NON ricalcola live — altrimenti tutte risultano doppie (addFoundCards aggiunge tutto il pack).
     static func getDuplicatesInActivePack(for museumId: String? = nil) -> Set<String> {
-        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
         guard getActivePack(for: city) != nil else { return [] }
         return Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
                    ?? UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
@@ -527,7 +508,7 @@ struct CardDatabase {
     
     /// True se TUTTE le carte del pacchetto attivo sono già state rivelate (tutte doppie)
     static func isActivePackAllDuplicates(for museumId: String? = nil) -> Bool {
-        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
         guard let pack = getActivePack(for: city), !pack.isEmpty else { return false }
         let revealed = getRevealedCards()
         let dupes = Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
@@ -539,23 +520,20 @@ struct CardDatabase {
     static func addFoundCards(_ names: [String]) {
         var found = getFoundCards()
         for name in names {
-            if ArtworkSafetyPolicy.allows(internalName: name) {
-                found.insert(name)
-            }
+            found.insert(name)
         }
         UserDefaults.standard.set(Array(found), forKey: "FoundCards")
     }
     
     static func getFoundCards() -> Set<String> {
         if let saved = UserDefaults.standard.stringArray(forKey: "FoundCards") {
-            return Set(saved.filter { ArtworkSafetyPolicy.allows(internalName: $0) })
+            return Set(saved.filter { !hiddenArtworkNames.contains($0) })
         }
         return []
     }
     
     // Gestione salvataggio carte riconosciute in AR (chiare)
     static func addRevealedCard(_ name: String) {
-        guard ArtworkSafetyPolicy.allows(internalName: name) else { return }
         var revealed = getRevealedCards()
         revealed.insert(name)
         UserDefaults.standard.set(Array(revealed), forKey: "RevealedCards")
@@ -566,148 +544,122 @@ struct CardDatabase {
     
     static func getRevealedCards() -> Set<String> {
         if let saved = UserDefaults.standard.stringArray(forKey: "RevealedCards") {
-            return Set(saved.filter { ArtworkSafetyPolicy.allows(internalName: $0) })
+            return Set(saved.filter { !hiddenArtworkNames.contains($0) })
         }
         return []
     }
 
+    private static var hiddenArtworkNames: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: hiddenArtworkNamesKey) ?? [])
+    }
+
     static let fallbackMuseumMap: [String: [String]] = [
         "uffizi": [
-            "botticelli-primavera",
-            "botticelli-pallas-and-the-centaur",
-            "botticelli-madonna-of-the-magnificat",
-            "botticelli-madonna-of-the-pomegranate-madonna-della-melagran",
-            "botticelli-calumny-of-apelles",
-            "botticelli-fortitude",
-            "leonardo-annunciation",
-            "leonardo-adoration-of-the-magi",
-            "verrocchio-the-baptism-of-christ",
-            "michelangelo-the-holy-family-with-the-infant-st-john-the-bap",
-            "raffaello-madonna-del-cardellino",
-            "raffaello-portraits-of-agnolo-and-maddalena-doni",
-            "raffaello-self-portrait",
-            "raffaello-pope-leo-x-with-cardinals-giulio-de-medici-and-lui",
-            "caravaggio-bacchus",
-            "piero-portrait-of-federico-da-montefeltro",
-            "piero-triumph-of-battista-sforza",
-            "giotto-ognissanti-madonna-madonna-in-maesta",
-            "cimabue-the-madonna-in-majesty-maesta",
-            "duccio-rucellai-madonna",
-            "simone-annunciation-and-two-saints",
-            "gentile-adoration-of-the-magi",
-            "uccello-bernardino-della-ciarda-thrown-off-his-horse",
-            "goes-sts-anthony-and-thomas-with-tommaso-portinari",
-            "parmigianino-madonna-dal-collo-lungo-madonna-with-long-neck",
-            "bronzino-eleonora-di-toledo-with-her-son-giovanni-de-medici",
-            "bronzino-portrait-of-lucrezia-panciatichi",
             "andrea-madonna-of-the-harpies",
             "angelico-the-coronation-of-the-virgin",
-            "lippi-madonna-and-child-with-two-angels",
-            "weyden-entombment-of-christ",
+            "bellini-sacred-allegory",
+            "botticelli-calumny-of-apelles",
+            "botticelli-fortitude",
+            "botticelli-madonna-of-the-magnificat",
+            "botticelli-madonna-of-the-pomegranate-madonna-della-melagran",
+            "botticelli-pallas-and-the-centaur",
+            "botticelli-primavera",
+            "botticelli-the-birth-of-venus",
+            "bronzino-eleonora-di-toledo-with-her-son-giovanni-de-medici",
+            "bronzino-portrait-of-lucrezia-panciatichi",
+            "caravaggio-bacchus",
+            "caravaggio-head-of-medusa",
+            "caravaggio-the-sacrifice-of-isaac",
+            "cimabue-the-madonna-in-majesty-maesta",
+            "correggio-rest-on-the-flight-into-egypt-with-st-francis",
+            "duccio-rucellai-madonna",
             "durer-adoration-of-the-magi",
+            "gentile-adoration-of-the-magi",
+            "gentileschi-st-catherine-of-alexandria",
+            "giotto-ognissanti-madonna-madonna-in-maesta",
+            "goes-sts-anthony-and-thomas-with-tommaso-portinari",
+            "greco-sts-john-the-evangelist-and-francis",
+            "leonardo-adoration-of-the-magi",
+            "leonardo-annunciation",
+            "lippi-madonna-and-child-with-two-angels",
+            "lorenzo-the-coronation-of-the-virgin",
+            "mantegna-the-adoration-of-the-magi",
+            "michelangelo-the-holy-family-with-the-infant-st-john-the-bap",
+            "parmigianino-madonna-dal-collo-lungo-madonna-with-long-neck",
+            "perugino-pieta",
+            "piero-portrait-of-federico-da-montefeltro",
+            "piero-triumph-of-battista-sforza",
+            "pollaiuolo-hercules-and-antaeus",
+            "pontormo-supper-at-emmaus",
+            "raffaello-madonna-del-cardellino",
+            "raffaello-pope-leo-x-with-cardinals-giulio-de-medici-and-lui",
+            "raffaello-portraits-of-agnolo-and-maddalena-doni",
+            "raffaello-self-portrait",
             "rembrandt-self-portrait-as-a-young-man",
             "rubens-self-portrait",
-            "gentileschi-st-catherine-of-alexandria",
-            "greco-sts-john-the-evangelist-and-francis",
-            "mantegna-the-adoration-of-the-magi",
-            "correggio-rest-on-the-flight-into-egypt-with-st-francis",
-            "lorenzo-the-coronation-of-the-virgin",
-            "pontormo-supper-at-emmaus",
-            "veronese-holy-family-with-st-catherine-and-the-infant-st-joh",
+            "simone-annunciation-and-two-saints",
             "tintoretto-self-portrait-with-a-book",
-            "perugino-pieta",
-            "bellini-sacred-allegory"
+            "tiziano-flora",
+            "tiziano-venus-of-urbino",
+            "uccello-bernardino-della-ciarda-thrown-off-his-horse",
+            "veronese-holy-family-with-st-catherine-and-the-infant-st-joh",
+            "verrocchio-the-baptism-of-christ",
+            "weyden-entombment-of-christ"
         ],
-        "prado": [
-            "prado-velazquez-las-meninas-or-the-family-of-philip-iv",
-            "prado-weyden-deposition",
-            "prado-tiziano-emperor-charles-v-at-muhlberg",
-            "prado-velazquez-the-surrender-of-breda-las-lanzas",
-            "prado-greco-nobleman-with-his-hand-on-his-chest",
-            "prado-rubens-the-rape-of-europa",
-            "prado-durer-self-portrait-at-26",
-            "prado-velazquez-the-triumph-of-bacchus-los-borrachos-the-tope",
-            "prado-rubens-the-holy-family-with-st-anne",
-            "prado-velazquez-the-fable-of-arachne-las-hilanderas",
-            "prado-velazquez-philip-iv-in-armour",
-            "prado-goya-y-lucientes-the-second-of-may-1808-the-charge-of-t",
-            "prado-greco-the-trinity",
-            "prado-greco-the-annunciation",
-            "prado-murillo-immaculate-conception",
-            "prado-goya-y-lucientes-witches-in-the-air",
-            "prado-tiziano-portrait-of-isabella-of-portugal",
-            "prado-bosch-triptych-of-haywain",
-            "prado-angelico-the-annunciation",
-            "prado-bosch-the-cure-of-folly-extraction-of-the-stone-of-madn",
-            "prado-goya-y-lucientes-the-parasol",
-            "prado-tintoretto-christ-washing-the-feet-of-his-disciples",
-            "prado-velazquez-aesop",
-            "prado-velazquez-menippus",
-            "prado-velazquez-the-forge-of-vulcan",
-            "prado-rubens-the-cardinal-infante",
-            "prado-antonello-the-dead-christ-supported-by-an-angel",
-            "prado-rubens-garden-of-love",
-            "prado-ribera-jacob-s-dream",
-            "prado-greco-the-pentecost",
-            "prado-velazquez-philip-iv-on-horseback",
-            "prado-rubens-duke-of-lerma",
-            "prado-bosch-the-temptation-of-st-anthony",
-            "prado-velazquez-prince-baltasar-carlos-as-a-hunter",
-            "prado-velazquez-the-buffoon-pablo-de-valladolid",
-            "prado-goya-y-lucientes-fight-with-a-young-bull",
-            "prado-velazquez-mercury-and-argus",
-            "prado-velazquez-cardinal-infante-don-fernando-as-a-hunter",
-            "prado-gentileschi-birth-of-st-john-the-baptist",
-            "prado-cecco-guardian-angel-with-sts-ursula-and-thomas"
-        ],
-        "moma": [
-            "moma-gogh-starry-night",
-            "moma-rousseau-the-sleeping-gypsy",
-            "moma-cezanne-bather",
-            "moma-seurat-evening-honfleur",
-            "moma-toulouse-lautrec-la-goulue-arriving-at-the-moulin-rouge",
-            "moma-gogh-the-olive-trees",
-            "moma-gauguin-still-life-with-three-puppies",
-            "moma-klimt-hope-ii",
-            "moma-signac-portrait-of-felix-feneon",
-            "moma-degas-at-the-milliner-s",
-            "moma-gauguin-washerwomen",
-            "moma-picasso-woman-by-a-window",
-            "moma-picasso-woman-in-an-armchair",
-            "moma-picasso-maya-in-a-sailor-suit",
-            "moma-picasso-bather-and-cabin",
-            "moma-picasso-still-life-with-fruit-dish-nature-morte-au-comp",
-            "moma-mondrian-composition-in-red-blue-and-yellow",
-            "moma-mondrian-composition-with-red-and-blue",
-            "moma-mondrian-composition-with-color-planes-5",
-            "moma-mondrian-tableau-i-lozenge-with-four-lines-and-gray",
-            "moma-matisse-the-rose-marble-table",
-            "moma-matisse-the-back-i",
-            "moma-matisse-jeannette-v",
-            "moma-hopper-gas",
-            "moma-hopper-night-windows",
-            "moma-ensor-tribulations-of-st-anthony",
-            "moma-klee-castle-garden",
-            "moma-klee-actor-s-mask",
-            "moma-klee-equals-infinity",
-            "moma-klee-pastorale-rhythms",
-            "moma-klee-in-the-grass",
-            "moma-puvis-de-chavannes-the-shepherd-s-song",
-            "moma-toulouse-lautrec-lily-grenier",
-            "moma-cezanne-turning-road-at-montgeroult",
-            "moma-picasso-portrait-of-francoise-with-long-neck-i-portrait",
-            "moma-picasso-head-of-a-woman-no-1-portrait-of-dora-maar-tete",
-            "moma-matisse-large-odalisque-in-striped-pantaloons-grande-od",
-            "moma-picasso-the-circus-le-cirque",
-            "moma-picasso-man-and-woman-homme-et-femme",
-            "moma-picasso-ines-and-her-child-ines-et-son-enfant",
-            "moma-picasso-owl-glass-and-flower",
-            "moma-matisse-harbor-at-collioure-port-de-collioure",
-            "moma-picasso-black-figure-figure-noire",
-            "moma-matisse-venus-in-a-shell-i",
-            "moma-picasso-bearded-faun",
-            "moma-matisse-torso-leaning-on-arms-torse-reposant-sur-les-br",
-            "moma-picasso-nocturnal-dance-with-an-owl-danse-nocturne-avec"
+        "capodimonte": [
+            "1 - Q 36 Masaccio_Crocifissione_ph.L.Romano_0779",
+            "10 - Girolamo Mazzoli Bedoli_Santa Chiara_ph.Luciano Romano_0620",
+            "11 - Tiziano Vecellio_Danae_Capodimonte_ph.L.Romano_0722",
+            "12 - Q 365 Annibale Carracci_Ercole al bivio_Capodimonte_ph.L.Romano_2280",
+            "13 - Annibale Carracci_Piet\u{00E0}_Capodimonte_ph.L.Romano_2265",
+            "14 - Caravaggio_Flagellazione di Cristo_Capodimonte_ph.L.Romano_10780",
+            "15 - Guido Reni_Atalanta e Ippomene_ph.L.Romano_70271",
+            "16 - Artemisia Gentileschi_Giuditta e Oloferne_ph.L.Romano_12119",
+            "17 - Q_622",
+            "18 - Francesco Guarino_S. Agata (part.)_ph.L.Romano_10804",
+            "19 - Jusepe de Ribera_San Girolamo e l'angelo del Giudizio_10904",
+            "2 - Giovanni Bellini_Trasfigurazione_ph.L.Romano_0738",
+            "20 - Jusepe de Ribera_Sileno ebbro_ph.l.Romano_10797",
+            "21 - Jusepe de Ribera_Apollo e Marsia_1637_ph.L.Romano_10849",
+            "22 - Luca Giordano-Apollo e Marsia_Capodimonte_ph.L.Romano_10824",
+            "23 - Mattia Preti_San Nicola di Bari_Capodimonte_ph.L.Romano_7315",
+            "24 - Mattia Preti_San Sebastiano_10861",
+            "25 - Luca Giordano_Madonna del Baldacchino_Capodimonte_ph.L.Romano_7326",
+            "26 - Q_294",
+            "27 - DSC_4408a",
+            "28 - Pierre-Jacques Volaire_Eruzione del Vesuvio dal ponte della Maddalena_ph.L.Romano_3002",
+            "29 - Tiziano Vecellio_Ritratto di Paolo III con i nipoti_ph.L.Romano_2131",
+            "3 - Colantonio_San Girolamo nello studio_Capodimonte_ph.L.Romano_2359",
+            "30 - Q 145 Raffaello Sanzio_Ritratto del cardinale Alessandro Farnese_Capodimonte_ph.L.Romano_3030",
+            "31 - Q 191 El Greco_Ritratto di Giulio Clovio-2636",
+            "32 - Antonio Joli_Ferdinando IV a cavallo con la corte_ph.L.Romano_Capodimonte_11010",
+            "33 - Museo di Capodimonte_Andy Warhol_Vesuvius_ph.L.Romano_0054",
+            "34 - 5501 EK Polittico S.Vincenzo Ferrer e storie",
+            "35 - Q 60 Andrea Mantegna_Ritratto di Francesco Gonzaga_ph.L.Romano_0767",
+            "36 - Q_130",
+            "37 - SOTTOCONSEGNA S Domenico Tiziano Vecellio_Annunciazione_Capodimonte_ph.L.Romano_7268",
+            "38 - Q_1110",
+            "39 - Q699 Finson Annunciazione C033-25",
+            "4 - Jacopo de'Barbari attr._Ritratto di Luca Pacioli_ph.L.Romano_3954",
+            "40 - Q_375",
+            "41 - Q 192 El Greco_El Soplon-2603",
+            "42 - Sebastiano del Piombo_Ritratto di Clemente VII_ph.L.Romano_0999",
+            "43 - Q_373",
+            "44 - Bernardo Cavallino_La Cantatrice_ph.L.Romano_10817",
+            "45 - Bernardo Cavallino_Santa Cecilia in estasi_ph.Luciano Romano__6811",
+            "46 - Q 106 Correggio_Sposalizio mistico di Santa Caterina_Capodimonte_ph.L.Romano_7235",
+            "47 - SOTTOCONSEGNA PALAZZO REALE PR 319 Annibale Carracci_Sposalizio mistico di Santa Caterina_Capodimonte_ph.L.Romano_2297",
+            "48 - Mattia Preti_Giuditta e Oloferne_ph.Luciano Romano_8691",
+            "49 - Q_309",
+            "5 - Lorenzo Lotto_Ritratto  di Bernardo de Rossi_0750",
+            "50 - Q_254",
+            "51 - Q_263",
+            "52 - Q_1719",
+            "53 - Q_1086",
+            "6 - Q 112 Rosso Fiorentino_Ritratto di giovane seduto con tappeto_ph.Luciano Romano_8414567",
+            "7 - Parmigianino_Ritratto di Galeazzo Sanvitale_Capodimonte_ph.L.Romano_10948",
+            "8 - Q 108 Parmigianino Antea_ph.L.Romano_10938",
+            "9 - Parmigianino_Lucrezia_Capodimonte_ph.L.Romano__3676"
         ]
     ]
 }
