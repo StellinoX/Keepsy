@@ -14,10 +14,8 @@ struct ContentView: View {
     @State private var autoKeptCount: Int = 0
     @State private var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
     @State private var openingInsertionEdge: Edge = .leading
-    #if DEBUG
     @State private var showDebugMenu = false
     @State private var catalogRevision = 0
-    #endif
 
     enum ActiveView: Equatable {
         case opening, arScanner
@@ -43,7 +41,6 @@ struct ContentView: View {
                     .transition(.identity)
             }
 
-            #if DEBUG
             if hasCompletedOnboarding {
                 VStack {
                     HStack {
@@ -64,9 +61,7 @@ struct ContentView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
             }
-            #endif
         }
-        #if DEBUG
         .id(catalogRevision)
         .sheet(isPresented: $showDebugMenu) {
             DebugMenuView {
@@ -77,7 +72,6 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .artworkDatabaseUpdated)) { _ in
             catalogRevision += 1
         }
-        #endif
         .onAppear {
             let autoCount = UserDefaults.standard.integer(forKey: "autoKeptCardsCount")
             if autoCount > 0 {

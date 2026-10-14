@@ -1,4 +1,3 @@
-#if DEBUG
 import SwiftUI
 
 struct DebugMenuView: View {
@@ -438,4 +437,3 @@ private struct DebugCardDetailView: View {
         revision += 1
     }
 }
-#endif

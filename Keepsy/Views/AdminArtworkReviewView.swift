@@ -1,4 +1,3 @@
-#if DEBUG
 import SwiftUI
 import Combine
 
@@ -292,4 +291,3 @@ struct AdminArtworkReviewView: View {
         }
     }
 }
-#endif

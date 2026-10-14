@@ -58,13 +58,11 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     }
 
     private var effectiveLocation: CLLocation? {
-        #if DEBUG
         if UserDefaults.standard.bool(forKey: "debugLocationEnabled"),
            let museumID = UserDefaults.standard.string(forKey: "debugLocationMuseumID"),
            let museum = MuseumConfig.shared.museums.first(where: { $0.id == museumID }) {
             return CLLocation(latitude: museum.latitude, longitude: museum.longitude)
         }
-        #endif
         return lastKnownLocation
     }
 
@@ -78,11 +76,9 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     }
 
     func isUserNear(museum: Museum) -> Bool {
-        #if DEBUG
         if UserDefaults.standard.bool(forKey: "debugLocationEnabled") {
             return true
         }
-        #endif
         if isNearDeveloperCenter() {
             return true
         }

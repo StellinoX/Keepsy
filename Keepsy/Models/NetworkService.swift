@@ -30,11 +30,9 @@ enum ArtworkSafetyPolicy {
     private static let localOverridesKey = "ArtworkSafetyLocalOverrides"
 
     static func allows(internalName: String, remoteApproval: Bool? = nil) -> Bool {
-        #if DEBUG
         if let override = localOverrides[internalName] {
             return override
         }
-        #endif
         if let remoteApproval {
             return remoteApproval
         }
@@ -46,18 +44,15 @@ enum ArtworkSafetyPolicy {
     }
 
     static func reviewReason(internalName: String, remoteApproval: Bool?) -> String {
-        #if DEBUG
         if localOverrides[internalName] != nil {
             return "Local review override"
         }
-        #endif
         if remoteApproval == false {
             return "Blocked in Firestore"
         }
         return blockedInternalNames.contains(internalName) ? "Reviewed safety block" : "Allowed"
     }
 
-    #if DEBUG
     static func setLocalOverride(_ isAllowed: Bool, for internalName: String) {
         var overrides = localOverrides
         overrides[internalName] = isAllowed
@@ -77,7 +72,6 @@ enum ArtworkSafetyPolicy {
     private static var localOverrides: [String: Bool] {
         UserDefaults.standard.dictionary(forKey: localOverridesKey) as? [String: Bool] ?? [:]
     }
-    #endif
 }
 
 struct NetworkArtwork: Codable, Identifiable {

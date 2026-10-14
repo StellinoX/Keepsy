@@ -627,12 +627,8 @@ struct ARArtworkView: View {
 
     private var isDeveloperDevice: Bool {
         // IDFV resets on uninstall/reinstall, so a hardcoded device-ID allowlist breaks on
-        // every fresh test install. This is dev-only tooling anyway — gate on build config.
-        #if DEBUG
+        // every fresh internal test install.
         return true
-        #else
-        return false
-        #endif
     }
 
     private func simulateArtworkScan() {
