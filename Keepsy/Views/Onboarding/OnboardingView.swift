@@ -18,7 +18,7 @@ struct OnboardingView: View {
     @State private var step: Int = 0
     @State private var isMovingForward: Bool = true
     @State private var locationManager = LocationManager()
-    @State private var selectedMuseumId: String = MuseumConfig.shared.museums.first?.id ?? "capodimonte"
+    @State private var selectedMuseumId: String = MuseumConfig.shared.museums.first?.id ?? "uffizi"
 
     private let lastStep = 2
 

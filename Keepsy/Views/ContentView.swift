@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     @State private var activeView: ActiveView = .opening
@@ -13,6 +14,10 @@ struct ContentView: View {
     @State private var autoKeptCount: Int = 0
     @State private var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
     @State private var openingInsertionEdge: Edge = .leading
+    #if DEBUG
+    @State private var showDebugMenu = false
+    @State private var catalogRevision = 0
+    #endif
 
     enum ActiveView: Equatable {
         case opening, arScanner
@@ -37,7 +42,42 @@ struct ContentView: View {
                 mainContent
                     .transition(.identity)
             }
+
+            #if DEBUG
+            if hasCompletedOnboarding {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button {
+                            showDebugMenu = true
+                        } label: {
+                            Image(systemName: "wrench.and.screwdriver.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 44, height: 44)
+                                .background(.black.opacity(0.7), in: Circle())
+                        }
+                        .accessibilityLabel("Open debug center")
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+            }
+            #endif
         }
+        #if DEBUG
+        .id(catalogRevision)
+        .sheet(isPresented: $showDebugMenu) {
+            DebugMenuView {
+                catalogRevision += 1
+                showDebugMenu = false
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .artworkDatabaseUpdated)) { _ in
+            catalogRevision += 1
+        }
+        #endif
         .onAppear {
             let autoCount = UserDefaults.standard.integer(forKey: "autoKeptCardsCount")
             if autoCount > 0 {
@@ -52,10 +92,11 @@ struct ContentView: View {
             }
         }
         .task {
-            // Sincronizza i metadati da Firebase Firestore in background all'avvio
+            guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1",
+                  ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PLAYGROUNDS"] != "1" else {
+                return
+            }
             await CardDatabase.syncWithCloud()
-            
-            // Prefetch/Scarica tutte le immagini delle opere per averle già in locale in background
             await prefetchAllImages()
         }
         .alert("We Kept 'Em", isPresented: $showAutoKeptPopup) {

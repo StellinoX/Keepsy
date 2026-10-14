@@ -21,13 +21,10 @@ struct PackSelectionView: View {
     private var packHeight: CGFloat { packWidth * (350.0 / 230.0) }
     private var spacing:    CGFloat { H / 9.0 }
     private var rulloCenterY: CGFloat { H * 1.10 }
-    private var selLiftY:     CGFloat { rulloCenterY - 55 }
-    private var selectedY:    CGFloat { H * 0.35 }
 
     // Posizione Y raised del tearing: centro schermo meno l'offset raised di PackOpeningView
     private var raisedY: CGFloat { H / 2 - H * 0.15 }
 
-    private let exitScale: CGFloat = 0.8
     private let selLift: CGFloat = 28
 
     private var imageName: String {

@@ -39,6 +39,10 @@ struct CardView: View {
         return "Card face down"
     }
 
+    private var voiceOverValue: String {
+        card.isFlipped ? "Revealed" : "Hidden"
+    }
+
     var body: some View {
         ZStack {
             if card.isFlipped {
@@ -69,6 +73,7 @@ struct CardView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(voiceOverLabel)
+        .accessibilityValue(voiceOverValue)
         .accessibilityHint("Double-tap to inspect")
         .accessibilityAddTraits(.isButton)
     }

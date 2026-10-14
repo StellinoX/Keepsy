@@ -14,9 +14,11 @@ enum TestSupport {
         let keys = [
             "FoundCards", "RevealedCards", "DuplicateCardCounts",
             "currentCity",
+            "CachedRemoteArtworks_v3", "CachedMuseumMap_v3",
             "CachedRemoteArtworks", "CachedMuseumMap",
             "activePackCards", "activePackTearMask", "activePackDuplicates",
             "activePackCards_\(city)", "activePackTearMask_\(city)", "activePackDuplicates_\(city)",
+            "ArtworkSafetyLocalOverrides"
         ]
         for key in keys { d.removeObject(forKey: key) }
 
@@ -33,7 +35,8 @@ enum TestSupport {
         museumId: String? = nil,
         imageUrl: String = "",
         dimensions: String? = nil,
-        cardNumber: Int? = nil
+        cardNumber: Int? = nil,
+        isAppStoreAllowed: Bool? = nil
     ) -> NetworkArtwork {
         NetworkArtwork(
             id: internalName,
@@ -48,7 +51,8 @@ enum TestSupport {
             technique: nil,
             dimensions: dimensions,
             museumId: museumId,
-            cardNumber: cardNumber
+            cardNumber: cardNumber,
+            isAppStoreAllowed: isAppStoreAllowed
         )
     }
 }

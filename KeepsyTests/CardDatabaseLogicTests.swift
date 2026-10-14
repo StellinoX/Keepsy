@@ -66,6 +66,33 @@ struct CardDatabaseLogicTests {
         #expect(CardDatabase.artworksFor(location: "zoo") == ["z1", "z2"])
     }
 
+    // MARK: - Card numbering & indexing
+
+    @Test func cardNumberAndIndexForArtwork() {
+        CardDatabase.remoteArtworks = [
+            "art1": TestSupport.artwork(internalName: "art1", museumId: city, cardNumber: 1),
+            "art2": TestSupport.artwork(internalName: "art2", museumId: city, cardNumber: 2),
+        ]
+        CardDatabase.artworksByMuseum = [city: ["art1", "art2"]]
+
+        #expect(CardDatabase.cardNumber(for: "art1") == 1)
+        #expect(CardDatabase.cardNumber(for: "art2") == 2)
+        #expect(CardDatabase.cardIndex(for: "art1") == 0)
+        #expect(CardDatabase.cardIndex(for: "art2") == 1)
+    }
+
+    @Test func hiddenCardsExcludedFromArtworksFor() {
+        CardDatabase.remoteArtworks = [
+            "visible": TestSupport.artwork(internalName: "visible", museumId: city, cardNumber: 1, isAppStoreAllowed: true),
+            "hidden": TestSupport.artwork(internalName: "hidden", museumId: city, cardNumber: nil, isAppStoreAllowed: false),
+        ]
+        CardDatabase.artworksByMuseum = [city: ["visible", "hidden"]]
+
+        let visibleList = CardDatabase.artworksFor(location: city)
+        #expect(visibleList.contains("visible"))
+        #expect(!visibleList.contains("hidden"))
+    }
+
     // MARK: - downloadedArtworkNames
 
     @Test func downloadedArtworkNamesEmptyWhenNoFilesOnDisk() {

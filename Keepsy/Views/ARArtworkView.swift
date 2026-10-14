@@ -23,30 +23,13 @@ struct ARArtworkView: View {
     @State private var triggerUnlockAnimation: String? = nil
     @State private var foundCardName: String? = nil
     @State private var isAnimatingUnlock: Bool = false
-    @State private var unlockStep: UnlockAnimationStep = .none
     @State private var showCardFoundFlash = false
-    @State private var greenFlashOpacity: Double = 0.0
-    @State private var catturataScale: CGFloat = 1.5
-    @State private var catturataOpacity: Double = 0.0
-    @State private var showUnlockCheckmark = false
-    @State private var showAutoKeptPopup: Bool = false
-    @State private var autoKeptCount: Int = 0
 
-    enum UnlockAnimationStep {
-        case none
-        case zoomToCenter
-    }
-    
-    var revealedCards: Set<String> {
-        return CardDatabase.getRevealedCards()
-    }
-    
-    var duplicatesInPack: Set<String> {
-        return CardDatabase.getDuplicatesInActivePack()
-    }
+    @State private var revealedCards: Set<String> = []
+    @State private var duplicatesInPack: Set<String> = []
     
     var activeMuseum: Museum? {
-        let activeMuseumId = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        let activeMuseumId = UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         return MuseumConfig.shared.museums.first(where: { $0.id == activeMuseumId })
     }
     
@@ -77,18 +60,6 @@ struct ARArtworkView: View {
         let kept = Text("Kept").font(.custom("Helvetica-BoldOblique", size: 16))
         let p2 = Text(" an artwork").font(.custom("Helvetica-Oblique", size: 16))
         return Text("\(p1)\(kept)\(p2)")
-    }
-
-    private var autoKeptMessage: Text {
-        let semibold = Font.system(size: 15, weight: .semibold)
-        let black = Font.system(size: 15, weight: .black)
-        let countText = LocalizationManager.shared.string("\(autoKeptCount) cards")
-        let p1 = Text("You closed the app with ").font(semibold).italic()
-        let count = Text(countText).font(black).italic()
-        let p2 = Text(" not yet in your collection.\nDon't worry — we ").font(semibold).italic()
-        let kept = Text("Kept").font(black).italic()
-        let p3 = Text(" them for you.").font(semibold).italic()
-        return Text("\(p1)\(count)\(p2)\(kept)\(p3)")
     }
 
     var body: some View {
@@ -233,19 +204,13 @@ struct ARArtworkView: View {
                         if !displayCards.isEmpty {
                             ZStack(alignment: .bottom) {
                                 ForEach(Array(displayCards.enumerated()), id: \.element) { index, cardName in
-                                    // Determina se questa specifica carta si sta sbloccando
-                                    let isThisCardUnlocking = isAnimatingUnlock && cardName == foundCardName
-                                    
                                     // Calculate diff relative to carouselOffset and dragOffset
-                                    let currentCarouselOffset = isThisCardUnlocking ? CGFloat(index) : (carouselOffset - (dragOffset / (cardWidth * 0.52)))
+                                    let currentCarouselOffset = carouselOffset - (dragOffset / (cardWidth * 0.52))
                                     let diff = CGFloat(index) - currentCarouselOffset
                                     
                                     // Scrollable horizontal X position
-                                    // Scrollable horizontal X position
                                     let xOffset: CGFloat = {
-                                        if isThisCardUnlocking {
-                                            return 0
-                                        } else if isAnimatingUnlock {
+                                        if isAnimatingUnlock {
                                             return diff * cardWidth * 1.8
                                         } else {
                                             // Carte laterali spostate orizzontalmente, quella centrale ferma
@@ -254,19 +219,13 @@ struct ARArtworkView: View {
                                     }()
 
                                     let yOffset: CGFloat = {
-                                        if isThisCardUnlocking {
-                                            return -screenHeight * 0.28
-                                        } else {
-                                            let distance = abs(diff)
-                                            return distance * cardHeight * 0.06
-                                        }
+                                        let distance = abs(diff)
+                                        return distance * cardHeight * 0.06
                                     }()
 
-                                    // Scala: centrale più grande, laterali leggermente più piccole
+                                    // Scala: laterali leggermente più piccole
                                     let scale: CGFloat = {
-                                        if isThisCardUnlocking {
-                                            return unlockStep == .zoomToCenter ? 1.85 : 0.6
-                                        } else if isAnimatingUnlock {
+                                        if isAnimatingUnlock {
                                             return 0.0
                                         } else {
                                             let distance = abs(diff)
@@ -282,39 +241,27 @@ struct ARArtworkView: View {
 
                                     // Opacità dinamica
                                     let opacity: Double = {
-                                        if isThisCardUnlocking {
-                                            return unlockStep == .zoomToCenter ? 1.0 : 0.0
-                                        } else {
-                                            if isAnimatingUnlock { return 0.0 }
-                                            let absDiff = abs(diff)
-                                            if absDiff <= 1.5 { return 1.0 }
-                                            return Double(max(0.0, 1.0 - (absDiff - 1.5) * 1.0))
-                                        }
+                                        if isAnimatingUnlock { return 0.0 }
+                                        let absDiff = abs(diff)
+                                        if absDiff <= 1.5 { return 1.0 }
+                                        return Double(max(0.0, 1.0 - (absDiff - 1.5) * 1.0))
                                     }()
 
                                     // NIENTE rotationZ né rotationY — carte sempre frontali
                                     let isUnlocked = duplicatesInPack.contains(cardName) || revealedCards.contains(cardName) || sessionFoundCards.contains(cardName)
-                                    let showGreenBorder = isThisCardUnlocking || isUnlocked
+                                    let showGreenBorder = isUnlocked
                                     let cardScale = cardWidth / 111.0
  
-                                    ScannerCardView(name: cardName, width: cardWidth, height: cardHeight)
+                                    ScannerCardView(name: cardName, width: cardWidth, height: cardHeight, isRevealed: revealedCards.contains(cardName))
+                                        .drawingGroup()
                                         .overlay(
                                             RoundedRectangle(cornerRadius: cardCorner)
-                                                .stroke(Color(hex: "6DB832"), lineWidth: showGreenBorder ? (isThisCardUnlocking ? 1.5 : 1.0) : 0)
+                                                .stroke(Color(hex: "6DB832"), lineWidth: showGreenBorder ? 1.0 : 0)
                                                 .padding(-6)
                                                 .shadow(color: Color(hex: "6DB832").opacity(showGreenBorder ? 0.85 : 0), radius: 10, x: 0, y: 0)
                                         )
                                         .overlay(alignment: .topTrailing) {
-                                            if isThisCardUnlocking {
-                                                if showUnlockCheckmark {
-                                                    Image("check")
-                                                        .resizable()
-                                                        .padding(4.5 * cardScale)
-                                                        .frame(width: 50 * cardScale, height: 50 * cardScale)
-                                                        .offset(x: 20 * cardScale, y: -25 * cardScale)
-                                                        .transition(.scale.combined(with: .opacity))
-                                                }
-                                            } else if isUnlocked {
+                                            if isUnlocked {
                                                 Image("check")
                                                     .resizable()
                                                     .padding(5 * cardScale)
@@ -323,8 +270,8 @@ struct ARArtworkView: View {
                                             }
                                         }
                                         .shadow(
-                                            color: isThisCardUnlocking ? Color(hex: "4CD964").opacity(0.7) : (selectedTargetCard == cardName ? .white.opacity(0.25) : .black.opacity(0.5)),
-                                            radius: isThisCardUnlocking ? 28 : (selectedTargetCard == cardName ? 18 : 6)
+                                            color: selectedTargetCard == cardName ? .white.opacity(0.25) : .black.opacity(0.5),
+                                            radius: selectedTargetCard == cardName ? 18 : 6
                                         )
                                         .contentShape(Rectangle())
                                         .onTapGesture {
@@ -344,12 +291,57 @@ struct ARArtworkView: View {
                                         .scaleEffect(scale, anchor: .bottom)
                                         .offset(x: xOffset, y: yOffset)
                                         .opacity(opacity)
-                                        .zIndex(isThisCardUnlocking ? 100 : Double(20 - abs(diff)))
+                                        .zIndex(Double(20 - abs(diff)))
                                         .animation(.spring(response: 0.35, dampingFraction: 0.72), value: isAnimatingUnlock)
-                                        .animation(.spring(response: 0.35, dampingFraction: 0.72), value: unlockStep)
                                         .animation(.spring(response: 0.35, dampingFraction: 0.72), value: selectedTargetCard)
                                 }
                             }
+                            .overlay(
+                                Group {
+                                    if let unlockingCard = foundCardName {
+                                        let cardScale = cardWidth / 111.0
+                                        ScannerCardView(name: unlockingCard, width: cardWidth, height: cardHeight, isRevealed: true)
+                                            .drawingGroup()
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: cardCorner)
+                                                    .stroke(Color(hex: "6DB832"), lineWidth: 1.5)
+                                                    .padding(-6)
+                                                    .shadow(color: Color(hex: "6DB832").opacity(0.85), radius: 10, x: 0, y: 0)
+                                            )
+                                            .overlay(alignment: .topTrailing) {
+                                                Image("check")
+                                                    .resizable()
+                                                    .padding(4.5 * cardScale)
+                                                    .frame(width: 50 * cardScale, height: 50 * cardScale)
+                                                    .offset(x: 20 * cardScale, y: -25 * cardScale)
+                                                    .keyframeAnimator(initialValue: 0.0, trigger: triggerUnlockAnimation) { view, value in
+                                                        view.scaleEffect(value).opacity(value)
+                                                    } keyframes: { _ in
+                                                        KeyframeTrack {
+                                                            LinearKeyframe(0.0, duration: 0.7)
+                                                            SpringKeyframe(1.0, duration: 0.35, spring: .init(response: 0.35, dampingRatio: 0.6))
+                                                        }
+                                                    }
+                                            }
+                                            .shadow(color: Color(hex: "4CD964").opacity(0.7), radius: 28)
+                                            .offset(y: -screenHeight * 0.28)
+                                            .keyframeAnimator(initialValue: (scale: 0.6, opacity: 0.0), trigger: triggerUnlockAnimation) { view, value in
+                                                view.scaleEffect(value.scale, anchor: .bottom).opacity(value.opacity)
+                                            } keyframes: { _ in
+                                                KeyframeTrack(\.scale) {
+                                                    SpringKeyframe(1.85, duration: 0.5, spring: .init(response: 0.5, dampingRatio: 0.65))
+                                                    LinearKeyframe(1.85, duration: 1.5)
+                                                    SpringKeyframe(0.6, duration: 0.4)
+                                                }
+                                                KeyframeTrack(\.opacity) {
+                                                    LinearKeyframe(1.0, duration: 0.1)
+                                                    LinearKeyframe(1.0, duration: 2.3)
+                                                    LinearKeyframe(0.0, duration: 0.3)
+                                                }
+                                            }
+                                    }
+                                }
+                            )
                             .frame(width: screenWidth, height: cardHeight * 1.25, alignment: .bottom)
                             .simultaneousGesture(
                                 DragGesture(minimumDistance: 5, coordinateSpace: .local)
@@ -417,10 +409,17 @@ struct ARArtworkView: View {
                 // ── GREEN SCREEN FLASH ────────────────────────────────────────
                 Color(hex: "4CD964")
                     .ignoresSafeArea()
-                    .opacity(greenFlashOpacity)
                     .blendMode(.screen)
                     .allowsHitTesting(false)
                     .zIndex(55)
+                    .keyframeAnimator(initialValue: 0.0, trigger: triggerUnlockAnimation) { view, value in
+                        view.opacity(value)
+                    } keyframes: { _ in
+                        KeyframeTrack {
+                            LinearKeyframe(0.35, duration: 0.05)
+                            LinearKeyframe(0.0, duration: 0.4)
+                        }
+                    }
 
                 // ── CARD FOUND BURST ──────────────────────────────────────────
                 if showCardFoundFlash {
@@ -450,9 +449,22 @@ struct ARArtworkView: View {
                             .foregroundStyle(.white)
                             .shadow(color: .black.opacity(0.35), radius: 2, x: 0, y: 1)
                         }
-                        .scaleEffect(catturataScale)
-                        .opacity(catturataOpacity)
                         .padding(.bottom, screenHeight * 0.16)
+                        .keyframeAnimator(initialValue: (scale: 1.5, opacity: 0.0), trigger: triggerUnlockAnimation) { view, value in
+                            view.scaleEffect(value.scale).opacity(value.opacity)
+                        } keyframes: { _ in
+                            KeyframeTrack(\.scale) {
+                                LinearKeyframe(1.5, duration: 0.2)
+                                SpringKeyframe(1.0, duration: 0.38, spring: .init(response: 0.38, dampingRatio: 0.6))
+                                LinearKeyframe(1.0, duration: 1.42)
+                            }
+                            KeyframeTrack(\.opacity) {
+                                LinearKeyframe(0.0, duration: 0.2)
+                                LinearKeyframe(1.0, duration: 0.1)
+                                LinearKeyframe(1.0, duration: 1.7)
+                                LinearKeyframe(0.0, duration: 0.3)
+                            }
+                        }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .zIndex(60)
@@ -545,66 +557,13 @@ struct ARArtworkView: View {
                     .zIndex(150)
                 }
                 } // End of else block for !isBlocked
-
-                // ── AUTO-KEPT POPUP ──────────────────────────────────────────
-                if showAutoKeptPopup {
-                    ZStack {
-                        Color.black.opacity(0.65)
-                            .ignoresSafeArea()
-                            .transition(.opacity)
-
-                        VStack(spacing: 24) {
-                            Text("WE KEPT 'EM")
-                                .font(.system(size: 26, weight: .black))
-                                .italic()
-                                .foregroundStyle(Color(hex: "FF7A00"))
-                                .multilineTextAlignment(.center)
-                                .padding(.top, 8)
-
-                            autoKeptMessage
-                            .foregroundStyle(.white.opacity(0.85))
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(4)
-                            .padding(.horizontal, 16)
-
-                            Button(action: {
-                                HapticManager.shared.triggerImpact(style: .light)
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    showAutoKeptPopup = false
-                                }
-                            }) {
-                                Text("NICE, THANKS")
-                                    .font(.system(size: 18, weight: .black))
-                                    .italic()
-                                    .foregroundStyle(.black)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 54)
-                                    .background(Capsule().fill(Color(hex: "E5E5EA")))
-                            }
-                            .padding(.horizontal, 8)
-                        }
-                        .padding(28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 32)
-                                .fill(Color(hex: "1C1C1E"))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 32)
-                                        .stroke(Color.white.opacity(0.15), lineWidth: 1.5)
-                                )
-                        )
-                        .padding(.horizontal, 28)
-                        .shadow(color: Color.black.opacity(0.5), radius: 20, y: 10)
-                        .transition(.scale(scale: 0.9).combined(with: .opacity))
-                    }
-                    .zIndex(160)
-                }
             }
             .ignoresSafeArea()
         }
         .onAppear {
+            revealedCards = CardDatabase.getRevealedCards()
+            duplicatesInPack = CardDatabase.getDuplicatesInActivePack()
             locationManager.startHighAccuracyTracking()
-
-            // Rimosso popup da qui perché viene mostrato in ContentView
 
             if let active = CardDatabase.getActivePack(), !active.isEmpty {
                 let dupes = CardDatabase.getDuplicatesInActivePack()
@@ -663,16 +622,15 @@ struct ARArtworkView: View {
     }
     
     func cleanedArtworkName(_ name: String) -> String {
-        return CardDatabase.cleanedArtworkName(name)
-    }
+    return CardDatabase.cleanedArtworkName(name)
+}
 
     private var isDeveloperDevice: Bool {
-        #if targetEnvironment(simulator)
+        // IDFV resets on uninstall/reinstall, so a hardcoded device-ID allowlist breaks on
+        // every fresh test install. This is dev-only tooling anyway — gate on build config.
+        #if DEBUG
         return true
         #else
-        if let idfv = UIDevice.current.identifierForVendor?.uuidString {
-            return idfv == "5B6688E6-0464-4335-9CA3-F41F1F65EDB8" || idfv == "E44CAFC6-22C0-4FC4-8898-9BD3C039A433"
-        }
         return false
         #endif
     }
@@ -693,7 +651,7 @@ struct ARArtworkView: View {
 
 
     private func navigateToCollection() {
-        let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         withAnimation(.easeInOut(duration: 0.35)) {
             activeView = .collection(activeCity)
         }
@@ -729,8 +687,6 @@ struct ARArtworkView: View {
         HapticManager.shared.triggerImpact(style: .rigid)
         SoundManager.shared.playSound(named: "opera_trovata")
 
-        showUnlockCheckmark = false
-
         withAnimation(.easeInOut(duration: 0.3)) {
             foundCardName = cardName
             isAnimatingUnlock = true
@@ -738,54 +694,19 @@ struct ARArtworkView: View {
 
         sessionFoundCards.insert(cardName)
 
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.65)) {
-            unlockStep = .zoomToCenter
-        }
-
-        // Green screen flash
-        withAnimation(.easeOut(duration: 0.05)) { greenFlashOpacity = 0.35 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            withAnimation(.easeIn(duration: 0.4)) { greenFlashOpacity = 0.0 }
-        }
-
         // Burst di particelle + testo
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             showCardFoundFlash = true
             HapticManager.shared.triggerImpact(style: .heavy)
         }
 
-        // Delay showing the checkmark to match Frame 3 transition
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
-                showUnlockCheckmark = true
-            }
-        }
-
-        // "CATTURATA!" pop in
-        catturataScale = 1.5
-        catturataOpacity = 0.0
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.6)) {
-                catturataScale = 1.0
-                catturataOpacity = 1.0
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        // Final cleanup after all keyframe animations complete (2.7s total)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.7) {
             withAnimation(.easeInOut(duration: 0.3)) {
-                catturataOpacity = 0.0
+                isAnimatingUnlock = false
+                foundCardName = nil
             }
-            withAnimation(.easeInOut(duration: 0.4)) {
-                unlockStep = .none
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    isAnimatingUnlock = false
-                    foundCardName = nil
-                    showUnlockCheckmark = false
-                }
-                triggerUnlockAnimation = nil
+            triggerUnlockAnimation = nil
 
                 // Controlla se abbiamo completato il pacchetto (tutte le 5 carte trovate/doppie/rivelate)
                 if let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
@@ -816,7 +737,6 @@ struct ARArtworkView: View {
                 }
             }
         }
-    }
 
     private func checkAndDownloadImages() async {
         // If blocked, don't download yet
@@ -824,7 +744,7 @@ struct ARArtworkView: View {
             return
         }
         
-        let city = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        let city = UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         let targetList: [String]
         if CardDatabase.hasActivePack(), let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
             targetList = activePack
@@ -896,7 +816,7 @@ struct ARArtworkView: View {
             // Bottom Overlapping Museum Packets (three packets cascading from left/back to right/front)
             ZStack(alignment: .bottom) {
                 // Back packet (left-most)
-                Image(activeMuseum?.packetImageName ?? "capodimonte_pacchetto")
+                Image(activeMuseum?.packetImageName ?? "uffizi_pacchetto")
                     .resizable()
                     .scaledToFit()
                     .frame(width: screenWidth * 0.75)
@@ -904,7 +824,7 @@ struct ARArtworkView: View {
                     .offset(x: -screenWidth * 0.03, y: screenHeight * 0.115)
                 
                 // Middle packet
-                Image(activeMuseum?.packetImageName ?? "capodimonte_pacchetto")
+                Image(activeMuseum?.packetImageName ?? "uffizi_pacchetto")
                     .resizable()
                     .scaledToFit()
                     .frame(width: screenWidth * 0.75)
@@ -912,7 +832,7 @@ struct ARArtworkView: View {
                     .offset(x: 0, y: screenHeight * 0.095)
                 
                 // Front packet (right-most)
-                Image(activeMuseum?.packetImageName ?? "capodimonte_pacchetto")
+                Image(activeMuseum?.packetImageName ?? "uffizi_pacchetto")
                     .resizable()
                     .scaledToFit()
                     .frame(width: screenWidth * 0.75)
@@ -1083,10 +1003,10 @@ struct ScannerCardView: View {
     let name: String
     let width: CGFloat
     let height: CGFloat
+    let isRevealed: Bool
     
     var body: some View {
-        let isRevealed = CardDatabase.getRevealedCards().contains(name)
-        let index = CardDatabase.remoteArtworks[name]?.cardNumber
+        let index = CardDatabase.cardIndex(for: name)
         let goldBorder = LinearGradient(
             colors: [
                 Color(hex: "F5E480"), Color(hex: "F1B40A"),
@@ -1183,7 +1103,7 @@ struct ARViewContainer: UIViewRepresentable {
         }
         
         let configuration = ARImageTrackingConfiguration()
-        let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         let downloaded = CardDatabase.downloadedArtworkNames(for: activeCity)
         let totalKnown = CardDatabase.artworksFor(location: activeCity).count
         
@@ -1203,7 +1123,7 @@ struct ARViewContainer: UIViewRepresentable {
         }
         
         // Carica le immagini di tracciamento asincronicamente e avvia la sessione UNA SOLA VOLTA
-        Task(priority: .userInitiated) { @MainActor in
+        Task(priority: .userInitiated) {
             var dynamicImages = Set<ARReferenceImage>()
 
             for name in targetArtworks {
@@ -1213,20 +1133,22 @@ struct ARViewContainer: UIViewRepresentable {
                 }
             }
 
-            if !dynamicImages.isEmpty {
-                configuration.trackingImages = dynamicImages
-                configuration.maximumNumberOfTrackedImages = 1
-                onDiagnosticMessageUpdated("✅ ARKit ready: \(dynamicImages.count)/\(totalKnown) images loaded.")
-            } else if let fallbackImages = ARReferenceImage.referenceImages(inGroupNamed: "AR Resources", bundle: nil) {
-                configuration.trackingImages = fallbackImages
-                configuration.maximumNumberOfTrackedImages = 1
-                onDiagnosticMessageUpdated("Using \(fallbackImages.count) base images from Xcode.")
-            } else {
-                onDiagnosticMessageUpdated("❌ No images found on the device!")
+            await MainActor.run {
+                if !dynamicImages.isEmpty {
+                    configuration.trackingImages = dynamicImages
+                    configuration.maximumNumberOfTrackedImages = 1
+                    onDiagnosticMessageUpdated("✅ ARKit ready: \(dynamicImages.count)/\(totalKnown) images loaded.")
+                } else if let fallbackImages = ARReferenceImage.referenceImages(inGroupNamed: "AR Resources", bundle: nil) {
+                    configuration.trackingImages = fallbackImages
+                    configuration.maximumNumberOfTrackedImages = 1
+                    onDiagnosticMessageUpdated("Using \(fallbackImages.count) base images from Xcode.")
+                } else {
+                    onDiagnosticMessageUpdated("❌ No images found on the device!")
+                }
+                
+                // Avvia la sessione AR una sola volta per evitare freeze della fotocamera
+                arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
             }
-            
-            // Avvia la sessione AR una sola volta per evitare freeze della fotocamera
-            arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
         }
         
         return arView
@@ -1253,6 +1175,7 @@ struct ARViewContainer: UIViewRepresentable {
     
     static func dismantleUIView(_ uiView: ARSCNView, coordinator: ARViewCoordinator) {
         uiView.session.pause()
+        NotificationCenter.default.removeObserver(coordinator)
     }
     
     func makeCoordinator() -> ARViewCoordinator {
