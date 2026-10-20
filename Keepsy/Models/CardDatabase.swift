@@ -432,7 +432,7 @@ struct CardDatabase {
     }
     
     static func getActivePack(for museumId: String? = nil) -> [String]? {
-        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         let cards = UserDefaults.standard.stringArray(forKey: "activePackCards_\(city)")
             ?? UserDefaults.standard.stringArray(forKey: "activePackCards")
         return cards?.filter { !hiddenArtworkNames.contains($0) }
@@ -446,7 +446,7 @@ struct CardDatabase {
     }
     
     static func clearActivePackIfNeeded(for museumId: String? = nil) {
-        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         if let active = getActivePack(for: city), !active.isEmpty {
             let revealed = getRevealedCards()
             let dupes = Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
@@ -504,7 +504,7 @@ struct CardDatabase {
     /// Legge la lista salvata UNA volta in trackDuplicates (prima di addFoundCards),
     /// NON ricalcola live — altrimenti tutte risultano doppie (addFoundCards aggiunge tutto il pack).
     static func getDuplicatesInActivePack(for museumId: String? = nil) -> Set<String> {
-        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         guard getActivePack(for: city) != nil else { return [] }
         return Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
                    ?? UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
@@ -512,7 +512,7 @@ struct CardDatabase {
     
     /// True se TUTTE le carte del pacchetto attivo sono già state rivelate (tutte doppie)
     static func isActivePackAllDuplicates(for museumId: String? = nil) -> Bool {
-        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         guard let pack = getActivePack(for: city), !pack.isEmpty else { return false }
         let revealed = getRevealedCards()
         let dupes = Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
@@ -610,61 +610,6 @@ struct CardDatabase {
             "verrocchio-the-baptism-of-christ",
             "weyden-entombment-of-christ"
         ],
-        "capodimonte": [
-            "1 - Q 36 Masaccio_Crocifissione_ph.L.Romano_0779",
-            "10 - Girolamo Mazzoli Bedoli_Santa Chiara_ph.Luciano Romano_0620",
-            "11 - Tiziano Vecellio_Danae_Capodimonte_ph.L.Romano_0722",
-            "12 - Q 365 Annibale Carracci_Ercole al bivio_Capodimonte_ph.L.Romano_2280",
-            "13 - Annibale Carracci_Piet\u{00E0}_Capodimonte_ph.L.Romano_2265",
-            "14 - Caravaggio_Flagellazione di Cristo_Capodimonte_ph.L.Romano_10780",
-            "15 - Guido Reni_Atalanta e Ippomene_ph.L.Romano_70271",
-            "16 - Artemisia Gentileschi_Giuditta e Oloferne_ph.L.Romano_12119",
-            "17 - Q_622",
-            "18 - Francesco Guarino_S. Agata (part.)_ph.L.Romano_10804",
-            "19 - Jusepe de Ribera_San Girolamo e l'angelo del Giudizio_10904",
-            "2 - Giovanni Bellini_Trasfigurazione_ph.L.Romano_0738",
-            "20 - Jusepe de Ribera_Sileno ebbro_ph.l.Romano_10797",
-            "21 - Jusepe de Ribera_Apollo e Marsia_1637_ph.L.Romano_10849",
-            "22 - Luca Giordano-Apollo e Marsia_Capodimonte_ph.L.Romano_10824",
-            "23 - Mattia Preti_San Nicola di Bari_Capodimonte_ph.L.Romano_7315",
-            "24 - Mattia Preti_San Sebastiano_10861",
-            "25 - Luca Giordano_Madonna del Baldacchino_Capodimonte_ph.L.Romano_7326",
-            "26 - Q_294",
-            "27 - DSC_4408a",
-            "28 - Pierre-Jacques Volaire_Eruzione del Vesuvio dal ponte della Maddalena_ph.L.Romano_3002",
-            "29 - Tiziano Vecellio_Ritratto di Paolo III con i nipoti_ph.L.Romano_2131",
-            "3 - Colantonio_San Girolamo nello studio_Capodimonte_ph.L.Romano_2359",
-            "30 - Q 145 Raffaello Sanzio_Ritratto del cardinale Alessandro Farnese_Capodimonte_ph.L.Romano_3030",
-            "31 - Q 191 El Greco_Ritratto di Giulio Clovio-2636",
-            "32 - Antonio Joli_Ferdinando IV a cavallo con la corte_ph.L.Romano_Capodimonte_11010",
-            "33 - Museo di Capodimonte_Andy Warhol_Vesuvius_ph.L.Romano_0054",
-            "34 - 5501 EK Polittico S.Vincenzo Ferrer e storie",
-            "35 - Q 60 Andrea Mantegna_Ritratto di Francesco Gonzaga_ph.L.Romano_0767",
-            "36 - Q_130",
-            "37 - SOTTOCONSEGNA S Domenico Tiziano Vecellio_Annunciazione_Capodimonte_ph.L.Romano_7268",
-            "38 - Q_1110",
-            "39 - Q699 Finson Annunciazione C033-25",
-            "4 - Jacopo de'Barbari attr._Ritratto di Luca Pacioli_ph.L.Romano_3954",
-            "40 - Q_375",
-            "41 - Q 192 El Greco_El Soplon-2603",
-            "42 - Sebastiano del Piombo_Ritratto di Clemente VII_ph.L.Romano_0999",
-            "43 - Q_373",
-            "44 - Bernardo Cavallino_La Cantatrice_ph.L.Romano_10817",
-            "45 - Bernardo Cavallino_Santa Cecilia in estasi_ph.Luciano Romano__6811",
-            "46 - Q 106 Correggio_Sposalizio mistico di Santa Caterina_Capodimonte_ph.L.Romano_7235",
-            "47 - SOTTOCONSEGNA PALAZZO REALE PR 319 Annibale Carracci_Sposalizio mistico di Santa Caterina_Capodimonte_ph.L.Romano_2297",
-            "48 - Mattia Preti_Giuditta e Oloferne_ph.Luciano Romano_8691",
-            "49 - Q_309",
-            "5 - Lorenzo Lotto_Ritratto  di Bernardo de Rossi_0750",
-            "50 - Q_254",
-            "51 - Q_263",
-            "52 - Q_1719",
-            "53 - Q_1086",
-            "6 - Q 112 Rosso Fiorentino_Ritratto di giovane seduto con tappeto_ph.Luciano Romano_8414567",
-            "7 - Parmigianino_Ritratto di Galeazzo Sanvitale_Capodimonte_ph.L.Romano_10948",
-            "8 - Q 108 Parmigianino Antea_ph.L.Romano_10938",
-            "9 - Parmigianino_Lucrezia_Capodimonte_ph.L.Romano__3676"
-        ]
     ]
 }
 

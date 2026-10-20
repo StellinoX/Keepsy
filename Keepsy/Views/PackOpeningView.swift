@@ -7,7 +7,7 @@ struct PackOpeningView: View {
     // Museum currently selected in the swipeable packet pager. Drives which museum's
     // cards a newly opened pack draws from. Persisted to the "currentCity" UserDefaults
     // key on open, which ARArtworkView reads for tracking + collection routing.
-    @State private var selectedMuseumId: String = MuseumConfig.shared.museums.first?.id ?? "capodimonte"
+    @State private var selectedMuseumId: String = MuseumConfig.shared.museums.first?.id ?? "uffizi"
     @State private var showCitySelector = false
 
     @State private var cards: [ArtworkCard] = []

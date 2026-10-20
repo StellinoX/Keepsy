@@ -561,7 +561,7 @@ public class PacketCoordinator: NSObject {
         self.firstCardName = firstCardName
         self.onTearComplete = onTearComplete
         self.onOpen = onOpen
-        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         self.tearY = (city == "capodimonte" || city == "uffizi") ? 3.15 : 3.0
         scene = SCNScene()
         
@@ -1228,7 +1228,7 @@ public class PacketCoordinator: NSObject {
         if abs(dx) > view.bounds.width * 0.35 {
             self.hasFinishedTear = true
             let maskToSave = self.lastMaskImage
-            let city = self.museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+            let city = self.museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
             let key = "activePackTearMask_\(city)"
             DispatchQueue.global(qos: .utility).async {
                 if let lastMask = maskToSave, let pngData = lastMask.pngData() {

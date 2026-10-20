@@ -110,7 +110,7 @@ struct CollectionAlbumView: View {
     }
 
     var experienceCardName: String {
-        let loc = (museumLocation ?? "capodimonte").lowercased()
+        let loc = (museumLocation ?? "uffizi").lowercased()
         if loc == "moma" {
             return "vale"
         }
