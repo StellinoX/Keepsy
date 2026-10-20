@@ -14,9 +14,6 @@ struct KeepsyApp: App {
 
     init() {
         FirebaseApp.configure()
-        if let idfv = UIDevice.current.identifierForVendor?.uuidString {
-            print("🚀 DEVELOPER DEVICE IDFV: \(idfv)")
-        }
     }
 
     var body: some Scene {
