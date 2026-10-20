@@ -255,7 +255,7 @@ struct ARArtworkView: View {
 
                                     let yOffset: CGFloat = {
                                         if isThisCardUnlocking {
-                                            return -screenHeight * 0.28
+                                            return 0
                                         } else {
                                             let distance = abs(diff)
                                             return distance * cardHeight * 0.06
@@ -265,7 +265,7 @@ struct ARArtworkView: View {
                                     // Scala: centrale più grande, laterali leggermente più piccole
                                     let scale: CGFloat = {
                                         if isThisCardUnlocking {
-                                            return unlockStep == .zoomToCenter ? 1.85 : 0.6
+                                            return 0
                                         } else if isAnimatingUnlock {
                                             return 0.0
                                         } else {
@@ -283,7 +283,7 @@ struct ARArtworkView: View {
                                     // Opacità dinamica
                                     let opacity: Double = {
                                         if isThisCardUnlocking {
-                                            return unlockStep == .zoomToCenter ? 1.0 : 0.0
+                                            return 0.0
                                         } else {
                                             if isAnimatingUnlock { return 0.0 }
                                             let absDiff = abs(diff)
@@ -422,10 +422,26 @@ struct ARArtworkView: View {
                     .allowsHitTesting(false)
                     .zIndex(55)
 
+                // Keep the reveal independent from the bottom carousel so its
+                // position is the exact visual center on every screen size.
+                if let unlockingCard = foundCardName {
+                    PublicScannerUnlockAnimationView(
+                        cardName: unlockingCard,
+                        cardWidth: cardWidth,
+                        cardHeight: cardHeight,
+                        cardCorner: cardCorner,
+                        isVisible: unlockStep == .zoomToCenter,
+                        showCheckmark: showUnlockCheckmark
+                    )
+                    .position(x: screenWidth / 2, y: screenHeight / 2)
+                    .allowsHitTesting(false)
+                    .zIndex(70)
+                }
+
                 // ── CARD FOUND BURST ──────────────────────────────────────────
                 if showCardFoundFlash {
                     CardFoundFlashView { showCardFoundFlash = false }
-                        .position(x: screenWidth / 2, y: screenHeight * 0.38)
+                        .position(x: screenWidth / 2, y: screenHeight / 2)
                         .allowsHitTesting(false)
                         .zIndex(58)
                 }
@@ -999,6 +1015,44 @@ struct ARArtworkView: View {
         }
     }
 
+}
+
+// MARK: - Centered card reveal
+
+private struct PublicScannerUnlockAnimationView: View {
+    let cardName: String
+    let cardWidth: CGFloat
+    let cardHeight: CGFloat
+    let cardCorner: CGFloat
+    let isVisible: Bool
+    let showCheckmark: Bool
+
+    var body: some View {
+        let cardScale = cardWidth / 111.0
+
+        ScannerCardView(name: cardName, width: cardWidth, height: cardHeight)
+            .overlay(
+                RoundedRectangle(cornerRadius: cardCorner)
+                    .stroke(Color(hex: "6DB832"), lineWidth: 1.5)
+                    .padding(-6)
+                    .shadow(color: Color(hex: "6DB832").opacity(0.85), radius: 10)
+            )
+            .overlay(alignment: .topTrailing) {
+                if showCheckmark {
+                    Image("check")
+                        .resizable()
+                        .padding(4.5 * cardScale)
+                        .frame(width: 50 * cardScale, height: 50 * cardScale)
+                        .offset(x: 20 * cardScale, y: -25 * cardScale)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .shadow(color: Color(hex: "4CD964").opacity(0.7), radius: 22)
+            .scaleEffect(isVisible ? 1.25 : 0.6)
+            .opacity(isVisible ? 1.0 : 0.0)
+            .animation(.spring(response: 0.5, dampingFraction: 0.65), value: isVisible)
+            .animation(.spring(response: 0.35, dampingFraction: 0.6), value: showCheckmark)
+    }
 }
 
 // MARK: - CardFoundFlashView — green burst when card is captured
