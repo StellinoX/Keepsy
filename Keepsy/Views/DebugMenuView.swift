@@ -41,14 +41,17 @@ struct DebugMenuView: View {
             .disabled(!debugLocationEnabled)
 
             if debugLocationEnabled {
-                Label("All museum proximity checks are unlocked", systemImage: "location.fill")
+                let selectedMuseumName = MuseumConfig.shared.museums.first {
+                    $0.id == debugLocationMuseumID
+                }?.name ?? debugLocationMuseumID
+                Label("Fake location: \(selectedMuseumName)", systemImage: "location.fill")
                     .font(.caption)
                     .foregroundStyle(.green)
             }
         } header: {
             Text("Location Faker")
         } footer: {
-            Text("The selected museum is used for distance and sorting. Scanning is allowed at every configured museum while the faker is enabled.")
+            Text("Distance, sorting, and scanning use the selected museum as the current location.")
         }
     }
 

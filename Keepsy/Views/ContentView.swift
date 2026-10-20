@@ -41,7 +41,7 @@ struct ContentView: View {
                     .transition(.identity)
             }
 
-            if hasCompletedOnboarding {
+            if hasCompletedOnboarding && AppBuild.isInternal {
                 VStack {
                     HStack {
                         Spacer()

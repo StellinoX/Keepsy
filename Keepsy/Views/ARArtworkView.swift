@@ -21,6 +21,7 @@ struct ARArtworkView: View {
     
     // Triumph unlock animation states
     @State private var triggerUnlockAnimation: String? = nil
+    @State private var unlockAnimationSequence = 0
     @State private var foundCardName: String? = nil
     @State private var isAnimatingUnlock: Bool = false
     @State private var showCardFoundFlash = false
@@ -36,14 +37,11 @@ struct ARArtworkView: View {
     var isBlocked: Bool {
         guard let museum = activeMuseum else { return false }
         
-        if locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted {
-            return true
+        if !locationManager.hasUsableLocation {
+            return locationManager.authorizationStatus == .denied ||
+                locationManager.authorizationStatus == .restricted
         }
-        
-        guard locationManager.lastKnownLocation != nil else {
-            return false // not blocked yet, wait for location
-        }
-        
+
         return !locationManager.isUserNear(museum: museum)
     }
     
@@ -273,52 +271,6 @@ struct ARArtworkView: View {
                                         .animation(.spring(response: 0.35, dampingFraction: 0.72), value: selectedTargetCard)
                                 }
                             }
-                            .overlay(
-                                Group {
-                                    if let unlockingCard = foundCardName {
-                                        let cardScale = cardWidth / 111.0
-                                        ScannerCardView(name: unlockingCard, width: cardWidth, height: cardHeight, isRevealed: true)
-                                            .drawingGroup()
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: cardCorner)
-                                                    .stroke(Color(hex: "6DB832"), lineWidth: 1.5)
-                                                    .padding(-6)
-                                                    .shadow(color: Color(hex: "6DB832").opacity(0.85), radius: 10, x: 0, y: 0)
-                                            )
-                                            .overlay(alignment: .topTrailing) {
-                                                Image("check")
-                                                    .resizable()
-                                                    .padding(4.5 * cardScale)
-                                                    .frame(width: 50 * cardScale, height: 50 * cardScale)
-                                                    .offset(x: 20 * cardScale, y: -25 * cardScale)
-                                                    .keyframeAnimator(initialValue: 0.0, trigger: triggerUnlockAnimation) { view, value in
-                                                        view.scaleEffect(value).opacity(value)
-                                                    } keyframes: { _ in
-                                                        KeyframeTrack {
-                                                            LinearKeyframe(0.0, duration: 0.7)
-                                                            SpringKeyframe(1.0, duration: 0.35, spring: .init(response: 0.35, dampingRatio: 0.6))
-                                                        }
-                                                    }
-                                            }
-                                            .shadow(color: Color(hex: "4CD964").opacity(0.7), radius: 28)
-                                            .offset(y: -screenHeight * 0.28)
-                                            .keyframeAnimator(initialValue: (scale: 0.6, opacity: 0.0), trigger: triggerUnlockAnimation) { view, value in
-                                                view.scaleEffect(value.scale, anchor: .bottom).opacity(value.opacity)
-                                            } keyframes: { _ in
-                                                KeyframeTrack(\.scale) {
-                                                    SpringKeyframe(1.85, duration: 0.5, spring: .init(response: 0.5, dampingRatio: 0.65))
-                                                    LinearKeyframe(1.85, duration: 1.5)
-                                                    SpringKeyframe(0.6, duration: 0.4)
-                                                }
-                                                KeyframeTrack(\.opacity) {
-                                                    LinearKeyframe(1.0, duration: 0.1)
-                                                    LinearKeyframe(1.0, duration: 2.3)
-                                                    LinearKeyframe(0.0, duration: 0.3)
-                                                }
-                                            }
-                                    }
-                                }
-                            )
                             .frame(width: screenWidth, height: cardHeight * 1.25, alignment: .bottom)
                             .simultaneousGesture(
                                 DragGesture(minimumDistance: 5, coordinateSpace: .local)
@@ -389,7 +341,7 @@ struct ARArtworkView: View {
                     .blendMode(.screen)
                     .allowsHitTesting(false)
                     .zIndex(55)
-                    .keyframeAnimator(initialValue: 0.0, trigger: triggerUnlockAnimation) { view, value in
+                    .keyframeAnimator(initialValue: 0.0, trigger: unlockAnimationSequence) { view, value in
                         view.opacity(value)
                     } keyframes: { _ in
                         KeyframeTrack {
@@ -398,10 +350,24 @@ struct ARArtworkView: View {
                         }
                     }
 
+                // ── CENTERED CARD REVEAL ──────────────────────────────────────
+                if let unlockingCard = foundCardName {
+                    ScannerUnlockAnimationView(
+                        cardName: unlockingCard,
+                        cardWidth: cardWidth,
+                        cardHeight: cardHeight,
+                        cardCorner: cardCorner,
+                        animationSequence: unlockAnimationSequence
+                    )
+                    .position(x: screenWidth / 2, y: screenHeight / 2)
+                    .allowsHitTesting(false)
+                    .zIndex(70)
+                }
+
                 // ── CARD FOUND BURST ──────────────────────────────────────────
                 if showCardFoundFlash {
                     CardFoundFlashView { showCardFoundFlash = false }
-                        .position(x: screenWidth / 2, y: screenHeight * 0.38)
+                        .position(x: screenWidth / 2, y: screenHeight / 2)
                         .allowsHitTesting(false)
                         .zIndex(58)
                 }
@@ -427,7 +393,7 @@ struct ARArtworkView: View {
                             .shadow(color: .black.opacity(0.35), radius: 2, x: 0, y: 1)
                         }
                         .padding(.bottom, screenHeight * 0.16)
-                        .keyframeAnimator(initialValue: (scale: 1.5, opacity: 0.0), trigger: triggerUnlockAnimation) { view, value in
+                        .keyframeAnimator(initialValue: (scale: 1.5, opacity: 0.0), trigger: unlockAnimationSequence) { view, value in
                             view.scaleEffect(value.scale).opacity(value.opacity)
                         } keyframes: { _ in
                             KeyframeTrack(\.scale) {
@@ -577,7 +543,7 @@ struct ARArtworkView: View {
         .task {
             // Wait up to 1.5 seconds for location to resolve
             for _ in 0..<15 {
-                if locationManager.lastKnownLocation != nil || locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted {
+                if locationManager.hasUsableLocation || locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted {
                     break
                 }
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
@@ -642,6 +608,12 @@ struct ARArtworkView: View {
         withAnimation(.easeInOut(duration: 0.3)) {
             foundCardName = cardName
             isAnimatingUnlock = true
+        }
+
+        // The keyframed views are conditionally inserted above. Advance their trigger
+        // on the next main-loop pass so they first mount with the previous value.
+        DispatchQueue.main.async {
+            unlockAnimationSequence += 1
         }
 
         sessionFoundCards.insert(cardName)
@@ -871,6 +843,75 @@ struct ARArtworkView: View {
         }
     }
 
+}
+
+// MARK: - Centered card reveal
+
+private struct ScannerUnlockAnimationView: View {
+    let cardName: String
+    let cardWidth: CGFloat
+    let cardHeight: CGFloat
+    let cardCorner: CGFloat
+    let animationSequence: Int
+
+    var body: some View {
+        let cardScale = cardWidth / 111.0
+
+        ScannerCardView(
+            name: cardName,
+            width: cardWidth,
+            height: cardHeight,
+            isRevealed: true
+        )
+        .drawingGroup()
+        .overlay(
+            RoundedRectangle(cornerRadius: cardCorner)
+                .stroke(Color(hex: "6DB832"), lineWidth: 1.5)
+                .padding(-6)
+                .shadow(color: Color(hex: "6DB832").opacity(0.85), radius: 10)
+        )
+        .overlay(alignment: .topTrailing) {
+            Image("check")
+                .resizable()
+                .padding(4.5 * cardScale)
+                .frame(width: 50 * cardScale, height: 50 * cardScale)
+                .offset(x: 20 * cardScale, y: -25 * cardScale)
+                .keyframeAnimator(initialValue: 0.0, trigger: animationSequence) { view, value in
+                    view.scaleEffect(value).opacity(value)
+                } keyframes: { _ in
+                    KeyframeTrack {
+                        LinearKeyframe(0.0, duration: 0.7)
+                        SpringKeyframe(
+                            1.0,
+                            duration: 0.35,
+                            spring: .init(response: 0.35, dampingRatio: 0.6)
+                        )
+                    }
+                }
+        }
+        .shadow(color: Color(hex: "4CD964").opacity(0.7), radius: 22)
+        .keyframeAnimator(
+            initialValue: (scale: 0.6, opacity: 0.0),
+            trigger: animationSequence
+        ) { view, value in
+            view.scaleEffect(value.scale).opacity(value.opacity)
+        } keyframes: { _ in
+            KeyframeTrack(\.scale) {
+                SpringKeyframe(
+                    1.25,
+                    duration: 0.5,
+                    spring: .init(response: 0.5, dampingRatio: 0.65)
+                )
+                LinearKeyframe(1.25, duration: 1.5)
+                SpringKeyframe(0.6, duration: 0.4)
+            }
+            KeyframeTrack(\.opacity) {
+                LinearKeyframe(1.0, duration: 0.1)
+                LinearKeyframe(1.0, duration: 2.3)
+                LinearKeyframe(0.0, duration: 0.3)
+            }
+        }
+    }
 }
 
 // MARK: - CardFoundFlashView — green burst when card is captured

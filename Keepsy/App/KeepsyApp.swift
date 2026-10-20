@@ -8,6 +8,10 @@
 import SwiftUI
 import FirebaseCore
 
+enum AppBuild {
+    static let isInternal = ProcessInfo.processInfo.environment["KEEPSY_INTERNAL_BUILD"] == "1"
+}
+
 @main
 struct KeepsyApp: App {
     @State private var localization = LocalizationManager.shared

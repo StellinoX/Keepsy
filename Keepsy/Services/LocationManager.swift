@@ -41,12 +41,17 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     }
 
     private var effectiveLocation: CLLocation? {
-        if UserDefaults.standard.bool(forKey: "debugLocationEnabled"),
+        if AppBuild.isInternal,
+           UserDefaults.standard.bool(forKey: "debugLocationEnabled"),
            let museumID = UserDefaults.standard.string(forKey: "debugLocationMuseumID"),
            let museum = MuseumConfig.shared.museums.first(where: { $0.id == museumID }) {
             return CLLocation(latitude: museum.latitude, longitude: museum.longitude)
         }
         return lastKnownLocation
+    }
+
+    var hasUsableLocation: Bool {
+        effectiveLocation != nil
     }
 
     func distanceTo(museum: Museum) -> CLLocationDistance? {
@@ -56,9 +61,6 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     }
 
     func isUserNear(museum: Museum) -> Bool {
-        if UserDefaults.standard.bool(forKey: "debugLocationEnabled") {
-            return true
-        }
         guard let dist = distanceTo(museum: museum) else { return false }
         return dist <= museum.geofenceRadius
     }
