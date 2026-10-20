@@ -41,12 +41,13 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     }
 
     private var effectiveLocation: CLLocation? {
-        if AppBuild.isInternal,
-           UserDefaults.standard.bool(forKey: "debugLocationEnabled"),
+#if INTERNAL_BUILD
+        if UserDefaults.standard.bool(forKey: "debugLocationEnabled"),
            let museumID = UserDefaults.standard.string(forKey: "debugLocationMuseumID"),
            let museum = MuseumConfig.shared.museums.first(where: { $0.id == museumID }) {
             return CLLocation(latitude: museum.latitude, longitude: museum.longitude)
         }
+#endif
         return lastKnownLocation
     }
 

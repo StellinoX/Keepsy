@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 
+#if INTERNAL_BUILD
 struct AdminArtworkReviewView: View {
     enum ReviewFilter: String, CaseIterable, Identifiable {
         case all = "All"
@@ -291,3 +292,4 @@ struct AdminArtworkReviewView: View {
         }
     }
 }
+#endif

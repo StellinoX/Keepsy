@@ -45,9 +45,8 @@ fileprivate func createCardBackTexture() -> UIImage {
                 UIColor(red: 0x2D / 255.0, green: 0x1C / 255.0, blue: 0x76 / 255.0, alpha: 1.0).cgColor,
                 UIColor(red: 0x43 / 255.0, green: 0x2B / 255.0, blue: 0x3F / 255.0, alpha: 1.0).cgColor
             ]
-            if let gradient = CGGradient(colorsSpace: colorSpace, colors: gradientColors as CFArray, locations: [0.0, 1.0]) {
-                context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: size.height), options: [])
-            }
+            let gradient = CGGradient(colorsSpace: colorSpace, colors: gradientColors as CFArray, locations: [0.0, 1.0])!
+            context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: size.height), options: [])
 
             // 3. LogoKeepsy centered (same visual as SwiftUI cardBack)
             if let logo = UIImage(named: "LogoKeepsy") {
@@ -72,24 +71,25 @@ fileprivate func createCardBackTexture() -> UIImage {
             UIColor(red: 0xF1/255.0, green: 0xB4/255.0, blue: 0x0A/255.0, alpha: 1.0).cgColor,
             UIColor(red: 0xF5/255.0, green: 0xE4/255.0, blue: 0x80/255.0, alpha: 1.0).cgColor,
         ]
-        if let goldGradient = CGGradient(colorsSpace: colorSpace, colors: goldColors as CFArray, locations: [0.0, 0.25, 0.5, 0.75, 1.0]) {
-            let borderLineWidth: CGFloat = 10
-            let borderInset = borderLineWidth / 2
-            let borderPath = UIBezierPath(
-                roundedRect: CGRect(origin: .zero, size: size).insetBy(dx: borderInset, dy: borderInset),
-                cornerRadius: cornerRadius - borderInset
-            )
-            context.saveGState()
-            context.setLineWidth(borderLineWidth)
-            context.addPath(borderPath.cgPath)
-            context.replacePathWithStrokedPath()
-            context.clip()
-            context.drawLinearGradient(goldGradient,
-                                       start: CGPoint(x: 0, y: 0),
-                                       end: CGPoint(x: size.width, y: size.height),
-                                       options: [])
-            context.restoreGState()
-        }
+        let goldGradient = CGGradient(colorsSpace: colorSpace, colors: goldColors as CFArray,
+                                      locations: [0.0, 0.25, 0.5, 0.75, 1.0])!
+
+        let borderLineWidth: CGFloat = 10
+        let borderInset = borderLineWidth / 2
+        let borderPath = UIBezierPath(
+            roundedRect: CGRect(origin: .zero, size: size).insetBy(dx: borderInset, dy: borderInset),
+            cornerRadius: cornerRadius - borderInset
+        )
+        context.saveGState()
+        context.setLineWidth(borderLineWidth)
+        context.addPath(borderPath.cgPath)
+        context.replacePathWithStrokedPath()
+        context.clip()
+        context.drawLinearGradient(goldGradient,
+                                   start: CGPoint(x: 0, y: 0),
+                                   end: CGPoint(x: size.width, y: size.height),
+                                   options: [])
+        context.restoreGState()
     }
     cachedCardBackTexture = result
     return result
@@ -137,7 +137,7 @@ fileprivate func createTornMask() -> UIImage {
 @MainActor
 fileprivate func createCardFrontTexture(name: String) -> UIImage {
     let title = CardDatabase.cleanedArtworkName(name)
-    let index = CardDatabase.cardIndex(for: name)
+    let index = CardDatabase.remoteArtworks[name]?.cardNumber
     let isRevealed = CardDatabase.getRevealedCards().contains(name)
     let borderGrad = CardDatabase.borderGradientFor(name: name)
     // Ensure the image is loaded into the memory cache first so ImageRenderer draws it
@@ -181,10 +181,10 @@ fileprivate func createSparkTexture() -> UIImage {
             UIColor(white: 1.0, alpha: 0.0).cgColor
         ] as CFArray
         let locations: [CGFloat] = [0.0, 0.25, 1.0]
-        if let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: locations) {
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            context.drawRadialGradient(gradient, startCenter: center, startRadius: 0, endCenter: center, endRadius: size.width / 2, options: [])
-        }
+        let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: locations)!
+        
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        context.drawRadialGradient(gradient, startCenter: center, startRadius: 0, endCenter: center, endRadius: size.width / 2, options: [])
     }
     cachedSparkTexture = result
     return result
@@ -214,10 +214,10 @@ fileprivate func createHorizontalFlareTexture() -> UIImage {
             UIColor(red: 0.2, green: 0.5, blue: 1.0, alpha: 0.18).cgColor,
             UIColor(red: 0.05, green: 0.2, blue: 0.7, alpha: 0.0).cgColor
         ] as CFArray
-        if let glowGrad = CGGradient(colorsSpace: colorSpace, colors: glowColors, locations: [0.0, 0.35, 1.0]) {
-            // End radius is only 40 pixels (only ~15% of total height, ensuring 100% fade at borders)
-            context.drawRadialGradient(glowGrad, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 40.0, options: [])
-        }
+        let glowGrad = CGGradient(colorsSpace: colorSpace, colors: glowColors, locations: [0.0, 0.35, 1.0])!
+        
+        // End radius is only 40 pixels (only ~15% of total height, ensuring 100% fade at borders)
+        context.drawRadialGradient(glowGrad, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 40.0, options: [])
         context.restoreGState()
         
         // 2. Intense horizontal core line (ultra thin needle)
@@ -231,10 +231,10 @@ fileprivate func createHorizontalFlareTexture() -> UIImage {
             UIColor(red: 0.4, green: 0.7, blue: 1.0, alpha: 0.2).cgColor,
             UIColor.clear.cgColor
         ] as CFArray
-        if let coreGrad = CGGradient(colorsSpace: colorSpace, colors: coreColors, locations: [0.0, 0.1, 0.5, 1.0]) {
-            // End radius is only 5.0 pixels (very thin core)
-            context.drawRadialGradient(coreGrad, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 5.0, options: [])
-        }
+        let coreGrad = CGGradient(colorsSpace: colorSpace, colors: coreColors, locations: [0.0, 0.1, 0.5, 1.0])!
+        
+        // End radius is only 5.0 pixels (very thin core)
+        context.drawRadialGradient(coreGrad, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 5.0, options: [])
         context.restoreGState()
         
         // 3. Central hot spot spark orb (small, bright center point)
@@ -244,10 +244,9 @@ fileprivate func createHorizontalFlareTexture() -> UIImage {
             UIColor(red: 1.0, green: 0.95, blue: 0.8, alpha: 0.8).cgColor,
             UIColor(red: 0.3, green: 0.7, blue: 1.0, alpha: 0.0).cgColor
         ] as CFArray
-        if let orbGrad = CGGradient(colorsSpace: colorSpace, colors: orbColors, locations: [0.0, 0.2, 1.0]) {
-            // End radius is 18.0 pixels (small spotlight)
-            context.drawRadialGradient(orbGrad, startCenter: center, startRadius: 0, endCenter: center, endRadius: 18.0, options: [])
-        }
+        let orbGrad = CGGradient(colorsSpace: colorSpace, colors: orbColors, locations: [0.0, 0.2, 1.0])!
+        // End radius is 18.0 pixels (small spotlight)
+        context.drawRadialGradient(orbGrad, startCenter: center, startRadius: 0, endCenter: center, endRadius: 18.0, options: [])
     }
     cachedHorizontalFlareTexture = result
     return result
@@ -562,8 +561,8 @@ public class PacketCoordinator: NSObject {
         self.firstCardName = firstCardName
         self.onTearComplete = onTearComplete
         self.onOpen = onOpen
-        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
-        self.tearY = city == "uffizi" ? 3.15 : 3.0
+        let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
+        self.tearY = (city == "capodimonte" || city == "uffizi") ? 3.15 : 3.0
         scene = SCNScene()
         
         // 1. Camera Setup
@@ -623,7 +622,7 @@ public class PacketCoordinator: NSObject {
         let mat = SCNMaterial()
         mat.lightingModel = .physicallyBased
         let finalImageName = packetImageName ?? "packet"
-        if let userImg = UIImage(named: finalImageName) ?? UIImage(named: "packet") {
+        if let userImg = UIImage(named: finalImageName) ?? UIImage(named: "Apri_pacchetto_Copy_14_3x") ?? UIImage(named: "uffizi_pacchetto") ?? UIImage(named: "packet") {
             mat.diffuse.contents = userImg
         } else {
             mat.diffuse.contents = UIColor(white: 0.12, alpha: 1.0)
@@ -881,8 +880,8 @@ public class PacketCoordinator: NSObject {
         bodyNode.geometry?.shaderModifiers = [.geometry: bodyGeometryShader, .surface: bodySurface]
         flapNode.geometry?.shaderModifiers = [.geometry: flapGeometryShader, .surface: flapSurface]
         
-        let crimpFreq: Float = city == "uffizi" ? 250.0 : 300.0
-        let crimpHeightVal: Float = city == "uffizi" ? 0.08 : 0.10
+        let crimpFreq: Float = (city == "capodimonte" || city == "uffizi") ? 250.0 : 300.0
+        let crimpHeightVal: Float = (city == "capodimonte" || city == "uffizi") ? 0.08 : 0.10
         bodyNode.geometry?.setValue(crimpFreq, forKey: "crimpFrequency")
         bodyNode.geometry?.setValue(crimpHeightVal, forKey: "crimpHeight")
         flapNode.geometry?.setValue(crimpFreq, forKey: "crimpFrequency")
@@ -906,7 +905,7 @@ public class PacketCoordinator: NSObject {
         // Also applies reverse-curl geometry so the packet opens like a physical pouch!
         let backMat = SCNMaterial()
         backMat.lightingModel = .physicallyBased
-        if let userImg = UIImage(named: finalImageName) ?? UIImage(named: "packet") {
+        if let userImg = UIImage(named: finalImageName) ?? UIImage(named: "Apri_pacchetto_Copy_14_3x") ?? UIImage(named: "uffizi_pacchetto") ?? UIImage(named: "packet") {
             backMat.diffuse.contents = userImg
             // Multiply with dark gray to make the back dark/metallic like the inside of a pouch
             backMat.multiply.contents = UIColor(white: 0.15, alpha: 1.0)
@@ -1043,7 +1042,8 @@ public class PacketCoordinator: NSObject {
             // Remove Z-tilt rotation when the packet is already torn, keeping it centered and straight
             tiltContainerNode.eulerAngles = SCNVector3(0, 0, 0)
             
-            if let firstCardName = firstCardName, let uniqueCardGeo = cardGeo.copy() as? SCNPlane {
+            if let firstCardName = firstCardName {
+                let uniqueCardGeo = cardGeo.copy() as! SCNPlane
                 let uniqueCardMat = SCNMaterial()
                 uniqueCardMat.lightingModel = .physicallyBased
                 uniqueCardMat.diffuse.contents = createCardFrontTexture(name: firstCardName)
@@ -1120,9 +1120,7 @@ public class PacketCoordinator: NSObject {
     }
     
     private func updateMask() {
-        guard let view = scnView,
-              let firstTouch = touchPoints.first,
-              let lastTouch = touchPoints.last else { return }
+        guard !touchPoints.isEmpty, let view = scnView else { return }
         self.isAnimatingOrTorn = true
         
         // PERFORMANCE FIX: Dropped resolution to 256x256 (16x faster generation!).
@@ -1164,11 +1162,8 @@ public class PacketCoordinator: NSObject {
             // Draw Flap (Red) with mathematical spline smoothing (QuadCurves)
             let path = UIBezierPath()
             path.move(to: CGPoint(x: 0, y: 0)) // Top left
-            
-            if let firstUVPt = uvPoints.first {
-                path.addLine(to: CGPoint(x: 0, y: firstUVPt.y)) // Start of cut
-                path.addLine(to: firstUVPt)
-            }
+            path.addLine(to: CGPoint(x: 0, y: uvPoints[0].y)) // Start of cut
+            path.addLine(to: uvPoints[0])
             
             for i in 1..<uvPoints.count {
                 let current = uvPoints[i]
@@ -1181,21 +1176,19 @@ public class PacketCoordinator: NSObject {
                     path.addQuadCurve(to: midPoint, controlPoint: previous)
                 }
             }
+            path.addLine(to: uvPoints.last!)
             
-            if let lastUVPt = uvPoints.last {
-                path.addLine(to: lastUVPt)
-                
-                // Extend the flap boundary horizontally to the right edge
-                path.addLine(to: CGPoint(x: texSize.width, y: lastUVPt.y))
-                path.addLine(to: CGPoint(x: texSize.width, y: 0)) // Top right
-                path.close()
-                
-                // Apply a slight blur/shadow to the edge so the mask.r has a smooth gradient (0.0 to 1.0)
-                // Reduced blur to 10.0 to match the 256x256 resolution and eliminate CPU lag
-                ctx.cgContext.setShadow(offset: .zero, blur: 10.0, color: UIColor.red.cgColor)
-                UIColor.red.setFill()
-                path.fill()
-            }
+            // Extend the flap boundary horizontally to the right edge
+            let lastPt = uvPoints.last!
+            path.addLine(to: CGPoint(x: texSize.width, y: lastPt.y))
+            path.addLine(to: CGPoint(x: texSize.width, y: 0)) // Top right
+            path.close()
+            
+            // Apply a slight blur/shadow to the edge so the mask.r has a smooth gradient (0.0 to 1.0)
+            // Reduced blur to 10.0 to match the 256x256 resolution and eliminate CPU lag
+            ctx.cgContext.setShadow(offset: .zero, blur: 10.0, color: UIColor.red.cgColor)
+            UIColor.red.setFill()
+            path.fill()
         }
         
         // Update the material mask dynamically!
@@ -1203,9 +1196,9 @@ public class PacketCoordinator: NSObject {
         self.lastMaskImage = maskImage
         
         // Pass fingerX to the shader to activate the curl ONLY where the finger has passed
-        let fingerX = Float(screenToLocal(point: lastTouch, view: view).x)
-        let startX = firstTouch.x
-        let currentX = lastTouch.x
+        let fingerX = Float(screenToLocal(point: touchPoints.last!, view: view).x)
+        let startX = touchPoints.first!.x
+        let currentX = touchPoints.last!.x
         let swipeDirection: Float = currentX >= startX ? 1.0 : -1.0
         let uniforms = SCNVector4(0, 0, swipeDirection, fingerX)
         
@@ -1227,14 +1220,15 @@ public class PacketCoordinator: NSObject {
     }
     
     private func finalizeCut() {
-        guard let lastPt = touchPoints.last, let start = touchPoints.first, let view = scnView else { return }
+        guard let lastPt = touchPoints.last, let view = scnView else { return }
+        let start = touchPoints.first!
         let dx = lastPt.x - start.x
         
         // If cut spans across at least 35% of the screen width
         if abs(dx) > view.bounds.width * 0.35 {
             self.hasFinishedTear = true
             let maskToSave = self.lastMaskImage
-            let city = self.museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
+            let city = self.museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "capodimonte"
             let key = "activePackTearMask_\(city)"
             DispatchQueue.global(qos: .utility).async {
                 if let lastMask = maskToSave, let pngData = lastMask.pngData() {

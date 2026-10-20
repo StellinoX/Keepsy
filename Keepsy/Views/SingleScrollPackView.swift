@@ -26,8 +26,14 @@ struct SingleScrollPackView: View {
         museums.firstIndex(where: { $0.id == selectedMuseumId }) ?? 0
     }
 
+    private var activePackMuseum: String? {
+        guard CardDatabase.hasActivePack() else { return nil }
+        return UserDefaults.standard.string(forKey: "currentCity") ?? museums.first?.id
+    }
+
     private var displayedCity: String {
         switch selectedMuseumId {
+        case "capodimonte": return "NAPLES"
         case "uffizi":      return "FLORENCE"
         case "prado":       return "MADRID"
         case "moma":        return "NEW YORK"

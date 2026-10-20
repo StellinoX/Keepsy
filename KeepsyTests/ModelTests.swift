@@ -3,7 +3,8 @@ import Foundation
 import SwiftUI
 @testable import Keepsy
 
-/// Codable round-trip + value-type model tests that don't touch global state.\n@Suite
+/// Codable round-trip + value-type model tests that don't touch global state.
+@Suite
 @MainActor
 struct ModelTests {
 
@@ -21,8 +22,7 @@ struct ModelTests {
             technique: "Oil on canvas",
             dimensions: "120x170 cm",
             museumId: "capodimonte",
-            cardNumber: 10,
-            isAppStoreAllowed: true
+            cardNumber: 10
         )
 
         let data = try JSONEncoder().encode(original)
@@ -35,7 +35,6 @@ struct ModelTests {
         #expect(decoded.museumId == original.museumId)
         #expect(decoded.dimensions == original.dimensions)
         #expect(decoded.cardNumber == original.cardNumber)
-        #expect(decoded.isAppStoreAllowed == original.isAppStoreAllowed)
     }
 
     @Test func artworkCardEqualityIsByIdentity() {

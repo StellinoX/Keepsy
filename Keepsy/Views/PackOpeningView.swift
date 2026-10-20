@@ -7,11 +7,13 @@ struct PackOpeningView: View {
     // Museum currently selected in the swipeable packet pager. Drives which museum's
     // cards a newly opened pack draws from. Persisted to the "currentCity" UserDefaults
     // key on open, which ARArtworkView reads for tracking + collection routing.
-    @State private var selectedMuseumId: String = MuseumConfig.shared.museums.first?.id ?? "uffizi"
+    @State private var selectedMuseumId: String = MuseumConfig.shared.museums.first?.id ?? "capodimonte"
     @State private var showCitySelector = false
 
     @State private var cards: [ArtworkCard] = []
     @State private var showCards = false
+    @State private var packTearOffset: CGFloat = 0
+    @State private var packOpacity: Double = 1.0
     @State private var inspectedCard: ArtworkCard? = nil
     @State private var inspectedCardWasAlreadyRevealed = false
     @State private var hasSyncedWithCloud = false
@@ -198,7 +200,7 @@ struct PackOpeningView: View {
                                 // Riga 1: carte 0,1,2
                                 HStack(spacing: 12) {
                                     ForEach(0..<min(3, cards.count), id: \.self) { index in
-                                        CardView(card: $cards[index], cardIndex: CardDatabase.cardIndex(for: cards[index].name)) {
+                                        CardView(card: $cards[index], cardIndex: CardDatabase.remoteArtworks[cards[index].name]?.cardNumber) {
                                             handleCardTap(index: index)
                                         }
                                         .id(cards[index].id)
@@ -220,7 +222,7 @@ struct PackOpeningView: View {
                                 // Riga 2: carte 3,4
                                 HStack(spacing: 12) {
                                     ForEach(3..<min(5, cards.count), id: \.self) { index in
-                                        CardView(card: $cards[index], cardIndex: CardDatabase.cardIndex(for: cards[index].name)) {
+                                        CardView(card: $cards[index], cardIndex: CardDatabase.remoteArtworks[cards[index].name]?.cardNumber) {
                                             handleCardTap(index: index)
                                         }
                                         .id(cards[index].id)
@@ -356,7 +358,7 @@ struct PackOpeningView: View {
                             .opacity(isFront ? 0.0 : 1.0)
                         ArtworkCardFrontView(
                             name: fc.name, title: fc.title,
-                            cardIndex: CardDatabase.cardIndex(for: fc.name),
+                            cardIndex: nil,
                             width: cardW, height: cardH,
                             isRevealed: isRevealed,
                             goldBorder: goldBorder
@@ -419,20 +421,14 @@ struct PackOpeningView: View {
         }
         .onAppear {
             // Open the pager on the active pack's museum, if one is in progress.
-            let availableMuseumIds = Set(MuseumConfig.shared.museums.map(\.id))
             if CardDatabase.hasActivePack(),
-               let activeMuseum = UserDefaults.standard.string(forKey: "currentCity"),
-               availableMuseumIds.contains(activeMuseum) {
+               let activeMuseum = UserDefaults.standard.string(forKey: "currentCity") {
                 selectedMuseumId = activeMuseum
             } else if let closest = locationManager.closestMuseum(from: MuseumConfig.shared.museums) {
                 selectedMuseumId = closest.id
-            } else if let lastSelected = UserDefaults.standard.string(forKey: "lastSelectedMuseumId"),
-                      availableMuseumIds.contains(lastSelected) {
+            } else if let lastSelected = UserDefaults.standard.string(forKey: "lastSelectedMuseumId") {
                 selectedMuseumId = lastSelected
             }
-
-            UserDefaults.standard.set(selectedMuseumId, forKey: "currentCity")
-            UserDefaults.standard.set(selectedMuseumId, forKey: "lastSelectedMuseumId")
             loadActivePack()
         }
     }
@@ -582,13 +578,20 @@ struct PackOpeningView: View {
 
         var selectedArtworks = Array(remainingArtworks.shuffled().prefix(5))
 
+        if selectedMuseumId == "capodimonte" {
+            let flagellationKey = "14 - Caravaggio_Flagellazione di Cristo_Capodimonte_ph.L.Romano_10780"
+            let found = CardDatabase.getFoundCards()
+            if !revealed.contains(flagellationKey) && !found.contains(flagellationKey) {
+                if !selectedArtworks.contains(flagellationKey) && !selectedArtworks.isEmpty {
+                    selectedArtworks[selectedArtworks.count - 1] = flagellationKey
+                }
+            }
+        }
+
         self.cards = selectedArtworks.map {
             ArtworkCard(
                 name: $0,
                 imageName: $0,
-                title: CardDatabase.cleanedArtworkName($0),
-                description: CardDatabase.remoteArtworks[$0]?.description,
-                imageUrl: URL(string: CardDatabase.remoteArtworks[$0]?.imageUrl ?? ""),
                 gradient: CardDatabase.gradientFor(name: $0),
                 isFlipped: false
             )
@@ -624,15 +627,7 @@ struct PackOpeningView: View {
         if CardDatabase.hasActivePack() {
             let activeNames = CardDatabase.getActivePack() ?? []
             self.cards = activeNames.map { name in
-                ArtworkCard(
-                    name: name,
-                    imageName: name,
-                    title: CardDatabase.cleanedArtworkName(name),
-                    description: CardDatabase.remoteArtworks[name]?.description,
-                    imageUrl: URL(string: CardDatabase.remoteArtworks[name]?.imageUrl ?? ""),
-                    gradient: CardDatabase.gradientFor(name: name),
-                    isFlipped: true
-                )
+                ArtworkCard(name: name, imageName: name, gradient: CardDatabase.gradientFor(name: name), isFlipped: true)
             }
             // Carte già viste: mostrale subito senza animazione
             cardOffsetX = Array(repeating: 0, count: 5)
@@ -656,6 +651,8 @@ struct PackOpeningView: View {
         packState = .selecting
         showCards = false
         cards = []
+        packTearOffset = 0
+        packOpacity = 1.0
         inspectedCard = nil
         flashOpacity = 0.0
         showOpeningEffect = false

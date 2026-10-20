@@ -999,7 +999,7 @@ struct ScannerCardView: View {
     let isRevealed: Bool
     
     var body: some View {
-        let index = CardDatabase.cardIndex(for: name)
+        let index = CardDatabase.cardNumber(for: name)
         let goldBorder = LinearGradient(
             colors: [
                 Color(hex: "F5E480"), Color(hex: "F1B40A"),

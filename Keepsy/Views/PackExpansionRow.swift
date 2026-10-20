@@ -51,6 +51,7 @@ struct PackExpansionRow: View {
         switch museumId {
         case "uffizi":      return "Florence, Italy"
         case "prado":       return "Madrid, Spain"
+        case "capodimonte": return "Naples, Italy"
         case "moma":        return "New York, NY"
         default:            return ""
         }

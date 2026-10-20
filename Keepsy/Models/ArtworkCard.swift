@@ -5,9 +5,20 @@ struct ArtworkCard: Identifiable, Equatable {
     let name: String
     let imageName: String
     
-    let title: String
-    let description: String?
-    let imageUrl: URL?
+    var imageUrl: URL? {
+        if let urlString = CardDatabase.remoteArtworks[name]?.imageUrl {
+            return URL(string: urlString)
+        }
+        return nil
+    }
+    
+    var description: String? {
+        return CardDatabase.remoteArtworks[name]?.description
+    }
+    
+    var title: String {
+        return CardDatabase.cleanedArtworkName(name)
+    }
     
     let gradient: LinearGradient
     var isFlipped: Bool = false

@@ -1,5 +1,6 @@
 import SwiftUI
 
+#if INTERNAL_BUILD
 struct DebugMenuView: View {
     let onDone: () -> Void
 
@@ -440,3 +441,4 @@ private struct DebugCardDetailView: View {
         revision += 1
     }
 }
+#endif
