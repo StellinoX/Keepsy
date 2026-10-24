@@ -1128,19 +1128,21 @@ struct ARViewContainer: UIViewRepresentable {
 
             await MainActor.run {
                 if !dynamicImages.isEmpty {
-                    configuration.trackingImages = dynamicImages
-                    configuration.maximumNumberOfTrackedImages = 1
+                    context.coordinator.installTrackingImages(
+                        dynamicImages,
+                        configuration: configuration
+                    )
                     onDiagnosticMessageUpdated("✅ ARKit ready: \(dynamicImages.count)/\(totalKnown) images loaded.")
                 } else if let fallbackImages = ARReferenceImage.referenceImages(inGroupNamed: "AR Resources", bundle: nil) {
-                    configuration.trackingImages = fallbackImages
-                    configuration.maximumNumberOfTrackedImages = 1
+                    context.coordinator.installTrackingImages(
+                        fallbackImages,
+                        configuration: configuration
+                    )
                     onDiagnosticMessageUpdated("Using \(fallbackImages.count) base images from Xcode.")
                 } else {
                     onDiagnosticMessageUpdated("❌ No images found on the device!")
+                    arView.session.run(configuration)
                 }
-                
-                // Avvia la sessione AR una sola volta per evitare freeze della fotocamera
-                arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
             }
         }
         
@@ -1149,21 +1151,8 @@ struct ARViewContainer: UIViewRepresentable {
     
     func updateUIView(_ uiView: ARSCNView, context: Context) {
         context.coordinator.parent = self
-        context.coordinator.targetName = targetName  // keep plain copy in sync (main thread)
-        
-        // Se l'opera selezionata è già presente nella sessione AR attiva, sbloccala subito
-        if let currentFrame = uiView.session.currentFrame {
-            for anchor in currentFrame.anchors {
-                if let imageAnchor = anchor as? ARImageAnchor,
-                   let name = imageAnchor.referenceImage.name,
-                   name == targetName {
-                    DispatchQueue.main.async {
-                        onArtworkDetected(name)
-                        onDiagnosticMessageUpdated("Found: \(name)!")
-                    }
-                }
-            }
-        }
+        context.coordinator.targetName = targetName
+        context.coordinator.updateTrackingTarget(targetName)
     }
     
     static func dismantleUIView(_ uiView: ARSCNView, coordinator: ARViewCoordinator) {
@@ -1185,6 +1174,11 @@ class ARViewCoordinator: NSObject, ARSCNViewDelegate {
     
     weak var arView: ARSCNView?
     private let updateQueue = DispatchQueue(label: "ar.update.queue", qos: .userInitiated)
+    nonisolated(unsafe) private var deliveredArtworkNames: Set<String> = []
+    nonisolated(unsafe) private var nextDetectionDate = Date.distantPast
+    nonisolated private let detectionCooldown: TimeInterval = 4.0
+    private var trackingImagesByName: [String: ARReferenceImage] = [:]
+    private var configuredTargetName: String?
 
     init(parent: ARViewContainer) {
         self.parent = parent
@@ -1216,43 +1210,129 @@ class ARViewCoordinator: NSObject, ARSCNViewDelegate {
         }
     }
 
+    @MainActor
+    func installTrackingImages(
+        _ images: Set<ARReferenceImage>,
+        configuration: ARImageTrackingConfiguration
+    ) {
+        trackingImagesByName.removeAll(keepingCapacity: true)
+        for image in images {
+            if let name = image.name {
+                trackingImagesByName[name] = image
+            }
+        }
+        configuredTargetName = nil
+        applyTrackingTarget(targetName, configuration: configuration)
+    }
+
+    @MainActor
+    func updateTrackingTarget(_ name: String) {
+        guard !trackingImagesByName.isEmpty,
+              configuredTargetName != name,
+              let configuration = arView?.session.configuration as? ARImageTrackingConfiguration else {
+            return
+        }
+
+        applyTrackingTarget(name, configuration: configuration)
+    }
+
+    @MainActor
+    private func applyTrackingTarget(
+        _ name: String,
+        configuration: ARImageTrackingConfiguration
+    ) {
+        if name.isEmpty {
+            configuration.trackingImages = Set(trackingImagesByName.values)
+            configuration.maximumNumberOfTrackedImages = min(trackingImagesByName.count, 5)
+        } else if let selectedImage = trackingImagesByName[name] {
+            configuration.trackingImages = [selectedImage]
+            configuration.maximumNumberOfTrackedImages = 1
+        } else {
+            return
+        }
+
+        configuredTargetName = name
+        arView?.session.run(
+            configuration,
+            options: [.resetTracking, .removeExistingAnchors]
+        )
+    }
+
     nonisolated func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
-        guard let imageAnchor = anchor as? ARImageAnchor else { return }
-        let rawName = imageAnchor.referenceImage.name ?? "Sconosciuta"
-        // Read coordinator's plain-String copy (now synchronized via thread-safe lock getter)
-        let capturedTargetName = targetName
+        guard let imageAnchor = anchor as? ARImageAnchor,
+              imageAnchor.isTracked else {
+            return
+        }
+        processDetection(imageAnchor)
+    }
+
+    nonisolated func processDetection(_ imageAnchor: ARImageAnchor) {
+        guard let artworkName = imageAnchor.referenceImage.name else { return }
+
+        // Capture the selection at the exact moment ARKit reports the image.
+        // A later carousel change must never turn an old anchor into a new scan.
+        let targetAtDetection = targetName
+        let anchorIdentifier = imageAnchor.identifier
 
         updateQueue.async {
-            let dbName = rawName
-            DispatchQueue.main.async {
-                let foundCards = CardDatabase.getFoundCards()
-                if capturedTargetName.isEmpty {
-                    if foundCards.contains(dbName) {
-                        self.parent.onArtworkDetected(dbName)
-                    }
-                } else if dbName == capturedTargetName {
-                    self.parent.onArtworkDetected(dbName)
-                } else {
-                    self.parent.onWrongArtworkDetected(dbName)
+            let currentTarget = targetAtDetection
+            let now = Date()
+
+            if currentTarget.isEmpty {
+                guard now >= self.nextDetectionDate,
+                      !self.deliveredArtworkNames.contains(artworkName) else {
+                    return
                 }
-                self.parent.onDiagnosticMessageUpdated("Found: \(dbName)!")
+                self.deliveredArtworkNames.insert(artworkName)
+                self.nextDetectionDate = now.addingTimeInterval(self.detectionCooldown)
+
+                DispatchQueue.main.async {
+                    guard self.targetName == currentTarget else { return }
+                    if CardDatabase.getFoundCards().contains(artworkName) {
+                        self.parent.onArtworkDetected(artworkName)
+                        self.removeTrackedAnchor(with: anchorIdentifier)
+                    }
+                    self.parent.onDiagnosticMessageUpdated("Found: \(artworkName)!")
+                }
+                return
+            }
+
+            guard artworkName == currentTarget else {
+                DispatchQueue.main.async {
+                    guard self.targetName == currentTarget else { return }
+                    self.parent.onWrongArtworkDetected(artworkName)
+                }
+                return
+            }
+
+            // Deliver each newly added ARKit anchor only once and leave enough
+            // time for the reveal animation to finish before accepting another artwork.
+            guard now >= self.nextDetectionDate,
+                  !self.deliveredArtworkNames.contains(artworkName) else {
+                return
+            }
+
+            self.deliveredArtworkNames.insert(artworkName)
+            self.nextDetectionDate = now.addingTimeInterval(self.detectionCooldown)
+
+            DispatchQueue.main.async {
+                guard self.targetName == currentTarget else { return }
+                self.parent.onArtworkDetected(artworkName)
+                self.removeTrackedAnchor(with: anchorIdentifier)
+                self.parent.onDiagnosticMessageUpdated("Found: \(artworkName)!")
             }
         }
     }
 
-    nonisolated func renderer(_ renderer: SCNSceneRenderer, didUpdate node: SCNNode, for anchor: ARAnchor) {
-        guard let imageAnchor = anchor as? ARImageAnchor else { return }
-        let rawName = imageAnchor.referenceImage.name ?? "Sconosciuta"
-        let capturedTargetName = targetName
-
-        updateQueue.async {
-            let dbName = rawName
-            DispatchQueue.main.async {
-                if dbName == capturedTargetName {
-                    self.parent.onArtworkDetected(dbName)
-                    self.parent.onDiagnosticMessageUpdated("Found: \(dbName)!")
-                }
-            }
+    @MainActor
+    private func removeTrackedAnchor(with identifier: UUID) {
+        guard let session = arView?.session,
+              let anchor = session.currentFrame?.anchors.first(where: {
+                  $0.identifier == identifier
+              }) else {
+            return
         }
+
+        session.remove(anchor: anchor)
     }
 }

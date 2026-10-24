@@ -314,8 +314,10 @@ struct CardDatabase {
 
         guard let cgImage = await rawCGImage(for: name) else { return nil }
 
-        // physicalWidthMeters reads remoteArtworks, now guarded by dictLock — safe from any thread.
-        let physicalWidth = physicalWidthMeters(for: name)
+        // Match the catalog dimensions to the actual image orientation. Museum
+        // measurements are commonly stored as height × width, while ARKit needs width.
+        let imageAspectRatio = CGFloat(cgImage.width) / CGFloat(cgImage.height)
+        let physicalWidth = physicalWidthMeters(for: name, imageAspectRatio: imageAspectRatio)
         let refImage = ARReferenceImage(cgImage, orientation: .up, physicalWidth: physicalWidth)
         refImage.name = name
 
@@ -333,17 +335,33 @@ struct CardDatabase {
         }
     }
 
-    // Parses "Misure senza cornice: 83x65x5,5 cm" → 0.83m.
-    // Falls back to 0.5m (reasonable average for museum paintings) if unparseable.
-    private static func physicalWidthMeters(for name: String) -> CGFloat {
+    // Parses measurements such as "83x65x5,5 cm". Catalogs generally store
+    // height × width, but some use width × height, so compare both orientations
+    // with the reference image instead of assuming the first value is its width.
+    private static func physicalWidthMeters(for name: String, imageAspectRatio: CGFloat) -> CGFloat {
         guard let dimensions = remoteArtworks[name]?.dimensions, !dimensions.isEmpty else {
             return 0.5
         }
-        guard let match = dimensions.firstMatch(of: /(\d+(?:[.,]\d+)?)/) else { return 0.5 }
-        let valueStr = String(match.1).replacingOccurrences(of: ",", with: ".")
-        guard let cm = Double(valueStr), cm > 5 else { return 0.5 }
-        // Convert cm to meters, clamp to sensible museum painting range (0.1–3.0m)
-        return CGFloat(min(max(cm / 100.0, 0.1), 3.0))
+
+        let measurements = dimensions.matches(of: /(\d+(?:[.,]\d+)?)/)
+            .compactMap { Double(String($0.1).replacingOccurrences(of: ",", with: ".")) }
+            .filter { $0 > 5 }
+
+        guard let first = measurements.first else { return 0.5 }
+
+        let widthInCentimeters: Double
+        if measurements.count >= 2 {
+            let second = measurements[1]
+            let firstAsWidthRatio = CGFloat(first / second)
+            let secondAsWidthRatio = CGFloat(second / first)
+            let firstDifference = abs(log(firstAsWidthRatio / imageAspectRatio))
+            let secondDifference = abs(log(secondAsWidthRatio / imageAspectRatio))
+            widthInCentimeters = firstDifference <= secondDifference ? first : second
+        } else {
+            widthInCentimeters = first
+        }
+
+        return CGFloat(min(max(widthInCentimeters / 100.0, 0.1), 3.0))
     }
     
     static func artworksFor(location: String) -> [String] {

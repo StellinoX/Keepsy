@@ -155,6 +155,7 @@ struct DebugMenuView: View {
         UserDefaults.standard.set(Array(Set(names)), forKey: "FoundCards")
         UserDefaults.standard.set(Array(Set(names)), forKey: "RevealedCards")
         collectionRevision += 1
+        NotificationCenter.default.post(name: NSNotification.Name("KeepsyCardsDidChange"), object: nil)
     }
 
     private func resetCollection() {
@@ -172,6 +173,7 @@ struct DebugMenuView: View {
             defaults.removeObject(forKey: "activePackDuplicates_\(museum.id)")
         }
         collectionRevision += 1
+        NotificationCenter.default.post(name: NSNotification.Name("KeepsyCardsDidChange"), object: nil)
     }
 
     private func syncDatabase() {
@@ -415,6 +417,7 @@ private struct DebugCardDetailView: View {
 
         if value {
             found.insert(artwork.internalName)
+            revealed.insert(artwork.internalName)
         } else {
             found.remove(artwork.internalName)
             revealed.remove(artwork.internalName)
@@ -423,6 +426,7 @@ private struct DebugCardDetailView: View {
         UserDefaults.standard.set(Array(found), forKey: "FoundCards")
         UserDefaults.standard.set(Array(revealed), forKey: "RevealedCards")
         revision += 1
+        NotificationCenter.default.post(name: NSNotification.Name("KeepsyCardsDidChange"), object: nil)
     }
 
     private func setRevealed(_ value: Bool) {
@@ -439,6 +443,7 @@ private struct DebugCardDetailView: View {
         UserDefaults.standard.set(Array(found), forKey: "FoundCards")
         UserDefaults.standard.set(Array(revealed), forKey: "RevealedCards")
         revision += 1
+        NotificationCenter.default.post(name: NSNotification.Name("KeepsyCardsDidChange"), object: nil)
     }
 }
 #endif

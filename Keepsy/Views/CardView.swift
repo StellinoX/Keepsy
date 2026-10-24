@@ -96,6 +96,48 @@ struct CardView: View {
     }
 }
 
+struct SpecialCardLockedBackView: View {
+    let cardName: String
+    let width: CGFloat
+    let height: CGFloat
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        Group {
+            if cardName == "vale" {
+                Image("dasbloccare")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else if cardName == "prado_experience" {
+                Image("prado_locked")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                ZStack {
+                    Color(hex: "0D0D0F")
+
+                    Image("LogoKeepsy")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: width * 0.39, height: width * 0.39)
+
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .stroke(
+                            LinearGradient(
+                                colors: [Color(hex: "FF9000"), Color(hex: "FF5100")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: max(2, width / 60)
+                        )
+                }
+            }
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+    }
+}
+
 // MARK: - Reusable Scalable Card Front
 struct ArtworkCardFrontView: View {
     let name: String
@@ -127,13 +169,16 @@ struct ArtworkCardFrontView: View {
     private var scale: CGFloat { width / 111.0 }
     private var cr: CGFloat { 3 * scale }
     private var artwork: NetworkArtwork? { CardDatabase.remoteArtworks[name] }
+    private var isSpecialCard: Bool { name.contains("_experience") || name == "vale" }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             // 0. Base card background gradient to prevent transparency/bleed-through from underlying layers (e.g. card back)
-            CardDatabase.gradientFor(name: name)
-                .frame(width: width, height: height)
-                .clipShape(RoundedRectangle(cornerRadius: cr))
+            if !isSpecialCard {
+                CardDatabase.gradientFor(name: name)
+                    .frame(width: width, height: height)
+                    .clipShape(RoundedRectangle(cornerRadius: cr))
+            }
 
             // 1. Full-bleed image
             ArtImageView(cardName: name, isRevealed: isRevealed)
@@ -143,7 +188,7 @@ struct ArtworkCardFrontView: View {
                 .clipShape(RoundedRectangle(cornerRadius: cr))
 
             // 2. Info Overlay (Title and Author/Year)
-            if !name.contains("_experience") && name != "vale" {
+            if !isSpecialCard {
                 VStack(alignment: .leading, spacing: 3 * scale) {
                     // Title Box
                     Text(title)
@@ -196,7 +241,7 @@ struct ArtworkCardFrontView: View {
                     HStack {
                         Spacer()
 
-                        let numStr = String(format: "%02d", idx + 1)
+                        let numStr = String(format: "%02d", idx)
                         Text(numStr)
                             .font(.system(size: 4.2 * scale, weight: .black, design: .default).italic())
                             .overlay(

@@ -44,21 +44,24 @@ struct CardInspectionView: View {
     @State private var miniSheetDrag: CGFloat = 0
     @State private var showFullDetail: Bool = false
 
+    private var isSpecialCard: Bool {
+        card.name.contains("_experience") || card.name == "vale"
+    }
+
     private func isCollectionCompleteFor(_ cardName: String) -> Bool {
+        let revealed = CardDatabase.getRevealedCards().union(CardDatabase.getFoundCards())
         if cardName == "vale" {
             let artworks = CardDatabase.artworksFor(location: "moma")
-            let revealed = CardDatabase.getRevealedCards()
             return !artworks.isEmpty && artworks.allSatisfy { revealed.contains($0) }
         }
         guard cardName.contains("_experience") else { return true }
         let location = cardName.replacingOccurrences(of: "_experience", with: "")
         let artworks = CardDatabase.artworksFor(location: location)
-        let revealed = CardDatabase.getRevealedCards()
         return !artworks.isEmpty && artworks.allSatisfy { revealed.contains($0) }
     }
 
     private var isRevealed: Bool {
-        CardDatabase.getRevealedCards().contains(card.name) || card.name.contains("_experience") || card.name == "vale"
+        CardDatabase.getRevealedCards().contains(card.name) || CardDatabase.getFoundCards().contains(card.name) || card.name.contains("_experience") || card.name == "vale"
     }
 
     private var artwork: NetworkArtwork? {
@@ -82,6 +85,8 @@ struct CardInspectionView: View {
     private var artistName: String {
         if card.name.contains("_experience") || card.name == "vale" {
             if !isCollectionCompleteFor(card.name) { return "Locked" }
+            if card.name == "vale" { return "Valentina" }
+            if card.name == "prado_experience" { return "Alicia" }
             return "Keepsy Collection"
         }
         return artwork?.artist ?? "Unknown Artist"
@@ -158,21 +163,12 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                         )
 
                         if (card.name.contains("_experience") || card.name == "vale") && !isCollectionCompleteFor(card.name) {
-                            Group {
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 24)
-                                        .fill(LinearGradient(
-                                            colors: [Color(hex: "5168C4"), Color(hex: "3F53B3")],
-                                            startPoint: .topLeading, endPoint: .bottomTrailing
-                                        ))
-                                    Text("?")
-                                        .font(.system(size: 110, weight: .black))
-                                        .foregroundStyle(.white)
-                                }
-                            }
-                            .frame(width: cardW, height: cardH)
-                            .clipShape(RoundedRectangle(cornerRadius: 24))
-                            .shadow(color: Color(hex: "5168C4").opacity(0.4), radius: 30, x: 0, y: 15)
+                            SpecialCardLockedBackView(
+                                cardName: card.name,
+                                width: cardW,
+                                height: cardH,
+                                cornerRadius: 24
+                            )
                             .scaleEffect(sheetState == .expanded ? 0.85 : 1.0)
                             .position(x: geometry.size.width / 2, y: cardTopY + cardH / 2)
                             .offset(y: sheetState == .expanded ? -30 : 0)
@@ -319,7 +315,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                     SilverMetalCardView(
                         width: cardWidth,
                         height: cardHeight,
-                        isEnabled: isFrontShowing,
+                        isEnabled: isFrontShowing && !isSpecialCard,
                         tiltX: tilt.width,
                         tiltY: tilt.height,
                         customRotationX: tilt.height * -14,
@@ -450,8 +446,12 @@ struct CardFullDetailView: View {
     private let cardWidth: CGFloat = 310
     private var cardHeight: CGFloat { 470 }
 
+    private var isSpecialCard: Bool {
+        card.name.contains("_experience") || card.name == "vale"
+    }
+
     private var isRevealed: Bool {
-        CardDatabase.getRevealedCards().contains(card.name) || card.name.contains("_experience") || card.name == "vale"
+        CardDatabase.getRevealedCards().contains(card.name) || isSpecialCard
     }
 
     private var isFrontShowing: Bool {
@@ -474,7 +474,7 @@ struct CardFullDetailView: View {
 
             SilverMetalCardView(
                 width: cardWidth, height: cardHeight,
-                isEnabled: isFrontShowing,
+                isEnabled: isFrontShowing && !isSpecialCard,
                 tiltX: tilt.width,
                 tiltY: tilt.height,
                 customRotationX: tilt.height * -14,

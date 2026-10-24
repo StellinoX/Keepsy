@@ -10,6 +10,10 @@ struct AlbumCardCell: View {
     let isAnimating: Bool
     let hidePocket: Bool
 
+    private var cardNumber: Int {
+        CardDatabase.remoteArtworks[name]?.cardNumber ?? (index + 1)
+    }
+
     var body: some View {
         ZStack {
             if isFound {
@@ -18,7 +22,7 @@ struct AlbumCardCell: View {
                     ArtworkCardFrontView(
                         name: name,
                         title: CardDatabase.remoteArtworks[name]?.title ?? CardDatabase.cleanedArtworkName(name),
-                        cardIndex: index,
+                        cardIndex: cardNumber,
                         width: 58,
                         height: 84,
                         isRevealed: isRevealed,
@@ -38,7 +42,7 @@ struct AlbumCardCell: View {
             } else {
                 ZStack(alignment: .top) {
                     ZStack(alignment: .center) {
-                        Text(String(format: "%02d", index + 1))
+                        Text(String(format: "%02d", cardNumber))
                             .font(.custom("Helvetica-BoldOblique", size: 17))
                             .foregroundStyle(
                                 LinearGradient(

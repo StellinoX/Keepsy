@@ -47,15 +47,14 @@ struct StickerGridView: View, Equatable {
     }
 
     private func cellLabel(name: String, index: Int) -> String {
-        let num = String(format: "%02d", index + 1)
-        if revealedCards.contains(name) {
+        let cardNum = CardDatabase.remoteArtworks[name]?.cardNumber ?? (index + 1)
+        let num = String(format: "%02d", cardNum)
+        if revealedCards.contains(name) || foundCards.contains(name) {
             let title = CardDatabase.remoteArtworks[name]?.title ?? CardDatabase.cleanedArtworkName(name)
             if let a = CardDatabase.remoteArtworks[name]?.artist, !a.isEmpty {
                 return "Card \(num), \(title), by \(a)"
             }
             return "Card \(num), \(title)"
-        } else if foundCards.contains(name) {
-            return "Card \(num), found, scan to reveal"
         } else {
             return "Card \(num), not yet found"
         }
@@ -64,12 +63,13 @@ struct StickerGridView: View, Equatable {
     var body: some View {
         LazyVGrid(columns: columns, spacing: 18) {
             ForEach(Array(artworks.enumerated()), id: \.offset) { index, name in
-                let isInteractive = revealedCards.contains(name) && animationPhase == .idle
+                let isOwned = revealedCards.contains(name) || foundCards.contains(name)
+                let isInteractive = isOwned && animationPhase == .idle
                 AlbumCardCell(
                     name: name,
                     index: index,
-                    isFound: revealedCards.contains(name) || recentlyCompletedPack.contains(name),
-                    isRevealed: revealedCards.contains(name) && !recentlyCompletedPack.contains(name) ? true : animatedCompletedCards.contains(name),
+                    isFound: isOwned || recentlyCompletedPack.contains(name),
+                    isRevealed: isOwned && !recentlyCompletedPack.contains(name) ? true : animatedCompletedCards.contains(name),
                     hasSynced: hasSyncedWithCloud,
                     cardOpacity: (animatingCardName == name) ? cellCardOpacity : (recentlyCompletedPack.contains(name) && !animatedCompletedCards.contains(name) ? 0.0 : 1.0),
                     isAnimating: animatingCardName == name,
@@ -86,7 +86,7 @@ struct StickerGridView: View, Equatable {
                 )
                 .onTapGesture {
                     guard recentlyCompletedPack.isEmpty else { return }
-                    guard revealedCards.contains(name), animationPhase == .idle else { return }
+                    guard isOwned, animationPhase == .idle else { return }
                     if let f = frameTracker.cellFrames[name] {
                         onTapCard(name, f)
                     }

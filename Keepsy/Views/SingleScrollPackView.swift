@@ -17,13 +17,10 @@ struct SingleScrollPackView: View {
     // True durante drag + animazione di settle. Abilita il rendering continuo dei
     // pacchetti SceneKit solo quando si muovono; da fermi tornano on-demand (no drain GPU).
     @State private var isScrolling: Bool = false
+    @State private var settleTask: Task<Void, Never>?
 
     private var museums: [Museum] {
         locationManager.sortedMuseums(MuseumConfig.shared.museums)
-    }
-
-    private var selectedIndex: Int {
-        museums.firstIndex(where: { $0.id == selectedMuseumId }) ?? 0
     }
 
     private var activePackMuseum: String? {
@@ -111,11 +108,14 @@ struct SingleScrollPackView: View {
                         .onChanged { gesture in
                             if abs(gesture.translation.width) > abs(gesture.translation.height) {
                                 if !isDragging {
+                                    settleTask?.cancel()
                                     isDragging = true
                                     isScrolling = true
-                                    baseScrollPosition = scrollPosition
+                                    baseScrollPosition = scrollPosition.rounded()
                                 }
-                                scrollPosition = baseScrollPosition - gesture.translation.width / 190
+                                let pageTranslation = gesture.translation.width / 190
+                                let limitedTranslation = min(max(pageTranslation, -1.15), 1.15)
+                                scrollPosition = baseScrollPosition - limitedTranslation
                             }
                         }
                         .onEnded { gesture in
@@ -131,19 +131,18 @@ struct SingleScrollPackView: View {
                                 }
                             }
                             let count = museums.count
-                            let targetIndex = (selectedIndex + indexChange + count) % count
-                            let targetScrollPosition = CGFloat(selectedIndex + indexChange)
+                            let targetVirtualIndex = Int(baseScrollPosition.rounded()) + indexChange
+                            let targetIndex = (targetVirtualIndex % count + count) % count
+                            let targetScrollPosition = CGFloat(targetVirtualIndex)
                             withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
                                 scrollPosition = targetScrollPosition
                                 selectedMuseumId = museums[targetIndex].id
                             }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
-                                var transaction = Transaction()
-                                transaction.disablesAnimations = true
-                                withTransaction(transaction) {
-                                    scrollPosition = CGFloat(targetIndex)
-                                    baseScrollPosition = scrollPosition
-                                }
+                            baseScrollPosition = targetScrollPosition
+                            settleTask?.cancel()
+                            settleTask = Task { @MainActor in
+                                try? await Task.sleep(for: .seconds(0.45))
+                                guard !Task.isCancelled else { return }
                                 // Settle finito: torna a on-demand per fermare il drain GPU.
                                 isScrolling = false
                             }
@@ -199,14 +198,18 @@ struct SingleScrollPackView: View {
         }
         .onChange(of: selectedMuseumId) { _, newValue in
             if let index = museums.firstIndex(where: { $0.id == newValue }) {
-                let targetPos = CGFloat(index)
                 let diff = circularDifference(index: index, scrollPosition: scrollPosition, count: museums.count)
                 if abs(diff) > 0.01 {
+                    let targetPosition = scrollPosition + diff
                     isScrolling = true
                     withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                        scrollPosition = targetPos
+                        scrollPosition = targetPosition
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                    baseScrollPosition = targetPosition
+                    settleTask?.cancel()
+                    settleTask = Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(0.45))
+                        guard !Task.isCancelled else { return }
                         isScrolling = false
                     }
                 }

@@ -24,6 +24,9 @@ struct CollectionAlbumView: View {
     @State private var inspectedCard: ArtworkCard? = nil
     @State private var showExperienceCardModal = false
     @State private var showSpecialCardLockModal = false
+    @State private var specialCardFrontOpacity = 0.0
+    @State private var isSpecialCardUnlocked = false
+    @State private var shouldRevealSpecialCardAfterIntro = false
     @State private var experienceCardFrame: CGRect = .zero
     @Namespace private var albumNamespace
     
@@ -61,6 +64,8 @@ struct CollectionAlbumView: View {
     @State private var screenSize: CGSize = .zero
 
     let pullDistance: CGFloat = 120
+    private let specialCardWidth: CGFloat = 250
+    private let specialCardHeight: CGFloat = 375
     @State private var scrollOffset: CGFloat = 0
 
     var pinY: CGFloat {
@@ -68,7 +73,8 @@ struct CollectionAlbumView: View {
     }
 
     var defaultY: CGFloat {
-        showCloseButton ? 465 : 410
+        guard hasSpecialCard else { return pinY }
+        return pinY + specialCardHeight + 60
     }
 
     var offsetY: CGFloat {
@@ -93,7 +99,7 @@ struct CollectionAlbumView: View {
 
     var collectionProgress: Double {
         guard !filteredArtworks.isEmpty else { return 0 }
-        let foundCount = filteredArtworks.filter { revealedCards.contains($0) }.count
+        let foundCount = filteredArtworks.filter { revealedCards.contains($0) || foundCards.contains($0) }.count
         return Double(foundCount) / Double(filteredArtworks.count)
     }
 
@@ -106,15 +112,24 @@ struct CollectionAlbumView: View {
 
     var isCollectionComplete: Bool {
         guard !filteredArtworks.isEmpty else { return false }
-        return filteredArtworks.allSatisfy { revealedCards.contains($0) }
+        return filteredArtworks.allSatisfy { revealedCards.contains($0) || foundCards.contains($0) }
+    }
+
+    private var hasSpecialCard: Bool {
+        guard let location = museumLocation?.lowercased() else { return false }
+        return location == "moma" || location == "prado" || location == "uffizi"
     }
 
     var experienceCardName: String {
-        let loc = (museumLocation ?? "uffizi").lowercased()
-        if loc == "moma" {
-            return "vale"
+        switch museumLocation?.lowercased() {
+        case "moma": "vale"
+        case "prado": "prado_experience"
+        default: "uffizi_experience"
         }
-        return "\(loc)_experience"
+    }
+
+    private var specialCardUnlockKey: String {
+        "specialCardRevealed_\(museumLocation?.lowercased() ?? "global")"
     }
 
     var destinationFrame: CGRect {
@@ -145,89 +160,55 @@ struct CollectionAlbumView: View {
                 Spacer().frame(height: showCloseButton ? 135 : 80)
                 
                 // ── EXPERIENCE CARD SECTION ──────────────────────────────
-                VStack(spacing: 12) {
-                    if isCollectionComplete {
-                        let goldBorder = LinearGradient(
-                            colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
-                                     Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                        ArtworkCardFrontView(
-                            name: experienceCardName,
-                            title: CardDatabase.cleanedArtworkName(experienceCardName),
-                            cardIndex: nil,
-                            width: 180,
-                            height: 270,
-                            isRevealed: true,
-                            goldBorder: goldBorder
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 24))
-                        .opacity(animatingCardName == experienceCardName ? cellCardOpacity : 1.0)
-                        .shadow(color: Color(hex: "F1B40A").opacity(0.4), radius: 25, x: 0, y: 10)
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear
-                                    .onAppear {
-                                        experienceCardFrame = geo.frame(in: .named("root"))
-                                    }
-                                    .onChange(of: geo.frame(in: .named("root"))) { _, newFrame in
-                                        experienceCardFrame = newFrame
-                                    }
-                            }
-                        )
-                        .onTapGesture {
-                            tapExperienceCard()
-                        }
-                    } else {
-                        Group {
-                            ZStack {
-                                // Dark background
-                                RoundedRectangle(cornerRadius: 24)
-                                    .fill(Color(hex: "0D0D0F"))
+                ZStack {
+                    SpecialCardLockedBackView(
+                        cardName: experienceCardName,
+                        width: specialCardWidth,
+                        height: specialCardHeight,
+                        cornerRadius: 24
+                    )
+                    .opacity(1 - specialCardFrontOpacity)
 
-                                // Keepsy Gold Logo
-                                Image("LogoKeepsy")
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 70, height: 70)
-
-                                // Orange border stroke
-                                RoundedRectangle(cornerRadius: 24)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [Color(hex: "FF9000"), Color(hex: "FF5100")],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 3
-                                    )
+                    let goldBorder = LinearGradient(
+                        colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
+                                 Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                    ArtworkCardFrontView(
+                        name: experienceCardName,
+                        title: CardDatabase.cleanedArtworkName(experienceCardName),
+                        cardIndex: nil,
+                        width: specialCardWidth,
+                        height: specialCardHeight,
+                        isRevealed: true,
+                        goldBorder: goldBorder
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 24))
+                    .opacity(specialCardFrontOpacity)
+                }
+                .frame(width: specialCardWidth, height: specialCardHeight)
+                .opacity(animatingCardName == experienceCardName ? cellCardOpacity : 1.0)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear
+                            .onAppear {
+                                experienceCardFrame = geo.frame(in: .named("root"))
                             }
-                            .frame(width: 180, height: 270)
-                            .shadow(color: Color(hex: "FF5100").opacity(0.35), radius: 25, x: 0, y: 10)
-                        }
-                        .opacity(animatingCardName == experienceCardName ? cellCardOpacity : 1.0)
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear
-                                    .onAppear {
-                                        experienceCardFrame = geo.frame(in: .named("root"))
-                                    }
-                                    .onChange(of: geo.frame(in: .named("root"))) { _, newFrame in
-                                        experienceCardFrame = newFrame
-                                    }
+                            .onChange(of: geo.frame(in: .named("root"))) { _, newFrame in
+                                experienceCardFrame = newFrame
                             }
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            tapExperienceCard()
-                        }
                     }
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    tapExperienceCard()
                 }
                 Spacer()
             }
             .frame(maxWidth: .infinity)
+            .opacity(hasSpecialCard ? 1 : 0)
             .blur(radius: showSpecialCardLockModal ? 20 : 0)
-            .allowsHitTesting(!showSpecialCardLockModal)
+            .allowsHitTesting(hasSpecialCard && !showSpecialCardLockModal)
             
             // ── FOREGROUND LAYER: MAIN SCROLL VIEW (THE SHEET/MODAL) ─────
             ScrollViewReader { proxy in
@@ -237,6 +218,7 @@ struct CollectionAlbumView: View {
                         ZStack(alignment: .top) {
                             Color.clear
                                 .frame(height: defaultY)
+                                .id("specialCardRevealAnchor")
                                 .background(
                                     GeometryReader { geo in
                                         Color.clear
@@ -252,16 +234,18 @@ struct CollectionAlbumView: View {
                             
                             // Foreground interactive area for the Experience Card (both locked and unlocked)
                             Color.clear
-                                .frame(width: 180, height: 270)
+                                .frame(width: specialCardWidth, height: specialCardHeight)
                                 .contentShape(Rectangle())
                                 .padding(.top, showCloseButton ? 135 : 80)
                                 .onTapGesture {
                                     tapExperienceCard()
                                 }
                                 .accessibilityElement(children: .ignore)
-                                .accessibilityLabel(isCollectionComplete ? "Experience card" : "Special card, locked")
-                                .accessibilityHint(isCollectionComplete ? "Double-tap to open experience card" : "Complete collection to unlock")
+                                .accessibilityLabel(isSpecialCardUnlocked ? "Experience card" : "Special card, locked")
+                                .accessibilityHint(isSpecialCardUnlocked ? "Double-tap to open experience card" : "Complete collection to unlock")
                                 .accessibilityAddTraits(.isButton)
+                                .accessibilityHidden(!hasSpecialCard)
+                                .allowsHitTesting(hasSpecialCard)
                         }
                         
                         // ── ALBUM GRID CONTAINER ─────────────────────────────────
@@ -478,6 +462,7 @@ struct CollectionAlbumView: View {
                 specialCardLockModal
                     .zIndex(200)
             }
+
         }
         // Nome del coordinateSpace — sia GeometryReader che .position lo usano
         .coordinateSpace(name: "root")
@@ -491,9 +476,18 @@ struct CollectionAlbumView: View {
                 recentlyCompletedPack = completed
                 stickerIntroActive = true
             }
+
+            configureSpecialCardUnlockState()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("KeepsyCardsDidChange"))) { _ in
+            foundCards = CardDatabase.getFoundCards()
+            revealedCards = CardDatabase.getRevealedCards()
         }
         .onChange(of: rootGeo.size) { _, newSize in
             screenSize = newSize
+        }
+        .onChange(of: isCollectionComplete) { _, _ in
+            configureSpecialCardUnlockState()
         }
         .task {
             await CardDatabase.syncWithCloud()
@@ -516,40 +510,23 @@ struct CollectionAlbumView: View {
 
     @ViewBuilder
     func flyingCardView(for name: String) -> some View {
-        if (name.contains("_experience") || name == "vale") && !isCollectionComplete {
+        if (name.contains("_experience") || name == "vale") && !isSpecialCardUnlocked {
             let finalW: CGFloat = destinationFrame.width
             let scale = flyingFrame.width / finalW
 
-            ZStack {
-                // Dark background
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(Color(hex: "0D0D0F"))
-
-                // Keepsy Gold Logo
-                Image("LogoKeepsy")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 70, height: 70)
-
-                // Orange border stroke
-                RoundedRectangle(cornerRadius: 24)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color(hex: "FF9000"), Color(hex: "FF5100")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 3
-                    )
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 24))
+            SpecialCardLockedBackView(
+                cardName: name,
+                width: finalW,
+                height: destinationFrame.height,
+                cornerRadius: 24
+            )
             .scaleEffect(scale, anchor: .center)
             .frame(width: flyingFrame.width, height: flyingFrame.height)
             .opacity(flyingOpacity)
             .position(x: flyingFrame.midX, y: flyingFrame.midY)
         } else {
-            let isRevealed = CardDatabase.getRevealedCards().contains(name) || name.contains("_experience") || name == "vale"
-            let index = CardDatabase.remoteArtworks[name]?.cardNumber
+            let isRevealed = CardDatabase.getRevealedCards().contains(name) || CardDatabase.getFoundCards().contains(name) || name.contains("_experience") || name == "vale"
+            let index = CardDatabase.remoteArtworks[name]?.cardNumber ?? (filteredArtworks.firstIndex(of: name).map { $0 + 1 })
             let goldBorder = LinearGradient(
                 colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
                          Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
@@ -581,7 +558,7 @@ struct CollectionAlbumView: View {
         guard recentlyCompletedPack.isEmpty else { return }
         guard animationPhase == .idle else { return }
         
-        if !isCollectionComplete {
+        if !isSpecialCardUnlocked {
             HapticManager.shared.triggerNotification(type: .warning)
             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                 showSpecialCardLockModal = true
@@ -602,6 +579,60 @@ struct CollectionAlbumView: View {
             HapticManager.shared.triggerImpact(style: .medium)
             
             startZoomAnimation()
+        }
+    }
+
+    private func configureSpecialCardUnlockState() {
+        guard hasSpecialCard else { return }
+
+        guard isCollectionComplete else {
+            isSpecialCardUnlocked = false
+            specialCardFrontOpacity = 0
+            shouldRevealSpecialCardAfterIntro = false
+            UserDefaults.standard.removeObject(forKey: specialCardUnlockKey)
+            return
+        }
+
+        if UserDefaults.standard.bool(forKey: specialCardUnlockKey) {
+            isSpecialCardUnlocked = true
+            specialCardFrontOpacity = 1
+            return
+        }
+
+        if recentlyCompletedPack.isEmpty {
+            // Existing or cloud-synced completed collections should not be locked again.
+            isSpecialCardUnlocked = true
+            specialCardFrontOpacity = 1
+            UserDefaults.standard.set(true, forKey: specialCardUnlockKey)
+        } else {
+            // Keep the card covered until every newly collected sticker reaches its slot.
+            isSpecialCardUnlocked = false
+            specialCardFrontOpacity = 0
+            shouldRevealSpecialCardAfterIntro = true
+        }
+    }
+
+    private func revealSpecialCardIfNeeded(proxy: ScrollViewProxy) {
+        guard hasSpecialCard,
+              isCollectionComplete,
+              shouldRevealSpecialCardAfterIntro,
+              !isSpecialCardUnlocked
+        else { return }
+
+        shouldRevealSpecialCardAfterIntro = false
+        isSpecialCardUnlocked = true
+        specialCardFrontOpacity = 0
+        UserDefaults.standard.set(true, forKey: specialCardUnlockKey)
+
+        withAnimation(.easeInOut(duration: 0.7)) {
+            proxy.scrollTo("specialCardRevealAnchor", anchor: .top)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            HapticManager.shared.triggerNotification(type: .success)
+            withAnimation(.easeInOut(duration: 1.2)) {
+                specialCardFrontOpacity = 1
+            }
         }
     }
 
@@ -833,6 +864,9 @@ struct CollectionAlbumView: View {
             // Re-sync standard discovered cards state
             foundCards = CardDatabase.getFoundCards()
             revealedCards = CardDatabase.getRevealedCards()
+
+            // Only now, after the final sticker is in its album slot, reveal the reward.
+            revealSpecialCardIfNeeded(proxy: proxy)
             return
         }
         
@@ -861,7 +895,12 @@ struct CollectionAlbumView: View {
             // Calculate corresponding frames matching Figma details tap mapping
             let finalSourceFrame = CGRect(x: f.minX + 7, y: f.minY + 5, width: 58, height: 84)
             let finalPocketFrame = CGRect(x: f.minX, y: f.minY + 5, width: 72, height: 94)
-            let finalPulledSourceFrame = CGRect(x: finalSourceFrame.minX, y: finalSourceFrame.minY - 90, width: 58, height: 84) // Shifted up by 90pt so it starts completely outside/above the pocket slot!
+            let finalPulledSourceFrame = CGRect(
+                x: finalSourceFrame.minX,
+                y: finalSourceFrame.minY - pullDistance,
+                width: finalSourceFrame.width,
+                height: finalSourceFrame.height
+            )
             
             // Start the card flight from the center of the screen
             let sourcePos = CGRect(
@@ -892,32 +931,30 @@ struct CollectionAlbumView: View {
                 flyingFrame = finalPulledSourceFrame
             }
 
-            // Wait 0.55 seconds for this flight to finish
+            // Wait for the flight to finish, then reuse the same pocket-entry
+            // motion used when a card is closed from its detail view.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                // Phase 3: la card scende sopra il pocket — niente overlay, pocket sempre visibile
-                withAnimation(.easeOut(duration: 0.35)) {
+                withAnimation(.easeIn(duration: 0.30)) {
                     flyingFrame = finalSourceFrame
-                    flyingOpacity = 0.0
                 }
 
-                // Wait 0.35 seconds for card to completely slide inside
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
                     HapticManager.shared.triggerImpact(style: .light)
 
-                    // Add to animated set so the grid cell blinks and reveals
-                    _ = withAnimation(.easeIn(duration: 0.15)) {
+                    // Swap the flying card with the card inside the pocket atomically.
+                    // Keeping opacity at 1 during the descent avoids the old dissolve.
+                    var transaction = Transaction(animation: nil)
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
                         animatedCompletedCards.insert(cardName)
+                        cellCardOpacity = 1.0
+                        flyingOpacity = 0.0
+                        currentlyAnimatingSticker = nil
+                        animatingCardName = nil
+                        animationPhase = .idle
                     }
 
-                    // Reveal cell card
-                    cellCardOpacity = 1.0
-
-                    // Reset animation states
-                    currentlyAnimatingSticker = nil
-                    animatingCardName = nil
-                    animationPhase = .idle
-
-                    // Short pause, then repeat for the next sticker in the queue!
+                    // Short pause, then repeat for the next sticker in the queue.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                         animateNextSticker(index: index + 1, proxy: proxy)
                     }
@@ -927,4 +964,127 @@ struct CollectionAlbumView: View {
     }
     
     // placeNextStickerFromTop REMOVED - WE NOW USE THE HIGH-FIDELITY ANIMATENEXTSTICKER ZOOM INTRO NATIVELY!
+}
+
+private struct SpecialCardRevealView: View {
+    let cardName: String
+    let onDismiss: () -> Void
+
+    @State private var backdropOpacity = 0.0
+    @State private var cardScale = 0.55
+    @State private var cardRotation = -10.0
+    @State private var cardOpacity = 0.0
+    @State private var glowOpacity = 0.0
+    @State private var copyOpacity = 0.0
+
+    var body: some View {
+        GeometryReader { geometry in
+            let cardWidth = min(geometry.size.width - 64, 310)
+            let cardHeight = cardWidth * (470.0 / 310.0)
+            let goldBorder = LinearGradient(
+                colors: [
+                    Color(hex: "FFF4A8"),
+                    Color(hex: "F1B40A"),
+                    Color(hex: "8C6100"),
+                    Color(hex: "F1B40A"),
+                    Color(hex: "FFF4A8")
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            ZStack {
+                Color.black
+                    .opacity(backdropOpacity)
+                    .ignoresSafeArea()
+
+                RadialGradient(
+                    colors: [
+                        Color(hex: "F1B40A").opacity(0.34 * glowOpacity),
+                        Color(hex: "FF7A00").opacity(0.10 * glowOpacity),
+                        .clear
+                    ],
+                    center: .center,
+                    startRadius: 20,
+                    endRadius: geometry.size.width * 0.8
+                )
+                .ignoresSafeArea()
+
+                VStack(spacing: 22) {
+                    VStack(spacing: 6) {
+                        Text("COLLECTION COMPLETE")
+                            .font(.custom("Helvetica-BoldOblique", size: 16))
+                            .foregroundStyle(.white.opacity(0.8))
+
+                        Text("SPECIAL CARD UNLOCKED")
+                            .font(.custom("Helvetica-BoldOblique", size: 28))
+                            .foregroundStyle(goldBorder)
+                            .multilineTextAlignment(.center)
+                            .minimumScaleFactor(0.75)
+                    }
+                    .opacity(copyOpacity)
+
+                    ArtworkCardFrontView(
+                        name: cardName,
+                        title: CardDatabase.cleanedArtworkName(cardName),
+                        cardIndex: nil,
+                        width: cardWidth,
+                        height: cardHeight,
+                        isRevealed: true,
+                        goldBorder: goldBorder
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 26))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 26)
+                            .stroke(goldBorder, lineWidth: 2)
+                    }
+                    .shadow(
+                        color: Color(hex: "F1B40A").opacity(0.65 * glowOpacity),
+                        radius: 38,
+                        x: 0,
+                        y: 12
+                    )
+                    .scaleEffect(cardScale)
+                    .rotationEffect(.degrees(cardRotation))
+                    .opacity(cardOpacity)
+
+                    Button(action: onDismiss) {
+                        Text("CONTINUE")
+                            .font(.custom("Helvetica-BoldOblique", size: 15))
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: 240)
+                            .frame(height: 50)
+                            .background(goldBorder, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .opacity(copyOpacity)
+                    .accessibilityHint("Closes the special card reveal")
+                }
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isModal)
+        .task {
+            withAnimation(.easeOut(duration: 0.3)) {
+                backdropOpacity = 0.94
+                glowOpacity = 1.0
+            }
+
+            try? await Task.sleep(for: .milliseconds(120))
+
+            withAnimation(.spring(response: 0.75, dampingFraction: 0.68)) {
+                cardScale = 1.0
+                cardRotation = 0
+                cardOpacity = 1.0
+            }
+
+            try? await Task.sleep(for: .milliseconds(420))
+
+            withAnimation(.easeOut(duration: 0.3)) {
+                copyOpacity = 1.0
+            }
+        }
+    }
 }

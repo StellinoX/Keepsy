@@ -25,8 +25,41 @@ struct ArtImageView: View {
                 Image(uiImage: img)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .scaleEffect(cardName == "vale" ? 1.43 : 1.0)
+                    .scaleEffect(cardName == "vale" ? 1.66 : 1.0)
                     .clipped()
+            } else if cardName.contains("_experience") || cardName == "vale" {
+                ZStack {
+                    LinearGradient(
+                        colors: [Color(hex: "1F1C18"), Color(hex: "0D0D0F"), Color(hex: "181510")],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+
+                    VStack(spacing: 12) {
+                        Image("LogoKeepsy")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 70, height: 70)
+                            .shadow(color: Color(hex: "F1B40A").opacity(0.6), radius: 15, x: 0, y: 5)
+
+                        Text(CardDatabase.cleanedArtworkName(cardName).uppercased())
+                            .font(.custom("Helvetica-BoldOblique", size: 14))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hex: "F5E480"), Color(hex: "F1B40A")],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 16)
+
+                        Text("SPECIAL CARD")
+                            .font(.system(size: 10, weight: .bold))
+                            .tracking(2)
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                }
             } else {
                 ZStack {
                     CardDatabase.gradientFor(name: cardName)
