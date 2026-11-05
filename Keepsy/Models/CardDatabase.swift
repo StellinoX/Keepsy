@@ -194,7 +194,7 @@ struct CardDatabase {
         return nil
     }
     
-    // Returns CGImage properly formatted for ARKit (bakes EXIF rotation and scales to a safe 512px)
+    // Bake EXIF rotation and bound memory use without discarding fine details.
     static func rawCGImage(for name: String) async -> CGImage? {
         // 1. Fallback to bundle assets if available
         let bundleImage = await MainActor.run { UIImage(named: name)?.cgImage }
@@ -215,7 +215,7 @@ struct CardDatabase {
         let options = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, options) else { return nil }
         
-        // ARKit requires max ~1000px, so 1024px is perfect for detailed feature matching. EXIF MUST be baked!
+        // Keep a detailed original; the scanner also derives a composition reference.
         let downsampleOptions = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceShouldCacheImmediately: true,
@@ -305,34 +305,41 @@ struct CardDatabase {
     }
     
     // Cache per le immagini ARKit, così ARArtworkView si carica all'istante dopo la prima volta
-    static let arImageCache = NSCache<NSString, ARReferenceImage>()
+    static let arImageCache = NSCache<NSString, NSArray>()
     
-    static func arReferenceImage(for name: String) async -> ARReferenceImage? {
-        if let cached = arImageCache.object(forKey: name as NSString) {
+    static func arReferenceImages(for name: String) async -> [ARReferenceImage] {
+        if let cached = arImageCache.object(forKey: name as NSString) as? [ARReferenceImage] {
             return cached
         }
 
-        guard let cgImage = await rawCGImage(for: name) else { return nil }
+        guard let cgImage = await rawCGImage(for: name) else { return [] }
 
         // Match the catalog dimensions to the actual image orientation. Museum
         // measurements are commonly stored as height × width, while ARKit needs width.
         let imageAspectRatio = CGFloat(cgImage.width) / CGFloat(cgImage.height)
         let physicalWidth = physicalWidthMeters(for: name, imageAspectRatio: imageAspectRatio)
-        let refImage = ARReferenceImage(cgImage, orientation: .up, physicalWidth: physicalWidth)
-        refImage.name = name
+        var sources = [cgImage]
+        if let composition = await ArtworkReferencePreprocessor.shared.compositionImage(from: cgImage) {
+            sources.append(composition)
+        }
 
-        arImageCache.setObject(refImage, forKey: name as NSString)
-        return refImage
-    }
-    
-    /// Safely performs ARReferenceImage validation in a nonisolated context,
-    /// preventing compiler-inserted `@MainActor` queue assertions on background callbacks.
-    nonisolated static func validateARImage(_ refImage: ARReferenceImage, name: String) {
-        refImage.validate { error in
-            if let error = error {
-                print("⚠️ ARKit Validation Error for \(name): \(error.localizedDescription)")
+        var references: [ARReferenceImage] = []
+        for source in sources {
+            guard !Task.isCancelled else { return [] }
+            let reference = ARReferenceImage(source, orientation: .up, physicalWidth: physicalWidth)
+            // Both variants map to the same card and cannot unlock it twice.
+            reference.name = name
+            do {
+                try await reference.validate()
+                references.append(reference)
+            } catch {
+                print("⚠️ ARKit reference rejected for \(name): \(error.localizedDescription)")
             }
         }
+        if !references.isEmpty, !Task.isCancelled {
+            arImageCache.setObject(references as NSArray, forKey: name as NSString)
+        }
+        return references
     }
 
     // Parses measurements such as "83x65x5,5 cm". Catalogs generally store

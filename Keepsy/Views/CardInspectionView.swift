@@ -169,6 +169,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                 height: cardH,
                                 cornerRadius: 24
                             )
+                            .gyroscopicCardMotion()
                             .scaleEffect(sheetState == .expanded ? 0.85 : 1.0)
                             .position(x: geometry.size.width / 2, y: cardTopY + cardH / 2)
                             .offset(y: sheetState == .expanded ? -30 : 0)
@@ -183,6 +184,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                 isRevealed: isRevealed,
                                 goldBorder: goldBorder
                             )
+                            .gyroscopicCardMotion()
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 HapticManager.shared.triggerImpact(style: .medium)
@@ -312,43 +314,45 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                         .accessibilityHint("Double-tap to close")
 
                     // Carta con effetto metallico
-                    SilverMetalCardView(
-                        width: cardWidth,
-                        height: cardHeight,
-                        isEnabled: isFrontShowing && !isSpecialCard,
-                        tiltX: tilt.width,
-                        tiltY: tilt.height,
-                        customRotationX: tilt.height * -14,
-                        customRotationY: currentRotation + tilt.width * 14
-                    ) {
-                        ZStack {
-                            Image("retro")
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: cardWidth, height: cardHeight)
-                                .clipped()
-                                .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-                                .opacity(isFrontShowing ? 0.0 : 1.0)
+                    GyroscopicCardView { motionTilt in
+                        SilverMetalCardView(
+                            width: cardWidth,
+                            height: cardHeight,
+                            isEnabled: isFrontShowing && !isSpecialCard,
+                            tiltX: tilt.width + motionTilt.width,
+                            tiltY: tilt.height + motionTilt.height,
+                            customRotationX: tilt.height * -14,
+                            customRotationY: currentRotation + tilt.width * 14
+                        ) {
+                            ZStack {
+                                Image("retro")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: cardWidth, height: cardHeight)
+                                    .clipped()
+                                    .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                                    .opacity(isFrontShowing ? 0.0 : 1.0)
 
-                            let index = CardDatabase.remoteArtworks[card.name]?.cardNumber
-                            let goldBorder = LinearGradient(
-                                colors: [
-                                    Color(hex: "F5E480"), Color(hex: "F1B40A"),
-                                    Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")
-                                ],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
+                                let index = CardDatabase.remoteArtworks[card.name]?.cardNumber
+                                let goldBorder = LinearGradient(
+                                    colors: [
+                                        Color(hex: "F5E480"), Color(hex: "F1B40A"),
+                                        Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")
+                                    ],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                )
 
-                            ArtworkCardFrontView(
-                                name: card.name,
-                                title: card.title,
-                                cardIndex: index,
-                                width: 310,
-                                height: 470,
-                                isRevealed: isRevealed,
-                                goldBorder: goldBorder
-                            )
-                            .opacity(isFrontShowing ? 1.0 : 0.0)
+                                ArtworkCardFrontView(
+                                    name: card.name,
+                                    title: card.title,
+                                    cardIndex: index,
+                                    width: 310,
+                                    height: 470,
+                                    isRevealed: isRevealed,
+                                    goldBorder: goldBorder
+                                )
+                                .opacity(isFrontShowing ? 1.0 : 0.0)
+                            }
                         }
                     }
                     .matchedGeometryEffectOptional(id: "card_\(card.name)", in: isZoomingFromAlbum ? nil : namespace, isSource: false)
@@ -472,38 +476,40 @@ struct CardFullDetailView: View {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint("Double-tap to close")
 
-            SilverMetalCardView(
-                width: cardWidth, height: cardHeight,
-                isEnabled: isFrontShowing && !isSpecialCard,
-                tiltX: tilt.width,
-                tiltY: tilt.height,
-                customRotationX: tilt.height * -14,
-                customRotationY: currentRotation + tilt.width * 14
-            ) {
-                ZStack {
-                    Image("retro")
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: cardWidth, height: cardHeight)
-                        .clipped()
-                        .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-                        .opacity(isFrontShowing ? 0.0 : 1.0)
+            GyroscopicCardView { motionTilt in
+                SilverMetalCardView(
+                    width: cardWidth, height: cardHeight,
+                    isEnabled: isFrontShowing && !isSpecialCard,
+                    tiltX: tilt.width + motionTilt.width,
+                    tiltY: tilt.height + motionTilt.height,
+                    customRotationX: tilt.height * -14,
+                    customRotationY: currentRotation + tilt.width * 14
+                ) {
+                    ZStack {
+                        Image("retro")
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: cardWidth, height: cardHeight)
+                            .clipped()
+                            .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                            .opacity(isFrontShowing ? 0.0 : 1.0)
 
-                    let index = CardDatabase.remoteArtworks[card.name]?.cardNumber
-                    let goldBorder = LinearGradient(
-                        colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                    ArtworkCardFrontView(
-                        name: card.name,
-                        title: card.title,
-                        cardIndex: index,
-                        width: 310,
-                        height: 470,
-                        isRevealed: isRevealed,
-                        goldBorder: goldBorder
-                    )
-                    .opacity(isFrontShowing ? 1 : 0)
+                        let index = CardDatabase.remoteArtworks[card.name]?.cardNumber
+                        let goldBorder = LinearGradient(
+                            colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        )
+                        ArtworkCardFrontView(
+                            name: card.name,
+                            title: card.title,
+                            cardIndex: index,
+                            width: 310,
+                            height: 470,
+                            isRevealed: isRevealed,
+                            goldBorder: goldBorder
+                        )
+                        .opacity(isFrontShowing ? 1 : 0)
+                    }
                 }
             }
             .scaleEffect(animateContent ? 1.0 : 0.85)

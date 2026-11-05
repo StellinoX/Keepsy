@@ -22,11 +22,14 @@ struct ArtImageView: View {
     var body: some View {
         Group {
             if let img = localImage {
-                Image(uiImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .scaleEffect(cardName == "vale" ? 1.66 : 1.0)
-                    .clipped()
+                if cardName.contains("_experience") || cardName == "vale" {
+                    SpecialCardImageView(image: img)
+                } else {
+                    Image(uiImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .clipped()
+                }
             } else if cardName.contains("_experience") || cardName == "vale" {
                 ZStack {
                     LinearGradient(

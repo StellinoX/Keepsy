@@ -11,13 +11,6 @@ struct SingleScrollPackView: View {
     let onTapCity: () -> Void
 
     @State private var revealedCards: Set<String> = []
-    @State private var scrollPosition: CGFloat = 0.0
-    @State private var baseScrollPosition: CGFloat = 0.0
-    @State private var isDragging: Bool = false
-    // True durante drag + animazione di settle. Abilita il rendering continuo dei
-    // pacchetti SceneKit solo quando si muovono; da fermi tornano on-demand (no drain GPU).
-    @State private var isScrolling: Bool = false
-    @State private var settleTask: Task<Void, Never>?
 
     private var museums: [Museum] {
         locationManager.sortedMuseums(MuseumConfig.shared.museums)
@@ -67,87 +60,14 @@ struct SingleScrollPackView: View {
                     .accessibilityHint("Double-tap to change museum")
                     .accessibilityAddTraits(.isButton)
 
-                ZStack {
-                    ForEach(Array(museums.enumerated()), id: \.element.id) { index, museum in
-                        let diff = circularDifference(index: index, scrollPosition: scrollPosition, count: museums.count)
-                        let absDiff = abs(diff)
-                        let scale: CGFloat = 1.25 - min(absDiff, 1.0) * (1.25 - 0.88)
-                        let opacity: Double = {
-                            if absDiff > 1.1 { return 0.0 }
-                            else if absDiff <= 1.0 { return 1.0 - absDiff * (1.0 - 0.65) }
-                            else { return 0.65 * (1.0 - (absDiff - 1.0) / 0.1) }
-                        }()
-                        let rotation: Double = {
-                            let maxRot: Double = 5.0
-                            if diff > 1.0 { return maxRot }
-                            else if diff < -1.0 { return -maxRot }
-                            else { return Double(diff) * maxRot }
-                        }()
-                        let xOffset = diff * 190
-                        let zIndexValue = 10.0 - absDiff
-
-                        MuseumPackPage(
-                            museum: museum,
-                            revealedCards: revealedCards,
-                            isScrolling: isScrolling,
-                            onTapActivePack: onTapActivePack,
-                            onTapStart: onStart
-                        )
-                        .frame(width: 380, height: 515)
-                        .scaleEffect(scale)
-                        .opacity(opacity)
-                        .rotationEffect(.degrees(rotation))
-                        .offset(x: xOffset)
-                        .zIndex(zIndexValue)
-                    }
-                }
-                .frame(height: 400)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 15)
-                        .onChanged { gesture in
-                            if abs(gesture.translation.width) > abs(gesture.translation.height) {
-                                if !isDragging {
-                                    settleTask?.cancel()
-                                    isDragging = true
-                                    isScrolling = true
-                                    baseScrollPosition = scrollPosition.rounded()
-                                }
-                                let pageTranslation = gesture.translation.width / 190
-                                let limitedTranslation = min(max(pageTranslation, -1.15), 1.15)
-                                scrollPosition = baseScrollPosition - limitedTranslation
-                            }
-                        }
-                        .onEnded { gesture in
-                            isDragging = false
-                            let velocity = gesture.predictedEndTranslation.width
-                            let threshold: CGFloat = 50
-                            var indexChange = 0
-                            if abs(gesture.translation.width) > abs(gesture.translation.height) {
-                                if gesture.translation.width < -threshold || velocity < -200 {
-                                    indexChange = 1
-                                } else if gesture.translation.width > threshold || velocity > 200 {
-                                    indexChange = -1
-                                }
-                            }
-                            let count = museums.count
-                            let targetVirtualIndex = Int(baseScrollPosition.rounded()) + indexChange
-                            let targetIndex = (targetVirtualIndex % count + count) % count
-                            let targetScrollPosition = CGFloat(targetVirtualIndex)
-                            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                                scrollPosition = targetScrollPosition
-                                selectedMuseumId = museums[targetIndex].id
-                            }
-                            baseScrollPosition = targetScrollPosition
-                            settleTask?.cancel()
-                            settleTask = Task { @MainActor in
-                                try? await Task.sleep(for: .seconds(0.45))
-                                guard !Task.isCancelled else { return }
-                                // Settle finito: torna a on-demand per fermare il drain GPU.
-                                isScrolling = false
-                            }
-                        }
+                MuseumPackCarousel(
+                    museums: museums,
+                    revealedCards: revealedCards,
+                    selectedMuseumId: $selectedMuseumId,
+                    onTapActivePack: onTapActivePack,
+                    onTapStart: onStart
                 )
+                .frame(height: 400)
 
                 let isSelectedActive = CardDatabase.hasActivePack(for: selectedMuseumId)
                 Button(action: isSelectedActive ? onTapActivePack : onStart) {
@@ -191,36 +111,6 @@ struct SingleScrollPackView: View {
         .ignoresSafeArea(edges: .top)
         .onAppear {
             revealedCards = CardDatabase.getRevealedCards()
-            if let index = museums.firstIndex(where: { $0.id == selectedMuseumId }) {
-                scrollPosition = CGFloat(index)
-                baseScrollPosition = CGFloat(index)
-            }
-        }
-        .onChange(of: selectedMuseumId) { _, newValue in
-            if let index = museums.firstIndex(where: { $0.id == newValue }) {
-                let diff = circularDifference(index: index, scrollPosition: scrollPosition, count: museums.count)
-                if abs(diff) > 0.01 {
-                    let targetPosition = scrollPosition + diff
-                    isScrolling = true
-                    withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                        scrollPosition = targetPosition
-                    }
-                    baseScrollPosition = targetPosition
-                    settleTask?.cancel()
-                    settleTask = Task { @MainActor in
-                        try? await Task.sleep(for: .seconds(0.45))
-                        guard !Task.isCancelled else { return }
-                        isScrolling = false
-                    }
-                }
-            }
-        }
-        .onChange(of: locationManager.lastKnownLocation) { _, _ in
-            // Re-align the scroll position if the museums list is re-sorted
-            if let index = museums.firstIndex(where: { $0.id == selectedMuseumId }) {
-                scrollPosition = CGFloat(index)
-                baseScrollPosition = CGFloat(index)
-            }
         }
     }
 
@@ -256,13 +146,4 @@ struct SingleScrollPackView: View {
         return (artworks.isEmpty ? 0 : Double(found) / Double(artworks.count), found, artworks.count)
     }
 
-    private func circularDifference(index: Int, scrollPosition: CGFloat, count: Int) -> CGFloat {
-        let c = CGFloat(count)
-        let rawDiff = CGFloat(index) - scrollPosition
-        var diff = rawDiff.truncatingRemainder(dividingBy: c)
-        let half = c / 2
-        if diff > half { diff -= c }
-        else if diff <= -half { diff += c }
-        return diff
-    }
 }

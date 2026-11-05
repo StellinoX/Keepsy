@@ -143,6 +143,7 @@
 				DEVELOPMENT_TEAM = 22SPWA3XU9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Keepsy-Info.plist";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "We use the camera to scan and recognize museum artworks with augmented reality.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "The app requires location access to enable packs specific to your current museum.";
@@ -182,6 +183,7 @@
 				DEVELOPMENT_TEAM = 22SPWA3XU9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Keepsy-Info.plist";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "We use the camera to scan and recognize museum artworks with augmented reality.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "The app requires location access to enable packs specific to your current museum.";
@@ -264,8 +266,10 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				ONLY_ACTIVE_ARCH = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) INTERNAL_BUILD";
-				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_COMPILATION_MODE = singlefile;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Internal;
@@ -462,6 +466,7 @@
 				DEVELOPMENT_TEAM = 22SPWA3XU9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Keepsy-Info.plist";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "We use the camera to scan and recognize museum artworks with augmented reality.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "The app requires location access to enable packs specific to your current museum.";
@@ -501,6 +506,7 @@
 				DEVELOPMENT_TEAM = 22SPWA3XU9;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Keepsy-Info.plist";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "We use the camera to scan and recognize museum artworks with augmented reality.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "The app requires location access to enable packs specific to your current museum.";

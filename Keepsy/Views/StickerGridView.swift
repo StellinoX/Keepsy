@@ -18,7 +18,6 @@ struct CellFramePreferenceKey: PreferenceKey {
 
 struct StickerGridView: View, Equatable {
     let artworks: [String]
-    let foundCards: Set<String>
     let revealedCards: Set<String>
     let recentlyCompletedPack: [String]
     let animatedCompletedCards: Set<String>
@@ -34,7 +33,6 @@ struct StickerGridView: View, Equatable {
 
     static func == (lhs: StickerGridView, rhs: StickerGridView) -> Bool {
         lhs.artworks == rhs.artworks &&
-        lhs.foundCards == rhs.foundCards &&
         lhs.revealedCards == rhs.revealedCards &&
         lhs.recentlyCompletedPack == rhs.recentlyCompletedPack &&
         lhs.animatedCompletedCards == rhs.animatedCompletedCards &&
@@ -49,7 +47,7 @@ struct StickerGridView: View, Equatable {
     private func cellLabel(name: String, index: Int) -> String {
         let cardNum = CardDatabase.remoteArtworks[name]?.cardNumber ?? (index + 1)
         let num = String(format: "%02d", cardNum)
-        if revealedCards.contains(name) || foundCards.contains(name) {
+        if revealedCards.contains(name) {
             let title = CardDatabase.remoteArtworks[name]?.title ?? CardDatabase.cleanedArtworkName(name)
             if let a = CardDatabase.remoteArtworks[name]?.artist, !a.isEmpty {
                 return "Card \(num), \(title), by \(a)"
@@ -63,12 +61,12 @@ struct StickerGridView: View, Equatable {
     var body: some View {
         LazyVGrid(columns: columns, spacing: 18) {
             ForEach(Array(artworks.enumerated()), id: \.offset) { index, name in
-                let isOwned = revealedCards.contains(name) || foundCards.contains(name)
+                let isOwned = revealedCards.contains(name)
                 let isInteractive = isOwned && animationPhase == .idle
                 AlbumCardCell(
                     name: name,
                     index: index,
-                    isFound: isOwned || recentlyCompletedPack.contains(name),
+                    isFound: isOwned,
                     isRevealed: isOwned && !recentlyCompletedPack.contains(name) ? true : animatedCompletedCards.contains(name),
                     hasSynced: hasSyncedWithCloud,
                     cardOpacity: (animatingCardName == name) ? cellCardOpacity : (recentlyCompletedPack.contains(name) && !animatedCompletedCards.contains(name) ? 0.0 : 1.0),

@@ -33,33 +33,33 @@ struct SilverMetalCardView<Content: View>: View {
 
     private var cr: CGFloat { width * (3.0 / 111.0) }
 
+    private var lightingTilt: CGSize {
+        CGSize(width: max(-1, min(1, tiltX)), height: max(-1, min(1, tiltY)))
+    }
+
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1 / 30)) { timeline in
-            let time = timeline.date.timeIntervalSinceReferenceDate
-            let phase = CGFloat(sin(time * 0.72)) * 0.82
+        ZStack {
+            content()
+                .frame(width: width, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: cr))
 
-            ZStack {
-                content()
-                    .frame(width: width, height: height)
+            if isEnabled {
+                SilverMetalOverlay(tiltX: lightingTilt.width, tiltY: lightingTilt.height)
                     .clipShape(RoundedRectangle(cornerRadius: cr))
-
-                if isEnabled {
-                    SilverMetalOverlay(phase: phase, tiltX: tiltX, tiltY: tiltY)
-                        .clipShape(RoundedRectangle(cornerRadius: cr))
-                        .allowsHitTesting(false)
-                }
+                    .allowsHitTesting(false)
             }
-            .frame(width: width, height: height)
-            .rotation3DEffect(.degrees(customRotationX ?? (tiltY * -8)), axis: (x: 1, y: 0, z: 0), perspective: 0.75)
-            .rotation3DEffect(.degrees(customRotationY ?? (tiltX * 8)), axis: (x: 0, y: 1, z: 0), perspective: 0.75)
-            .shadow(color: .white.opacity(isEnabled ? 0.14 : 0.08), radius: isEnabled ? 18 : 10, x: 0, y: 8)
-            .shadow(color: .black.opacity(0.28), radius: 18, x: 0, y: 12)
         }
+        .frame(width: width, height: height)
+        .rotation3DEffect(.degrees(customRotationX ?? (tiltY * -8)), axis: (x: 1, y: 0, z: 0), perspective: 0.75)
+        .rotation3DEffect(.degrees(customRotationY ?? (tiltX * 8)), axis: (x: 0, y: 1, z: 0), perspective: 0.75)
+        .shadow(color: .white.opacity(isEnabled ? 0.14 : 0.08), radius: isEnabled ? 18 : 10,
+                x: lightingTilt.width * 4, y: 8 + lightingTilt.height * 3)
+        .shadow(color: .black.opacity(0.28), radius: 18,
+                x: -lightingTilt.width * 10, y: 12 - lightingTilt.height * 5)
     }
 }
 
 private struct SilverMetalOverlay: View {
-    let phase: CGFloat
     let tiltX: Double
     let tiltY: Double
 
@@ -99,7 +99,7 @@ private struct SilverMetalOverlay: View {
                     )
                     .frame(width: width * 0.34, height: height * 1.35)
                     .rotationEffect(.degrees(18))
-                    .offset(x: phase * width + (tiltX * width * 0.22), y: tiltY * height * 0.05)
+                    .offset(x: tiltX * width * 0.22, y: tiltY * height * 0.05)
                     .blur(radius: 9)
                     .blendMode(.screen)
                     .opacity(0.62 + min(abs(tiltX), 1.0) * 0.24)

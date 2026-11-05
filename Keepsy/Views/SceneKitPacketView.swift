@@ -413,10 +413,10 @@ public struct SceneKitPacketView: UIViewRepresentable {
         view.isUserInteractionEnabled = interactive
         // Rullo (non interattivo): rendering continuo per non mostrare il drawable nero
         // quando le bustine scorrono. Tearing: on-demand come prima.
-        view.rendersContinuously = !interactive
+        view.rendersContinuously = !interactive && isScrolling
         // MSAA pesante: solo sul pacchetto interattivo (tearing).
         view.antialiasingMode = interactive ? .multisampling2X : .none
-        view.preferredFramesPerSecond = !interactive ? 30 : 60
+        view.preferredFramesPerSecond = 60
         
         if interactive {
             let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(PacketCoordinator.handlePan(_:)))

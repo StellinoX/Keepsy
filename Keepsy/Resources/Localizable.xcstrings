@@ -587,6 +587,16 @@
         }
       }
     },
+    "Keep the artwork in frame" : {
+      "localizations" : {
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantieni il quadro inquadrato"
+          }
+        }
+      }
+    },
     "KEEP TRACK OF\nYOUR PROGRESS!" : {
       "localizations" : {
         "it" : {
@@ -890,6 +900,16 @@
           "stringUnit" : {
             "state" : "machine_translated",
             "value" : "UFFIZI"
+          }
+        }
+      }
+    },
+    "Unlocking…" : {
+      "localizations" : {
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sblocco in corso…"
           }
         }
       }

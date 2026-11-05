@@ -105,13 +105,9 @@ struct SpecialCardLockedBackView: View {
     var body: some View {
         Group {
             if cardName == "vale" {
-                Image("dasbloccare")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                SpecialCardImageView(image: UIImage(named: "dasbloccare"))
             } else if cardName == "prado_experience" {
-                Image("prado_locked")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                SpecialCardImageView(image: UIImage(named: "prado_locked"))
             } else {
                 ZStack {
                     Color(hex: "0D0D0F")
@@ -131,10 +127,10 @@ struct SpecialCardLockedBackView: View {
                             lineWidth: max(2, width / 60)
                         )
                 }
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             }
         }
         .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
 }
 
@@ -185,7 +181,7 @@ struct ArtworkCardFrontView: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: width, height: height)
                 .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: cr))
+                .clipShape(RoundedRectangle(cornerRadius: isSpecialCard ? 0 : cr))
 
             // 2. Info Overlay (Title and Author/Year)
             if !isSpecialCard {
@@ -270,6 +266,6 @@ struct ArtworkCardFrontView: View {
             }
         }
         .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: cr))
+        .clipShape(RoundedRectangle(cornerRadius: isSpecialCard ? 0 : cr))
     }
 }

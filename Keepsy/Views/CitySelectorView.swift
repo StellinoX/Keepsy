@@ -36,7 +36,7 @@ struct CitySelectorView: View {
     }
     
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             // Background gradient and Grid Background
             LinearGradient(
                 colors: [Color(hex: "06080B"), Color(hex: "14193B")],
@@ -48,23 +48,8 @@ struct CitySelectorView: View {
             GridBackground()
             
             VStack(spacing: 0) {
-                // Header (Close Button)
-                HStack {
-                    Button(action: {
-                        HapticManager.shared.triggerImpact(style: .light)
-                        dismiss()
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 44, height: 44)
-                            .background(Circle().fill(Color(hex: "383838")))
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 64)
-                .padding(.bottom, 35)
+                Spacer()
+                    .frame(height: 143)
                 
                 // Title and Subtitle
                 VStack(alignment: .leading, spacing: 8) {
@@ -218,6 +203,20 @@ struct CitySelectorView: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 48)
             }
+
+            // Independent from the searchable content so its position never changes.
+            Button(action: {
+                HapticManager.shared.triggerImpact(style: .light)
+                dismiss()
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(Color(hex: "383838")))
+            }
+            .padding(.leading, 24)
+            .padding(.top, 64)
         }
         .ignoresSafeArea()
         .ignoresSafeArea(.keyboard, edges: .bottom)

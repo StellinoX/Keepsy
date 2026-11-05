@@ -17,7 +17,6 @@ struct CollectionAlbumView: View {
         GridItem(.fixed(72), spacing: 18)
     ]
 
-    @State private var foundCards: Set<String> = []
     @State private var revealedCards: Set<String> = []
     
     @State private var hasSyncedWithCloud = false
@@ -99,8 +98,8 @@ struct CollectionAlbumView: View {
 
     var collectionProgress: Double {
         guard !filteredArtworks.isEmpty else { return 0 }
-        let foundCount = filteredArtworks.filter { revealedCards.contains($0) || foundCards.contains($0) }.count
-        return Double(foundCount) / Double(filteredArtworks.count)
+        let revealedCount = filteredArtworks.filter { revealedCards.contains($0) }.count
+        return Double(revealedCount) / Double(filteredArtworks.count)
     }
 
     var filteredArtworks: [String] {
@@ -112,7 +111,7 @@ struct CollectionAlbumView: View {
 
     var isCollectionComplete: Bool {
         guard !filteredArtworks.isEmpty else { return false }
-        return filteredArtworks.allSatisfy { revealedCards.contains($0) || foundCards.contains($0) }
+        return filteredArtworks.allSatisfy { revealedCards.contains($0) }
     }
 
     private var hasSpecialCard: Bool {
@@ -183,7 +182,6 @@ struct CollectionAlbumView: View {
                         isRevealed: true,
                         goldBorder: goldBorder
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
                     .opacity(specialCardFrontOpacity)
                 }
                 .frame(width: specialCardWidth, height: specialCardHeight)
@@ -250,32 +248,8 @@ struct CollectionAlbumView: View {
                         
                         // ── ALBUM GRID CONTAINER ─────────────────────────────────
                         ZStack(alignment: .top) {
-                            // Pinned sheet background and grab handle
-                            ZStack(alignment: .top) {
-                                RoundedRectangle(cornerRadius: 33)
-                                    .fill(Color(white: 0.12))
-                                    .overlay(RoundedRectangle(cornerRadius: 33).stroke(
-                                        LinearGradient(
-                                            colors: [Color(hex: "B1B1B1"), Color(hex: "464646")],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 2
-                                    ))
-                                
-                                // Grab handle (pill)
-                                Capsule()
-                                    .fill(Color(white: 0.28))
-                                    .frame(width: 36, height: 5)
-                                    .padding(.top, 10)
-                                    .accessibilityHidden(true)
-                            }
-                            .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
-                            .offset(y: offsetY)
-
                             StickerGridView(
                                 artworks: filteredArtworks,
-                                foundCards: foundCards,
                                 revealedCards: revealedCards,
                                 recentlyCompletedPack: recentlyCompletedPack,
                                 animatedCompletedCards: animatedCompletedCards,
@@ -360,6 +334,32 @@ struct CollectionAlbumView: View {
                             .allowsHitTesting(false)
                         }
                         .frame(width: sheetWidth)
+                        .background(alignment: .top) {
+                            ZStack(alignment: .top) {
+                                RoundedRectangle(cornerRadius: 33)
+                                    .fill(Color(white: 0.12))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 33)
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [Color(hex: "B1B1B1"), Color(hex: "464646")],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
+                                                lineWidth: 2
+                                            )
+                                    )
+
+                                Capsule()
+                                    .fill(Color(white: 0.28))
+                                    .frame(width: 36, height: 5)
+                                    .padding(.top, 10)
+                                    .accessibilityHidden(true)
+                            }
+                            .frame(width: sheetWidth, height: screenSize.height + 80)
+                            .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
+                            .offset(y: offsetY)
+                        }
                         .padding(.bottom, 40)
                     }
                     .frame(maxWidth: .infinity)
@@ -469,18 +469,16 @@ struct CollectionAlbumView: View {
         .ignoresSafeArea()
         .onAppear {
             screenSize = rootGeo.size
-            foundCards = CardDatabase.getFoundCards()
             revealedCards = CardDatabase.getRevealedCards()
             
             if let completed = UserDefaults.standard.stringArray(forKey: "recentlyCompletedPackCards"), !completed.isEmpty {
-                recentlyCompletedPack = completed
-                stickerIntroActive = true
+                recentlyCompletedPack = completed.filter { revealedCards.contains($0) && filteredArtworks.contains($0) }
+                stickerIntroActive = !recentlyCompletedPack.isEmpty
             }
 
             configureSpecialCardUnlockState()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("KeepsyCardsDidChange"))) { _ in
-            foundCards = CardDatabase.getFoundCards()
             revealedCards = CardDatabase.getRevealedCards()
         }
         .onChange(of: rootGeo.size) { _, newSize in
@@ -525,7 +523,7 @@ struct CollectionAlbumView: View {
             .opacity(flyingOpacity)
             .position(x: flyingFrame.midX, y: flyingFrame.midY)
         } else {
-            let isRevealed = CardDatabase.getRevealedCards().contains(name) || CardDatabase.getFoundCards().contains(name) || name.contains("_experience") || name == "vale"
+            let isRevealed = revealedCards.contains(name) || name.contains("_experience") || name == "vale"
             let index = CardDatabase.remoteArtworks[name]?.cardNumber ?? (filteredArtworks.firstIndex(of: name).map { $0 + 1 })
             let goldBorder = LinearGradient(
                 colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
@@ -862,7 +860,6 @@ struct CollectionAlbumView: View {
             UserDefaults.standard.removeObject(forKey: "recentlyCompletedPackCards")
             
             // Re-sync standard discovered cards state
-            foundCards = CardDatabase.getFoundCards()
             revealedCards = CardDatabase.getRevealedCards()
 
             // Only now, after the final sticker is in its album slot, reveal the reward.
@@ -1033,7 +1030,6 @@ private struct SpecialCardRevealView: View {
                         isRevealed: true,
                         goldBorder: goldBorder
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 26))
                     .overlay {
                         RoundedRectangle(cornerRadius: 26)
                             .stroke(goldBorder, lineWidth: 2)
