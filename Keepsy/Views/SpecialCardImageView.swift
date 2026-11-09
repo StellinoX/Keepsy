@@ -1,24 +1,29 @@
 import SwiftUI
 
-/// Fits the complete printed card to the shared size, adapting both dimensions independently.
+/// Fits the printed face at its original aspect ratio after trimming transparent padding.
 struct SpecialCardImageView: View {
-    private static let boundsCache = NSCache<UIImage, NSValue>()
+    private static let faceCache = NSCache<UIImage, UIImage>()
     private let image: UIImage?
-    private let cardBounds: CGRect
 
     init(image: UIImage?) {
-        self.image = image
         guard let image else {
-            self.cardBounds = CGRect(x: 0, y: 0, width: 1, height: 1)
+            self.image = nil
             return
         }
-        if let cached = Self.boundsCache.object(forKey: image) {
-            self.cardBounds = cached.cgRectValue
-        } else {
-            let bounds = image.cgImage?.visibleCardBounds() ?? CGRect(x: 0, y: 0, width: 1, height: 1)
-            Self.boundsCache.setObject(NSValue(cgRect: bounds), forKey: image)
-            self.cardBounds = bounds
+        if let cached = Self.faceCache.object(forKey: image) {
+            self.image = cached
+            return
         }
+        let face: UIImage
+        if let cgImage = image.cgImage,
+           let bounds = cgImage.visibleCardBounds(),
+           let cropped = cgImage.cropping(to: bounds) {
+            face = UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
+        } else {
+            face = image
+        }
+        Self.faceCache.setObject(face, forKey: image)
+        self.image = face
     }
 
     var body: some View {
@@ -26,12 +31,8 @@ struct SpecialCardImageView: View {
             if let image {
                 Image(uiImage: image)
                     .resizable()
+                    .scaledToFit()
                     .frame(width: geometry.size.width, height: geometry.size.height)
-                    .scaleEffect(x: 1 / cardBounds.width, y: 1 / cardBounds.height)
-                    .offset(
-                        x: (0.5 - cardBounds.midX) * geometry.size.width / cardBounds.width,
-                        y: (0.5 - cardBounds.midY) * geometry.size.height / cardBounds.height
-                    )
             }
         }
         .clipped()
@@ -67,10 +68,10 @@ private extension CGImage {
             }
             guard maxX >= minX, maxY >= minY else { return nil }
             return CGRect(
-                x: CGFloat(minX) / CGFloat(width),
-                y: CGFloat(minY) / CGFloat(height),
-                width: CGFloat(maxX - minX + 1) / CGFloat(width),
-                height: CGFloat(maxY - minY + 1) / CGFloat(height)
+                x: minX,
+                y: minY,
+                width: maxX - minX + 1,
+                height: maxY - minY + 1
             )
         }
         return bounds

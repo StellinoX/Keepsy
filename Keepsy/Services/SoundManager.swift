@@ -4,18 +4,20 @@ import AVFoundation
 
 nonisolated final class SoundManager: NSObject, AVAudioPlayerDelegate, @unchecked Sendable {
     static let shared = SoundManager()
-    
-    private var activePlayers = Set<AVAudioPlayer>()
-    private let lock = NSLock()
-    
-    private override init() {
-        super.init()
+
+    private static let configureAudioSession: Void = {
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
-            try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             print("⚠️ Failed to configure audio session: \(error)")
         }
+    }()
+
+    private var activePlayers = Set<AVAudioPlayer>()
+    private let lock = NSLock()
+
+    private override init() {
+        super.init()
     }
     
     func playSound(named name: String) {
@@ -24,10 +26,10 @@ nonisolated final class SoundManager: NSObject, AVAudioPlayerDelegate, @unchecke
             return
         }
 
-        // Off-main: NSDataAsset decode + AVAudioPlayer init + prepareToPlay possono bloccare
-        // alcuni ms. playSound viene chiamato all'apertura del pacchetto (onTearComplete),
-        // proprio quando parte l'animazione → farlo sul main causa un hitch sul primo frame.
+        // Configure once on the playback queue. prepareToPlay activates the session
+        // there too, keeping audio setup off the main thread during animations.
         DispatchQueue.global(qos: .userInitiated).async {
+            _ = Self.configureAudioSession
             do {
                 let player = try AVAudioPlayer(data: asset.data, fileTypeHint: "mp3")
                 player.delegate = self

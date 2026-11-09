@@ -31,6 +31,43 @@ struct ArtworkReferencePreprocessorTests {
         #expect(Int(second) - Int(first) > 60)
     }
 
+    @Test func portraitDetailsKeepFullWidthAndEmphasizeOppositeEnds() async throws {
+        let context = try #require(CGContext(data: nil, width: 100, height: 200,
+            bitsPerComponent: 8, bytesPerRow: 100,
+            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue))
+        let data = try #require(context.data).assumingMemoryBound(to: UInt8.self)
+        for y in 0..<200 {
+            for x in 0..<100 {
+                data[y * context.bytesPerRow + x] = (x < 50) == (y < 100) ? 100 : 120
+            }
+        }
+
+        let source = try #require(context.makeImage())
+        let details = await ArtworkReferencePreprocessor.shared.detailImages(from: source)
+        try #require(details.count == 2)
+        let top = details[0]
+        let bottom = details[1]
+        #expect(top.image.width == 100 && top.image.height == 120)
+        #expect(bottom.image.width == 100 && bottom.image.height == 120)
+        #expect(top.widthFraction == 1 && bottom.widthFraction == 1)
+
+        let topPixels = try grayscalePixels(top.image)
+        let bottomPixels = try grayscalePixels(bottom.image)
+        let lastRow = (bottom.image.height - 1) * bottom.image.width
+        #expect(Int(topPixels[75]) - Int(topPixels[25]) > 20)
+        #expect(Int(bottomPixels[lastRow + 25]) - Int(bottomPixels[lastRow + 75]) > 20)
+    }
+
+    @Test func landscapeDetailsScalePhysicalWidthToTheCrop() async throws {
+        let source = try makeImage(width: 204, height: 100)
+        let details = await ArtworkReferencePreprocessor.shared.detailImages(from: source)
+        try #require(details.count == 2)
+        for detail in details {
+            #expect(detail.image.width == 122 && detail.image.height == 100)
+            #expect(detail.widthFraction == CGFloat(122) / 204)
+        }
+    }
+
     private func makeImage(width: Int, height: Int, dotted: Bool = false) throws -> CGImage {
         let context = try #require(CGContext(data: nil, width: width, height: height,
             bitsPerComponent: 8, bytesPerRow: width,

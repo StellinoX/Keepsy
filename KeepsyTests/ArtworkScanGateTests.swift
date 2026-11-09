@@ -61,11 +61,17 @@ struct ArtworkScanGateTests {
         #expect(accepted)
     }
 
-    @Test func unselectedModeAcceptsDifferentArtworksAfterCooldown() {
+    @Test func scanningRequiresTheCurrentSelection() {
         var gate = ArtworkScanGate(targetName: "")
-        let first = gate.accept(artworkName: "first", selectionID: gate.selectionID, time: 0)
-        let second = gate.accept(artworkName: "second", selectionID: gate.selectionID, time: 4)
-        #expect(first)
-        #expect(second)
+        let unselected = gate.accept(artworkName: "puppies", selectionID: gate.selectionID, time: 0)
+        #expect(!unselected)
+
+        gate.select("lily")
+        let unfocused = gate.accept(artworkName: "puppies", selectionID: gate.selectionID, time: 1)
+        #expect(!unfocused)
+
+        gate.select("puppies")
+        let focused = gate.accept(artworkName: "puppies", selectionID: gate.selectionID, time: 2)
+        #expect(focused)
     }
 }

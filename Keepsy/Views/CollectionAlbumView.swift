@@ -1,14 +1,14 @@
 import SwiftUI
+import UIKit
 
 class FrameTracker {
     var cellFrames: [String: CGRect] = [:]
-    var floatingCardFrames: [String: CGRect] = [:]
 }
 
 struct CollectionAlbumView: View {
-    var museumLocation: String? = nil
-    var showCloseButton: Bool = false
-    var onClose: (() -> Void)? = nil
+    let museumLocation: String?
+    let showCloseButton: Bool
+    let onClose: (() -> Void)?
 
     let columns = [
         GridItem(.fixed(72), spacing: 18),
@@ -32,11 +32,16 @@ struct CollectionAlbumView: View {
     // Sticker placement sequence states
     @State private var recentlyCompletedPack: [String] = []
     @State private var animatedCompletedCards: Set<String> = []
-    @State private var currentlyAnimatingSticker: String? = nil
+    @State private var flyingStickerName: String?
+    @State private var flyingStickerFrame: CGRect = .zero
+    @State private var landingPocketFrame: CGRect?
+    @State private var stickerIntroTask: Task<Void, Never>?
     @State private var frameTracker = FrameTracker()
-    @State private var frameRefreshToken: Int = 0
-    
-    @State private var stickerIntroActive: Bool = false
+
+    private let completedPackKey = "recentlyCompletedPackCards"
+    private let stickerSize = CGSize(width: 58, height: 84)
+    private let stickerSpacing: CGFloat = 8
+    private let headerHeight: CGFloat = 110
     
     @State private var animatingCardName: String? = nil
     @State private var animationPhase: CardAnimationPhase = .idle
@@ -66,6 +71,16 @@ struct CollectionAlbumView: View {
     private let specialCardWidth: CGFloat = 250
     private let specialCardHeight: CGFloat = 375
     @State private var scrollOffset: CGFloat = 0
+
+    init(museumLocation: String? = nil, showCloseButton: Bool = false, onClose: (() -> Void)? = nil) {
+        self.museumLocation = museumLocation
+        self.showCloseButton = showCloseButton
+        self.onClose = onClose
+
+        let revealed = CardDatabase.getRevealedCards()
+        _revealedCards = State(initialValue: revealed)
+        _recentlyCompletedPack = State(initialValue: pendingStickers(revealed: revealed))
+    }
 
     var pinY: CGFloat {
         showCloseButton ? 135 : 80
@@ -141,13 +156,10 @@ struct CollectionAlbumView: View {
         return CGRect(x: (sw - w) / 2, y: cardTopY, width: w, height: h)
     }
     
-    var sheetWidth: CGFloat {
-        screenSize.width > 0 ? min(screenSize.width - 24, 373) : 373
-    }
     var body: some View {
         // GeometryReader cattura le dimensioni schermo — usate da tutte le animazioni
         GeometryReader { rootGeo in
-        let _ = { if screenSize == .zero { DispatchQueue.main.async { screenSize = rootGeo.size } } }()
+        let sheetWidth = min(max(0, rootGeo.size.width - 24), 373)
         ZStack(alignment: .topLeading) {
             Color(red: 0.05, green: 0.05, blue: 0.1).ignoresSafeArea()
             GridBackground()
@@ -206,7 +218,7 @@ struct CollectionAlbumView: View {
             .frame(maxWidth: .infinity)
             .opacity(hasSpecialCard ? 1 : 0)
             .blur(radius: showSpecialCardLockModal ? 20 : 0)
-            .allowsHitTesting(hasSpecialCard && !showSpecialCardLockModal)
+            .allowsHitTesting(hasSpecialCard && !showSpecialCardLockModal && stickerIntroTask == nil)
             
             // ── FOREGROUND LAYER: MAIN SCROLL VIEW (THE SHEET/MODAL) ─────
             ScrollViewReader { proxy in
@@ -254,12 +266,11 @@ struct CollectionAlbumView: View {
                                 recentlyCompletedPack: recentlyCompletedPack,
                                 animatedCompletedCards: animatedCompletedCards,
                                 hasSyncedWithCloud: hasSyncedWithCloud,
-                                animatingCardName: animatingCardName,
-                                cellCardOpacity: cellCardOpacity,
+                                animatingCardName: flyingStickerName ?? animatingCardName,
+                                cellCardOpacity: flyingStickerName == nil ? cellCardOpacity : 0,
                                 animationPhase: animationPhase,
-                                hideCellPocket: hideCellPocket,
+                                hideCellPocket: hideCellPocket || landingPocketFrame != nil,
                                 frameTracker: frameTracker,
-                                frameRefreshToken: frameRefreshToken,
                                 columns: columns
                             ) { name, f in
                                 let figFrame = CGRect(x: f.minX + 7, y: f.minY + 5, width: 58, height: 84)
@@ -269,17 +280,17 @@ struct CollectionAlbumView: View {
                                 startPullAnimation(for: name)
                             }
                             .equatable()
-                            .padding(.top, 110)
+                            .padding(.top, headerHeight)
                             .padding(.bottom, 24)
                             .padding(.horizontal, 16)
                             .mask(
                                 Rectangle()
-                                    .padding(.top, offsetY + 110)
+                                    .padding(.top, offsetY + headerHeight)
                             )
 
                             // Touch blocker for the header area to prevent tapping cards that have scrolled underneath it
                             Color.clear
-                                .frame(height: 110)
+                                .frame(height: headerHeight)
                                 .contentShape(Rectangle())
                                 .onTapGesture {} // Consumes taps, preventing them from reaching cards underneath
                                 .offset(y: offsetY)
@@ -334,6 +345,18 @@ struct CollectionAlbumView: View {
                             .allowsHitTesting(false)
                         }
                         .frame(width: sheetWidth)
+                        .overlay(alignment: .top) {
+                            if !recentlyCompletedPack.isEmpty {
+                                GeometryReader { header in
+                                    stagedStickers(in: header.frame(in: .named("root")))
+                                }
+                                .frame(height: headerHeight)
+                                .offset(y: offsetY)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                                .transition(.identity)
+                            }
+                        }
                         .background(alignment: .top) {
                             ZStack(alignment: .top) {
                                 RoundedRectangle(cornerRadius: 33)
@@ -356,7 +379,7 @@ struct CollectionAlbumView: View {
                                     .padding(.top, 10)
                                     .accessibilityHidden(true)
                             }
-                            .frame(width: sheetWidth, height: screenSize.height + 80)
+                            .frame(width: sheetWidth, height: rootGeo.size.height + 80)
                             .shadow(color: Color.black.opacity(0.5), radius: 39, x: 0, y: 4)
                             .offset(y: offsetY)
                         }
@@ -364,25 +387,20 @@ struct CollectionAlbumView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .onAppear {
-                    // Run the sticker intro after a short delay to allow views to render and frames to compile
-                    if !recentlyCompletedPack.isEmpty {
-                        runCompletedPackStickerIntro(proxy: proxy)
-                    }
-                }
-                .onChange(of: stickerIntroActive) { _, newValue in
-                    // Trigger sticker intro when data is loaded from outer onAppear
-                    // (fixes race condition: inner onAppear fires before outer onAppear loads data)
-                    if newValue && !recentlyCompletedPack.isEmpty {
-                        runCompletedPackStickerIntro(proxy: proxy)
+                .onChange(of: recentlyCompletedPack.isEmpty, initial: true) { _, isEmpty in
+                    guard !isEmpty, stickerIntroTask == nil else { return }
+                    stickerIntroTask = Task { @MainActor in
+                        defer { stickerIntroTask = nil }
+                        try? await runCompletedPackStickerIntro(proxy: proxy)
                     }
                 }
             }
             .blur(radius: showSpecialCardLockModal ? 20 : 0)
-            .allowsHitTesting(!showSpecialCardLockModal)
+            .allowsHitTesting(!showSpecialCardLockModal && stickerIntroTask == nil)
 
             if showCloseButton {
                 Button(action: {
+                    stickerIntroTask?.cancel()
                     HapticManager.shared.triggerImpact(style: .light)
                     onClose?()
                 }) {
@@ -406,8 +424,6 @@ struct CollectionAlbumView: View {
 
 
 
-            // Floating cards bar removed - cards now animate directly from the screen center
-            
             // Flying card e overlay dentro lo stesso ZStack "root"
             // così .position usa le stesse coordinate del GeometryReader
             if animationPhase != .idle {
@@ -470,14 +486,10 @@ struct CollectionAlbumView: View {
         .onAppear {
             screenSize = rootGeo.size
             revealedCards = CardDatabase.getRevealedCards()
-            
-            if let completed = UserDefaults.standard.stringArray(forKey: "recentlyCompletedPackCards"), !completed.isEmpty {
-                recentlyCompletedPack = completed.filter { revealedCards.contains($0) && filteredArtworks.contains($0) }
-                stickerIntroActive = !recentlyCompletedPack.isEmpty
-            }
-
+            recentlyCompletedPack = pendingStickers(revealed: revealedCards)
             configureSpecialCardUnlockState()
         }
+        .onDisappear { stickerIntroTask?.cancel() }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("KeepsyCardsDidChange"))) { _ in
             revealedCards = CardDatabase.getRevealedCards()
         }
@@ -610,27 +622,26 @@ struct CollectionAlbumView: View {
         }
     }
 
-    private func revealSpecialCardIfNeeded(proxy: ScrollViewProxy) {
+    private func revealSpecialCardIfNeeded(proxy: ScrollViewProxy) async throws {
         guard hasSpecialCard,
               isCollectionComplete,
               shouldRevealSpecialCardAfterIntro,
               !isSpecialCardUnlocked
         else { return }
 
-        shouldRevealSpecialCardAfterIntro = false
-        isSpecialCardUnlocked = true
-        specialCardFrontOpacity = 0
-        UserDefaults.standard.set(true, forKey: specialCardUnlockKey)
-
         withAnimation(.easeInOut(duration: 0.7)) {
             proxy.scrollTo("specialCardRevealAnchor", anchor: .top)
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            HapticManager.shared.triggerNotification(type: .success)
-            withAnimation(.easeInOut(duration: 1.2)) {
-                specialCardFrontOpacity = 1
-            }
+        try await waitForStickerIntro(.milliseconds(800))
+        guard isCollectionComplete, shouldRevealSpecialCardAfterIntro else { return }
+
+        shouldRevealSpecialCardAfterIntro = false
+        isSpecialCardUnlocked = true
+        UserDefaults.standard.set(true, forKey: specialCardUnlockKey)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        withAnimation(.easeInOut(duration: 1.2)) {
+            specialCardFrontOpacity = 1
         }
     }
 
@@ -828,139 +839,165 @@ struct CollectionAlbumView: View {
     }
     
     // MARK: - Sticker Insertion Intro Sequence
-    
-    func runCompletedPackStickerIntro(proxy: ScrollViewProxy) {
-        guard !recentlyCompletedPack.isEmpty else { return }
-        
-        // Sort completed pack so stickers are placed in sequential album grid order
-        recentlyCompletedPack = recentlyCompletedPack.sorted { a, b in
-            let all = filteredArtworks
-            return (all.firstIndex(of: a) ?? Int.max) < (all.firstIndex(of: b) ?? Int.max)
-        }
-        
-        // Wait 1.0 second for the view to render before starting the premium reverse-zoom animation sequence!
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            animateNextSticker(index: 0, proxy: proxy)
-        }
+
+    private func pendingStickers(revealed: Set<String>) -> [String] {
+        let completed = Set(UserDefaults.standard.stringArray(forKey: completedPackKey) ?? [])
+        return filteredArtworks.filter { completed.contains($0) && revealed.contains($0) }
     }
-    
-    func animateNextSticker(index: Int, proxy: ScrollViewProxy) {
-        guard index < recentlyCompletedPack.count else {
-            // Finished animating all stickers! Clear local pack completed references
-            withAnimation(.easeInOut(duration: 0.5)) {
-                recentlyCompletedPack = []
-                currentlyAnimatingSticker = nil
-                animatingCardName = nil
-                animationPhase = .idle
-                flyingOpacity = 0.0
-                pocketOverlayOpacity = 0.0
-                cellCardOpacity = 1.0
-                stickerIntroActive = false
-            }
-            UserDefaults.standard.removeObject(forKey: "recentlyCompletedPackCards")
-            
-            // Re-sync standard discovered cards state
-            revealedCards = CardDatabase.getRevealedCards()
 
-            // Only now, after the final sticker is in its album slot, reveal the reward.
-            revealSpecialCardIfNeeded(proxy: proxy)
-            return
-        }
-        
-        let cardName = recentlyCompletedPack[index]
-        
-        // 1. Scroll dynamically to center the target album cell in the ScrollView!
-        HapticManager.shared.triggerSelection()
-        withAnimation(.spring(response: 0.85, dampingFraction: 0.82)) {
-            proxy.scrollTo(cardName, anchor: .center)
-        }
-        
-        // 2. Wait 0.7 seconds for scroll, then force-refresh all visible cell frames
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-            frameRefreshToken += 1
-        }
-        
-        // 3. Wait 0.9 seconds total for scroll + frame refresh to complete
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
-            let f = frameTracker.cellFrames[cardName] ?? CGRect(
-                x: screenSize.width / 2 - 36,
-                y: screenSize.height / 2 - 51,
-                width: 72,
-                height: 103
-            )
-            
-            // Calculate corresponding frames matching Figma details tap mapping
-            let finalSourceFrame = CGRect(x: f.minX + 7, y: f.minY + 5, width: 58, height: 84)
-            let finalPocketFrame = CGRect(x: f.minX, y: f.minY + 5, width: 72, height: 94)
-            let finalPulledSourceFrame = CGRect(
-                x: finalSourceFrame.minX,
-                y: finalSourceFrame.minY - pullDistance,
-                width: finalSourceFrame.width,
-                height: finalSourceFrame.height
-            )
-            
-            // Start the card flight from the center of the screen
-            let sourcePos = CGRect(
-                x: screenSize.width / 2 - 29,
-                y: screenSize.height / 2 - 42,
-                width: 58,
-                height: 84
-            )
-            
-            // Synchronized activation: hide from top bar & show in flyingCardView at the exact same frame!
-            currentlyAnimatingSticker = cardName
-            animatingCardName = cardName
-            animationPhase = .pulling
-            cellCardOpacity = 0.0
-            overlayOpacity = 0.0
-            hideCellPocket = false   // cella mostra il suo pocket durante il volo
-            flyingFrame = sourcePos
-            flyingCornerRadius = 8
-            flyingOpacity = 1.0
+    private func stagingFrame(at index: Int, in headerWidth: CGFloat) -> CGRect {
+        let count = CGFloat(recentlyCompletedPack.count)
+        let width = max(1, min(stickerSize.width, (headerWidth - 32 - (count - 1) * stickerSpacing) / count))
+        let height = width * stickerSize.height / stickerSize.width
+        let rowWidth = count * width + (count - 1) * stickerSpacing
+        let x = (headerWidth - rowWidth) / 2 + CGFloat(index) * (width + stickerSpacing)
+        let y = (headerHeight - height) / 2 + 4
+        return CGRect(x: x, y: y, width: width, height: height)
+    }
 
-            pocketFrame = finalPocketFrame
-            pocketOverlayOpacity = 0.0
-
-            HapticManager.shared.triggerImpact(style: .medium)
-
-            // Phase 2: Fly from top bar down to just above its grid cell slot
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.78)) {
-                flyingFrame = finalPulledSourceFrame
+    private func stagedStickers(in header: CGRect) -> some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(recentlyCompletedPack.enumerated()), id: \.element) { index, name in
+                if !animatedCompletedCards.contains(name) {
+                    let isFlying = flyingStickerName == name
+                    let origin = stagingFrame(at: index, in: header.width)
+                    let destination = isFlying
+                        ? flyingStickerFrame.offsetBy(dx: -header.minX, dy: -header.minY)
+                        : origin
+                    ArtworkCardFrontView(
+                        name: name,
+                        title: CardDatabase.remoteArtworks[name]?.title ?? CardDatabase.cleanedArtworkName(name),
+                        cardIndex: CardDatabase.remoteArtworks[name]?.cardNumber
+                            ?? filteredArtworks.firstIndex(of: name).map { $0 + 1 },
+                        width: stickerSize.width,
+                        height: stickerSize.height,
+                        isRevealed: true,
+                        goldBorder: CardDatabase.borderGradientFor(name: name)
+                    )
+                    .modifier(StickerFlightMotion(
+                        origin: origin,
+                        destination: destination,
+                        cardWidth: stickerSize.width,
+                        progress: isFlying ? 1 : 0
+                    ))
+                    .zIndex(isFlying ? 1 : 0)
+                }
             }
 
-            // Wait for the flight to finish, then reuse the same pocket-entry
-            // motion used when a card is closed from its detail view.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                withAnimation(.easeIn(duration: 0.30)) {
-                    flyingFrame = finalSourceFrame
-                }
-
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) {
-                    HapticManager.shared.triggerImpact(style: .light)
-
-                    // Swap the flying card with the card inside the pocket atomically.
-                    // Keeping opacity at 1 during the descent avoids the old dissolve.
-                    var transaction = Transaction(animation: nil)
-                    transaction.disablesAnimations = true
-                    withTransaction(transaction) {
-                        animatedCompletedCards.insert(cardName)
-                        cellCardOpacity = 1.0
-                        flyingOpacity = 0.0
-                        currentlyAnimatingSticker = nil
-                        animatingCardName = nil
-                        animationPhase = .idle
-                    }
-
-                    // Short pause, then repeat for the next sticker in the queue.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        animateNextSticker(index: index + 1, proxy: proxy)
-                    }
-                }
+            if let frame = landingPocketFrame {
+                Image("pocket_outline")
+                    .resizable()
+                    .frame(width: frame.width, height: frame.height)
+                    .position(x: frame.midX - header.minX, y: frame.midY - header.minY)
+                    .transition(.identity)
+                    .zIndex(2)
             }
         }
     }
-    
-    // placeNextStickerFromTop REMOVED - WE NOW USE THE HIGH-FIDELITY ANIMATENEXTSTICKER ZOOM INTRO NATIVELY!
+
+    private func runCompletedPackStickerIntro(proxy: ScrollViewProxy) async throws {
+        defer {
+            recentlyCompletedPack = []
+            animatedCompletedCards = []
+            flyingStickerName = nil
+            landingPocketFrame = nil
+        }
+
+        try await waitForStickerIntro(.milliseconds(380))
+
+        let liftFeedback = UIImpactFeedbackGenerator(style: .light)
+        let landingFeedback = UIImpactFeedbackGenerator(style: .medium)
+        let flightDuration = 0.64
+
+        for name in recentlyCompletedPack {
+            let minimumAnchor = (pinY + headerHeight) / max(1, screenSize.height - 103)
+            let anchor = UnitPoint(x: 0.5, y: min(1, max(0.67, minimumAnchor)))
+            withAnimation(.easeInOut(duration: 0.44)) {
+                proxy.scrollTo(name, anchor: anchor)
+            }
+            try await waitForStickerIntro(.milliseconds(500))
+            if visibleStickerSlot(for: name) == nil {
+                proxy.scrollTo(name, anchor: anchor)
+                try await waitForStickerIntro(.milliseconds(150))
+            }
+            guard let cell = visibleStickerSlot(for: name) else { return }
+
+            // Match the card and pocket positions in AlbumCardCell.
+            let cardTop = cell.minY + (cell.height - 99) / 2
+            let destination = CGRect(
+                x: cell.midX - stickerSize.width / 2,
+                y: cardTop,
+                width: stickerSize.width,
+                height: stickerSize.height
+            )
+            liftFeedback.impactOccurred()
+            landingFeedback.prepare()
+            withAnimation(.easeInOut(duration: flightDuration)) {
+                flyingStickerName = name
+                flyingStickerFrame = destination
+                landingPocketFrame = CGRect(x: cell.minX, y: cardTop + 5, width: 72, height: 94)
+            }
+            try await waitForStickerIntro(.seconds(flightDuration))
+
+            // Swap the overlay and the album card together, then acknowledge the landing.
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                animatedCompletedCards.insert(name)
+                flyingStickerName = nil
+                landingPocketFrame = nil
+            }
+            let remaining = (UserDefaults.standard.stringArray(forKey: completedPackKey) ?? []).filter { $0 != name }
+            if remaining.isEmpty {
+                UserDefaults.standard.removeObject(forKey: completedPackKey)
+            } else {
+                UserDefaults.standard.set(remaining, forKey: completedPackKey)
+            }
+            landingFeedback.impactOccurred()
+            try await waitForStickerIntro(.milliseconds(140))
+        }
+
+        recentlyCompletedPack = []
+        try await revealSpecialCardIfNeeded(proxy: proxy)
+    }
+
+    private func visibleStickerSlot(for name: String) -> CGRect? {
+        let headerBottom = max(pinY, defaultY + scrollOffset) + headerHeight
+        guard let cell = frameTracker.cellFrames[name],
+              cell.midY >= headerBottom,
+              cell.midY < screenSize.height
+        else { return nil }
+        return cell
+    }
+
+    private func waitForStickerIntro(_ duration: Duration) async throws {
+        try await Task.sleep(for: duration)
+        try Task.checkCancellation()
+    }
+}
+
+private struct StickerFlightMotion: ViewModifier, Animatable {
+    let origin: CGRect
+    let destination: CGRect
+    let cardWidth: CGFloat
+    var progress: CGFloat
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        // Ease the horizontal motion to zero as the card settles into the pocket.
+        let horizontalProgress = progress * (2 - progress)
+        let x = origin.midX + (destination.midX - origin.midX) * horizontalProgress
+        let y = origin.midY + (destination.midY - origin.midY) * progress
+        let width = origin.width + (destination.width - origin.width) * progress
+
+        content
+            .scaleEffect(width / cardWidth)
+            .position(x: x, y: y)
+    }
 }
 
 private struct SpecialCardRevealView: View {

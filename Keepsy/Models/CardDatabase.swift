@@ -306,6 +306,7 @@ struct CardDatabase {
     
     // Cache per le immagini ARKit, così ARArtworkView si carica all'istante dopo la prima volta
     static let arImageCache = NSCache<NSString, NSArray>()
+    private static let pastoraleName = "moma-klee-pastorale-rhythms"
     
     static func arReferenceImages(for name: String) async -> [ARReferenceImage] {
         if let cached = arImageCache.object(forKey: name as NSString) as? [ARReferenceImage] {
@@ -318,25 +319,29 @@ struct CardDatabase {
         // measurements are commonly stored as height × width, while ARKit needs width.
         let imageAspectRatio = CGFloat(cgImage.width) / CGFloat(cgImage.height)
         let physicalWidth = physicalWidthMeters(for: name, imageAspectRatio: imageAspectRatio)
-        var sources = [cgImage]
-        if let composition = await ArtworkReferencePreprocessor.shared.compositionImage(from: cgImage) {
-            sources.append(composition)
+        let preprocessor = ArtworkReferencePreprocessor.shared
+        var sources = [ArtworkReferencePreprocessor.Reference(image: cgImage, widthFraction: 1)]
+        if let composition = await preprocessor.compositionImage(from: cgImage) {
+            sources.append(.init(image: composition, widthFraction: 1))
         }
+        guard !Task.isCancelled else { return [] }
+        sources.append(contentsOf: await preprocessor.detailImages(from: cgImage))
 
         var references: [ARReferenceImage] = []
-        for source in sources {
+        for (index, source) in sources.enumerated() {
             guard !Task.isCancelled else { return [] }
-            let reference = ARReferenceImage(source, orientation: .up, physicalWidth: physicalWidth)
-            // Both variants map to the same card and cannot unlock it twice.
-            reference.name = name
+            let reference = ARReferenceImage(source.image, orientation: .up,
+                physicalWidth: physicalWidth * source.widthFraction)
+            reference.name = "\(name)#\(index)"
             do {
                 try await reference.validate()
                 references.append(reference)
             } catch {
-                print("⚠️ ARKit reference rejected for \(name): \(error.localizedDescription)")
+                print("⚠️ ARKit reference \(index) rejected for \(name): \(error.localizedDescription)")
             }
         }
-        if !references.isEmpty, !Task.isCancelled {
+        guard !Task.isCancelled else { return [] }
+        if !references.isEmpty {
             arImageCache.setObject(references as NSArray, forKey: name as NSString)
         }
         return references
@@ -346,15 +351,17 @@ struct CardDatabase {
     // height × width, but some use width × height, so compare both orientations
     // with the reference image instead of assuming the first value is its width.
     private static func physicalWidthMeters(for name: String, imageAspectRatio: CGFloat) -> CGFloat {
+        // MoMA lists Pastorale as 69.3 × 52.4 cm (collection work 79012).
+        let fallbackWidth: CGFloat = name == pastoraleName ? 0.524 : 0.5
         guard let dimensions = remoteArtworks[name]?.dimensions, !dimensions.isEmpty else {
-            return 0.5
+            return fallbackWidth
         }
 
         let measurements = dimensions.matches(of: /(\d+(?:[.,]\d+)?)/)
             .compactMap { Double(String($0.1).replacingOccurrences(of: ",", with: ".")) }
             .filter { $0 > 5 }
 
-        guard let first = measurements.first else { return 0.5 }
+        guard let first = measurements.first else { return fallbackWidth }
 
         let widthInCentimeters: Double
         if measurements.count >= 2 {

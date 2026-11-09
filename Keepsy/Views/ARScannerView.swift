@@ -6,8 +6,7 @@ struct ARViewContainer: UIViewRepresentable {
     let targetName: String
     let isCaptureEnabled: Bool
     let onScanProgressUpdated: @MainActor (ArtworkScanHold.Progress) -> Void
-    let onArtworkDetected: @MainActor (String) -> Void
-    let onWrongArtworkDetected: @MainActor (String) -> Void
+    let onArtworkDetected: @MainActor (String) -> Bool
     let onDiagnosticMessageUpdated: @MainActor (String) -> Void
 
     func makeUIView(context: Context) -> ARSCNView {
@@ -18,13 +17,7 @@ struct ARViewContainer: UIViewRepresentable {
             return view
         }
 
-        let configuration = ARImageTrackingConfiguration()
-        configuration.isAutoFocusEnabled = true
-        let city = UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
-        let downloaded = CardDatabase.downloadedArtworkNames(for: city)
-        let names = CardDatabase.getActivePack().flatMap { $0.isEmpty ? nil : $0 }
-            ?? Array(downloaded.prefix(20))
-        context.coordinator.prepareTrackingImages(names: names, configuration: configuration)
+        context.coordinator.prepareTrackingImages(names: CardDatabase.getActivePack() ?? [])
         return view
     }
 
@@ -51,13 +44,19 @@ nonisolated private final class ArtworkScanSelection: Sendable {
 
 nonisolated(unsafe) private var scanSelectionKey: UInt8 = 0
 
+nonisolated private struct TrackedImageSnapshot: Sendable {
+    let name: String
+    let transform: simd_float4x4
+    let physicalSize: CGSize
+}
+
 @MainActor
 final class ARViewCoordinator: NSObject, ARSessionDelegate {
     var parent: ARViewContainer
     private weak var arView: ARSCNView?
     private var preparationTask: Task<Void, Never>?
     private var trackingImagesByName: [String: Set<ARReferenceImage>] = [:]
-    private var configuration: ARImageTrackingConfiguration?
+    private var activeReferenceNames: Set<String> = []
     private var gate: ArtworkScanGate
     private var isAttached = false
     private var isSuspended = false
@@ -91,52 +90,58 @@ final class ARViewCoordinator: NSObject, ARSessionDelegate {
             name: UIApplication.didBecomeActiveNotification, object: nil)
     }
 
-    func prepareTrackingImages(names: [String], configuration: ARImageTrackingConfiguration) {
-        self.configuration = configuration
+    func prepareTrackingImages(names: [String]) {
         preparationTask?.cancel()
+        var orderedNames = names
+        if let targetIndex = orderedNames.firstIndex(of: gate.targetName) {
+            let target = orderedNames.remove(at: targetIndex)
+            orderedNames.insert(target, at: 0)
+        }
         preparationTask = Task { [weak self] in
-            var images: [String: Set<ARReferenceImage>] = [:]
-            for name in names {
+            for name in orderedNames {
                 guard !Task.isCancelled else { return }
                 let references = await CardDatabase.arReferenceImages(for: name)
-                if !references.isEmpty { images[name] = Set(references) }
+                guard !Task.isCancelled, let self, self.isAttached else { return }
+                guard !references.isEmpty else { continue }
+                self.trackingImagesByName[name] = Set(references)
+                if self.gate.targetName == name { self.applyTrackingTarget() }
             }
             guard !Task.isCancelled, let self, self.isAttached else { return }
-            self.trackingImagesByName = images
-            self.applyTrackingTarget()
             self.parent.onDiagnosticMessageUpdated(
-                "Scanner ready: \(images.count)/\(names.count) artworks validated."
+                "Scanner ready: \(self.trackingImagesByName.count)/\(names.count) artworks validated."
             )
         }
     }
 
     func updateTrackingTarget(_ name: String, isCaptureEnabled: Bool) {
         let targetChanged = gate.targetName != name
-        guard targetChanged || self.isCaptureEnabled != isCaptureEnabled else { return }
+        let captureChanged = self.isCaptureEnabled != isCaptureEnabled
+        guard targetChanged || captureChanged else { return }
         self.isCaptureEnabled = isCaptureEnabled
-        if targetChanged { gate.select(name) }
-        gate.invalidatePendingDetections()
+        if targetChanged {
+            gate.select(name)
+        } else {
+            gate.invalidatePendingDetections()
+        }
         publishSelection()
         resetHold()
         if targetChanged { applyTrackingTarget() }
     }
 
     private func applyTrackingTarget() {
-        guard let configuration, isAttached, !isSuspended else { return }
-        let images: Set<ARReferenceImage>
-        if gate.targetName.isEmpty {
-            images = Set(trackingImagesByName.values.flatMap { $0 })
-        } else {
-            images = trackingImagesByName[gate.targetName] ?? []
-        }
+        guard isAttached, !isSuspended else { return }
+        let images = trackingImagesByName[gate.targetName] ?? []
+        activeReferenceNames = Set(images.compactMap(\.name))
         guard !images.isEmpty else {
             arView?.session.pause()
-            parent.onDiagnosticMessageUpdated("No valid reference for the selected artwork.")
             return
         }
+
+        let configuration = ARImageTrackingConfiguration()
+        configuration.isAutoFocusEnabled = true
         configuration.trackingImages = images
-        configuration.maximumNumberOfTrackedImages = gate.targetName.isEmpty
-            ? min(trackingImagesByName.count, 4) : 1
+        // A loosely tracked variant should not occupy the only tracking slot.
+        configuration.maximumNumberOfTrackedImages = min(images.count, 4)
         gate.invalidatePendingDetections()
         publishSelection()
         resetHold()
@@ -174,51 +179,75 @@ final class ARViewCoordinator: NSObject, ARSessionDelegate {
 
     nonisolated func session(_ session: ARSession, didUpdate frame: ARFrame) {
         guard let selection else { return }
+        let trackedImages = frame.anchors.compactMap { anchor -> TrackedImageSnapshot? in
+            guard let imageAnchor = anchor as? ARImageAnchor,
+                  imageAnchor.isTracked,
+                  let name = imageAnchor.referenceImage.name else { return nil }
+            return TrackedImageSnapshot(
+                name: name,
+                transform: imageAnchor.transform,
+                physicalSize: imageAnchor.referenceImage.physicalSize
+            )
+        }
+        guard !trackedImages.isEmpty else { return }
         let receivedAt = ProcessInfo.processInfo.systemUptime
-        // Copy only tracking metadata, without retaining the camera's pixel buffers
-        // while waiting for the main actor to update the progress indicator.
         let timestamp = frame.timestamp
-        let camera = frame.camera
-        let images = frame.anchors.compactMap { $0 as? ARImageAnchor }
+        let cameraTransform = frame.camera.transform
+        let cameraProjection = frame.camera.projectionMatrix
         Task { @MainActor [weak self] in
             guard let self, selection.id == self.gate.selectionID else { return }
             guard ProcessInfo.processInfo.systemUptime - receivedAt <= ArtworkScanHold.maximumFrameGap else {
                 self.resetHold()
                 return
             }
-            self.processFrame(camera: camera, images: images, timestamp: timestamp, selectionID: selection.id)
+            self.processFrame(
+                cameraTransform: cameraTransform,
+                cameraProjection: cameraProjection,
+                images: trackedImages,
+                timestamp: timestamp,
+                selectionID: selection.id
+            )
         }
     }
 
-    private func processFrame(camera: ARCamera, images: [ARImageAnchor], timestamp: TimeInterval,
-                              selectionID: UUID) {
+    private func processFrame(
+        cameraTransform: simd_float4x4,
+        cameraProjection: simd_float4x4,
+        images: [TrackedImageSnapshot],
+        timestamp: TimeInterval,
+        selectionID: UUID
+    ) {
         guard isAttached, !isSuspended, isCaptureEnabled,
               selectionID == gate.selectionID, timestamp > lastFrameTimestamp,
               let arView, arView.bounds.width > 0, arView.bounds.height > 0 else { return }
         lastFrameTimestamp = timestamp
-        if let latestTimestamp = arView.session.currentFrame?.timestamp,
-           latestTimestamp - timestamp > ArtworkScanHold.maximumFrameGap {
-            resetHold()
-            return
-        }
         lastFrameArrival = ProcessInfo.processInfo.systemUptime
 
-        let projection = camera.projectionMatrix(for: .portrait,
-            viewportSize: arView.bounds.size, zNear: 0.001, zFar: 1_000)
-        let viewProjection = projection * simd_inverse(camera.transform)
-        let foundNames = CardDatabase.getFoundCards()
-        let visibleNames = Set(images.compactMap { image -> String? in
-            guard image.isTracked,
-                  let name = image.referenceImage.name, foundNames.contains(name),
-                  gate.canTrack(artworkName: name),
-                  ArtworkScanVisibility.containsArtwork(
-                    clipTransform: viewProjection * image.transform,
-                    size: image.referenceImage.physicalSize) else { return nil }
-            return name
-        })
-        guard let name = visibleNames.first,
-              gate.accept(artworkName: name, selectionID: selectionID, time: timestamp) else { return }
-        parent.onArtworkDetected(name)
+        let name = gate.targetName
+        guard gate.canTrack(artworkName: name),
+              CardDatabase.getFoundCards().contains(name),
+              !CardDatabase.getRevealedCards().contains(name),
+              !CardDatabase.getDuplicatesInActivePack().contains(name) else { return }
+
+        let viewProjection = cameraProjection * simd_inverse(cameraTransform)
+        let isTargetVisible = images.contains { image in
+            guard activeReferenceNames.contains(image.name) else { return false }
+            let centerSize = CGSize(
+                width: max(0.01, image.physicalSize.width * 0.25),
+                height: max(0.01, image.physicalSize.height * 0.25)
+            )
+            return ArtworkScanVisibility.containsArtwork(
+                clipTransform: viewProjection * image.transform,
+                size: centerSize
+            )
+        }
+        guard isTargetVisible else { return }
+
+        // The carousel can change before SwiftUI updates the camera view.
+        var updatedGate = gate
+        guard updatedGate.accept(artworkName: name, selectionID: selectionID, time: timestamp),
+              parent.onArtworkDetected(name) else { return }
+        gate = updatedGate
         parent.onDiagnosticMessageUpdated("Found: \(name)!")
     }
 

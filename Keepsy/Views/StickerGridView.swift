@@ -27,7 +27,6 @@ struct StickerGridView: View, Equatable {
     let animationPhase: CardAnimationPhase
     let hideCellPocket: Bool
     let frameTracker: FrameTracker
-    let frameRefreshToken: Int
     let columns: [GridItem]
     let onTapCard: (String, CGRect) -> Void
 
@@ -40,8 +39,7 @@ struct StickerGridView: View, Equatable {
         lhs.animatingCardName == rhs.animatingCardName &&
         lhs.cellCardOpacity == rhs.cellCardOpacity &&
         lhs.animationPhase == rhs.animationPhase &&
-        lhs.hideCellPocket == rhs.hideCellPocket &&
-        lhs.frameRefreshToken == rhs.frameRefreshToken
+        lhs.hideCellPocket == rhs.hideCellPocket
     }
 
     private func cellLabel(name: String, index: Int) -> String {
@@ -62,7 +60,7 @@ struct StickerGridView: View, Equatable {
         LazyVGrid(columns: columns, spacing: 18) {
             ForEach(Array(artworks.enumerated()), id: \.offset) { index, name in
                 let isOwned = revealedCards.contains(name)
-                let isInteractive = isOwned && animationPhase == .idle
+                let isInteractive = isOwned && recentlyCompletedPack.isEmpty && animationPhase == .idle
                 AlbumCardCell(
                     name: name,
                     index: index,
@@ -83,8 +81,7 @@ struct StickerGridView: View, Equatable {
                     }
                 )
                 .onTapGesture {
-                    guard recentlyCompletedPack.isEmpty else { return }
-                    guard isOwned, animationPhase == .idle else { return }
+                    guard isInteractive else { return }
                     if let f = frameTracker.cellFrames[name] {
                         onTapCard(name, f)
                     }
@@ -98,9 +95,10 @@ struct StickerGridView: View, Equatable {
             }
         }
         .onPreferenceChange(CellFramePreferenceKey.self) { preferences in
-            for pref in preferences {
-                frameTracker.cellFrames[pref.name] = pref.frame
-            }
+            frameTracker.cellFrames = Dictionary(
+                preferences.map { ($0.name, $0.frame) },
+                uniquingKeysWith: { _, latest in latest }
+            )
         }
     }
 }

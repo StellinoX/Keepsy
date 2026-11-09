@@ -86,7 +86,7 @@ struct CardInspectionView: View {
         if card.name.contains("_experience") || card.name == "vale" {
             if !isCollectionCompleteFor(card.name) { return "Locked" }
             if card.name == "vale" { return "Valentina" }
-            if card.name == "prado_experience" { return "Alicia" }
+            if card.name == "prado_experience" { return "Puoya" }
             return "Keepsy Collection"
         }
         return artwork?.artist ?? "Unknown Artist"
@@ -486,13 +486,24 @@ struct CardFullDetailView: View {
                     customRotationY: currentRotation + tilt.width * 14
                 ) {
                     ZStack {
-                        Image("retro")
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: cardWidth, height: cardHeight)
-                            .clipped()
-                            .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
-                            .opacity(isFrontShowing ? 0.0 : 1.0)
+                        Group {
+                            if card.name == "vale" {
+                                SpecialCardLockedBackView(
+                                    cardName: card.name,
+                                    width: cardWidth,
+                                    height: cardHeight,
+                                    cornerRadius: 24
+                                )
+                            } else {
+                                Image("retro")
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: cardWidth, height: cardHeight)
+                                    .clipped()
+                            }
+                        }
+                        .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
+                        .opacity(isFrontShowing ? 0.0 : 1.0)
 
                         let index = CardDatabase.remoteArtworks[card.name]?.cardNumber
                         let goldBorder = LinearGradient(

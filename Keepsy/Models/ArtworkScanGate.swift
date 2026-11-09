@@ -23,7 +23,7 @@ nonisolated struct ArtworkScanGate {
     }
 
     func canTrack(artworkName: String) -> Bool {
-        (targetName.isEmpty || artworkName == targetName) && !deliveredNames.contains(artworkName)
+        !targetName.isEmpty && artworkName == targetName && !deliveredNames.contains(artworkName)
     }
 
     mutating func accept(
@@ -36,7 +36,7 @@ nonisolated struct ArtworkScanGate {
               time >= nextDetectionTime,
               time.isFinite else { return false }
         deliveredNames.insert(artworkName)
-        nextDetectionTime = time + 4
+        nextDetectionTime = time + 2.5
         return true
     }
 }

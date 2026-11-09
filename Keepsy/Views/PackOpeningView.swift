@@ -281,11 +281,13 @@ struct PackOpeningView: View {
                             }
                             .scaleEffect(nextButtonScale)
                             .onAppear {
+                                let firstCardID = cards.first?.id
                                 nextButtonScale = 0
                                 withAnimation(.spring(response: 0.52, dampingFraction: 0.62)) {
                                     nextButtonScale = 1.08
                                 }
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                                    guard packState == .opened, cards.first?.id == firstCardID else { return }
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                                         nextButtonScale = 1.0
                                     }
@@ -379,8 +381,33 @@ struct PackOpeningView: View {
             }
         }
         .ignoresSafeArea()
+        .overlay(alignment: .topLeading) {
+            if packState == .opened, inspectedCard == nil, flyingCard == nil {
+                Button {
+                    HapticManager.shared.triggerImpact(style: .light)
+                    resetPack()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 14, weight: .bold))
+                            .accessibilityHidden(true)
+                        Text("Back")
+                            .font(.system(size: 16))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 44)
+                    .background(.white.opacity(0.12), in: Capsule())
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 24)
+                .padding(.top, 8)
+            }
+        }
         .fullScreenCover(isPresented: $showCitySelector) {
             CitySelectorView(locationManager: locationManager, selectedMuseumId: $selectedMuseumId)
+                .ignoresSafeArea()
         }
         .task {
             await CardDatabase.syncWithCloud()
@@ -450,9 +477,10 @@ struct PackOpeningView: View {
             HapticManager.shared.triggerImpact(style: .light)
 
             guard let startFrame = cardFrames[index] else {
+                let cardID = cards[index].id
                 cards[index].isFlipped = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    guard index < self.cards.count else { return }
+                    guard index < self.cards.count, self.cards[index].id == cardID else { return }
                     withAnimation(.easeOut(duration: 0.28)) { self.inspectedCard = self.cards[index] }
                 }
                 return
@@ -506,6 +534,7 @@ struct PackOpeningView: View {
     // MARK: - Animazione ingresso carte
 
     func animateCardsIn() {
+        guard let firstCardID = cards.first?.id else { return }
         let finalRotations: [Double] = Array(repeating: 0, count: 5)
 
         cardOffsetX = [123, 0, -123, -61.5, 61.5]
@@ -522,6 +551,7 @@ struct PackOpeningView: View {
             let i = revealOrder[seq]
             let delay = baseDelay + Double(seq) * stagger
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                guard cards.first?.id == firstCardID else { return }
                 HapticManager.shared.triggerImpact(style: seq == 0 ? .heavy : .medium)
                 withAnimation(.spring(response: 0.46, dampingFraction: 0.6)) {
                     var newOffsetsX = cardOffsetX
@@ -540,6 +570,7 @@ struct PackOpeningView: View {
                     cardOpacity = newOpacities
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
+                    guard cards.first?.id == firstCardID else { return }
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                         var newScales = cardScale
                         if i < newScales.count { newScales[i] = 1.0 }
@@ -551,6 +582,7 @@ struct PackOpeningView: View {
 
         let shimmerStart = baseDelay + Double(revealOrder.count - 1) * stagger + 0.46
         DispatchQueue.main.asyncAfter(deadline: .now() + shimmerStart) {
+            guard cards.first?.id == firstCardID else { return }
             withAnimation(.easeInOut(duration: 0.65)) {
                 shimmerPhase = 1.0
             }
@@ -618,7 +650,9 @@ struct PackOpeningView: View {
         self.packState = .opened
         self.showCards = true
 
+        guard let firstCardID = cards.first?.id else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            guard self.cards.first?.id == firstCardID else { return }
             self.animateCardsIn()
         }
     }
