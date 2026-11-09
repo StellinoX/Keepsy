@@ -6,11 +6,8 @@ struct ArtworkScanDetailView: View {
     let showsDetails: Bool
     let onDismiss: () -> Void
 
-    private static let snapAnimation = Animation.spring(response: 0.38, dampingFraction: 0.84)
-
     @State private var isExpanded = false
-    @GestureState(resetTransaction: Transaction(animation: ArtworkScanDetailView.snapAnimation))
-    private var dragOffset: CGFloat = 0
+    @State private var descriptionScrollPosition = ScrollPosition(edge: .top)
 
     private var artwork: NetworkArtwork? {
         CardDatabase.remoteArtworks[artworkName]
@@ -49,9 +46,8 @@ struct ArtworkScanDetailView: View {
             let screenHeight = geometry.size.height
             let collapsedHeight = min(max(165, screenHeight * 0.215), screenHeight * 0.4)
             let expandedHeight = screenHeight * 0.5
-            let restingHeight = isExpanded ? expandedHeight : collapsedHeight
-            let sheetHeight = min(expandedHeight, max(0, restingHeight - dragOffset))
-            let expansion = min(1, max(0, (sheetHeight - collapsedHeight) / max(1, expandedHeight - collapsedHeight)))
+            let sheetTop = screenHeight - (isExpanded ? expandedHeight : collapsedHeight)
+            let surfaceHeight = screenHeight + expandedHeight
             let cardWidth = min(geometry.size.width * 0.67, screenHeight * 0.32)
 
             ZStack(alignment: .bottom) {
@@ -70,15 +66,18 @@ struct ArtworkScanDetailView: View {
                     animationSequence: animationSequence
                 )
                 .rotationEffect(.degrees(-4))
-                .scaleEffect(1 - 0.14 * expansion)
-                .position(x: geometry.size.width / 2, y: screenHeight * (0.455 - 0.075 * expansion))
+                .scaleEffect(isExpanded ? 0.86 : 1)
+                .position(x: geometry.size.width / 2, y: screenHeight * (isExpanded ? 0.38 : 0.455))
+                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: isExpanded)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
 
                 if showsDetails {
-                    infoSheet(height: sheetHeight)
+                    infoSheet(contentHeight: expandedHeight, surfaceHeight: surfaceHeight)
+                        .modifier(ArtworkDetailsSheetDrag(isExpanded: $isExpanded, onDismiss: dismiss))
                         .padding(.horizontal, geometry.size.width * 0.032)
-                        .transition(.move(edge: .bottom))
+                        .position(x: geometry.size.width / 2, y: sheetTop + surfaceHeight / 2)
+                        .transition(.offset(y: collapsedHeight))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -86,13 +85,12 @@ struct ArtworkScanDetailView: View {
         .transition(.opacity)
     }
 
-    private func infoSheet(height: CGFloat) -> some View {
+    private func infoSheet(contentHeight: CGFloat, surfaceHeight: CGFloat) -> some View {
         let shape = UnevenRoundedRectangle(topLeadingRadius: 42, topTrailingRadius: 42)
-        let drag = sheetDrag
 
         return VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(Self.snapAnimation) {
+                withAnimation(ArtworkDetailsSheetDrag.settleAnimation) {
                     isExpanded.toggle()
                 }
             } label: {
@@ -106,7 +104,6 @@ struct ArtworkScanDetailView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isExpanded ? Text("Collapse artwork details") : Text("Expand artwork details"))
-            .gesture(drag, including: isExpanded ? .all : .subviews)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -148,45 +145,34 @@ struct ArtworkScanDetailView: View {
             }
             .scrollIndicators(.hidden)
             .scrollDisabled(!isExpanded)
-            .id(isExpanded)
+            .scrollPosition($descriptionScrollPosition)
+            .onChange(of: isExpanded) { _, isExpanded in
+                if !isExpanded {
+                    withAnimation(ArtworkDetailsSheetDrag.settleAnimation) {
+                        descriptionScrollPosition.scrollTo(edge: .top)
+                    }
+                }
+            }
         }
-        .frame(height: height, alignment: .top)
+        .frame(height: contentHeight)
+        // Keep the panel below the viewport throughout the drag without resizing the scroll view.
+        .frame(height: surfaceHeight, alignment: .top)
         .background {
             shape.fill(
                 LinearGradient(
                     colors: [Color(hex: "232323"), Color(hex: "151515")],
                     startPoint: .top,
-                    endPoint: .bottom
+                    endPoint: UnitPoint(x: 0.5, y: surfaceHeight > 0 ? contentHeight / surfaceHeight : 1)
                 )
             )
         }
         .overlay {
             shape.strokeBorder(.white.opacity(0.5), lineWidth: 1.5)
-                // Extend the side borders to the screen edge while clipping the bottom stroke.
-                .padding(.bottom, -3)
                 .allowsHitTesting(false)
         }
         .clipShape(shape)
         .shadow(color: .black.opacity(0.45), radius: 20, y: -4)
-        .gesture(drag, including: isExpanded ? .subviews : .all)
         .accessibilityAction(.escape, dismiss)
-    }
-
-    private var sheetDrag: some Gesture {
-        DragGesture(coordinateSpace: .global)
-            .updating($dragOffset) { value, offset, _ in
-                offset = value.translation.height
-            }
-            .onEnded { value in
-                let travel = value.predictedEndTranslation.height
-                if !isExpanded && travel > 90 {
-                    dismiss()
-                } else if (isExpanded && travel > 60) || (!isExpanded && travel < -55) {
-                    withAnimation(Self.snapAnimation) {
-                        isExpanded.toggle()
-                    }
-                }
-            }
     }
 
     private func dismiss() {

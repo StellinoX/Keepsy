@@ -1,5 +1,13 @@
 import SwiftUI
 
+struct AlbumArtworkBoundsKey: PreferenceKey {
+    static var defaultValue: [String: Anchor<CGRect>] { [:] }
+
+    static func reduce(value: inout [String: Anchor<CGRect>], nextValue: () -> [String: Anchor<CGRect>]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, latest in latest })
+    }
+}
+
 struct AlbumCardCell: View {
     let name: String
     let index: Int
@@ -28,6 +36,7 @@ struct AlbumCardCell: View {
                         isRevealed: isRevealed,
                         goldBorder: borderGrad
                     )
+                    .anchorPreference(key: AlbumArtworkBoundsKey.self, value: .bounds) { [name: $0] }
                     .opacity(cardOpacity)
 
                     if !(isAnimating && hidePocket) {

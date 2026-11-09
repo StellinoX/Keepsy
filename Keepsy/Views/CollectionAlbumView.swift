@@ -33,8 +33,6 @@ struct CollectionAlbumView: View {
     @State private var recentlyCompletedPack: [String] = []
     @State private var animatedCompletedCards: Set<String> = []
     @State private var flyingStickerName: String?
-    @State private var flyingStickerFrame: CGRect = .zero
-    @State private var landingPocketFrame: CGRect?
     @State private var stickerIntroTask: Task<Void, Never>?
     @State private var frameTracker = FrameTracker()
 
@@ -266,10 +264,10 @@ struct CollectionAlbumView: View {
                                 recentlyCompletedPack: recentlyCompletedPack,
                                 animatedCompletedCards: animatedCompletedCards,
                                 hasSyncedWithCloud: hasSyncedWithCloud,
-                                animatingCardName: flyingStickerName ?? animatingCardName,
-                                cellCardOpacity: flyingStickerName == nil ? cellCardOpacity : 0,
+                                animatingCardName: animatingCardName,
+                                cellCardOpacity: cellCardOpacity,
                                 animationPhase: animationPhase,
-                                hideCellPocket: hideCellPocket || landingPocketFrame != nil,
+                                hideCellPocket: hideCellPocket,
                                 frameTracker: frameTracker,
                                 columns: columns
                             ) { name, f in
@@ -345,13 +343,11 @@ struct CollectionAlbumView: View {
                             .allowsHitTesting(false)
                         }
                         .frame(width: sheetWidth)
-                        .overlay(alignment: .top) {
+                        .overlayPreferenceValue(AlbumArtworkBoundsKey.self) { artworkBounds in
                             if !recentlyCompletedPack.isEmpty {
-                                GeometryReader { header in
-                                    stagedStickers(in: header.frame(in: .named("root")))
+                                GeometryReader { overlay in
+                                    stagedStickers(in: overlay, artworkBounds: artworkBounds)
                                 }
-                                .frame(height: headerHeight)
-                                .offset(y: offsetY)
                                 .allowsHitTesting(false)
                                 .accessibilityHidden(true)
                                 .transition(.identity)
@@ -855,15 +851,13 @@ struct CollectionAlbumView: View {
         return CGRect(x: x, y: y, width: width, height: height)
     }
 
-    private func stagedStickers(in header: CGRect) -> some View {
+    private func stagedStickers(in overlay: GeometryProxy, artworkBounds: [String: Anchor<CGRect>]) -> some View {
         ZStack(alignment: .topLeading) {
             ForEach(Array(recentlyCompletedPack.enumerated()), id: \.element) { index, name in
                 if !animatedCompletedCards.contains(name) {
                     let isFlying = flyingStickerName == name
-                    let origin = stagingFrame(at: index, in: header.width)
-                    let destination = isFlying
-                        ? flyingStickerFrame.offsetBy(dx: -header.minX, dy: -header.minY)
-                        : origin
+                    let origin = stagingFrame(at: index, in: overlay.size.width).offsetBy(dx: 0, dy: offsetY)
+                    let destination = artworkBounds[name].map { overlay[$0] } ?? origin
                     ArtworkCardFrontView(
                         name: name,
                         title: CardDatabase.remoteArtworks[name]?.title ?? CardDatabase.cleanedArtworkName(name),
@@ -883,15 +877,6 @@ struct CollectionAlbumView: View {
                     .zIndex(isFlying ? 1 : 0)
                 }
             }
-
-            if let frame = landingPocketFrame {
-                Image("pocket_outline")
-                    .resizable()
-                    .frame(width: frame.width, height: frame.height)
-                    .position(x: frame.midX - header.minX, y: frame.midY - header.minY)
-                    .transition(.identity)
-                    .zIndex(2)
-            }
         }
     }
 
@@ -900,7 +885,6 @@ struct CollectionAlbumView: View {
             recentlyCompletedPack = []
             animatedCompletedCards = []
             flyingStickerName = nil
-            landingPocketFrame = nil
         }
 
         try await waitForStickerIntro(.milliseconds(380))
@@ -916,26 +900,15 @@ struct CollectionAlbumView: View {
                 proxy.scrollTo(name, anchor: anchor)
             }
             try await waitForStickerIntro(.milliseconds(500))
-            if visibleStickerSlot(for: name) == nil {
+            if !isStickerSlotVisible(name) {
                 proxy.scrollTo(name, anchor: anchor)
                 try await waitForStickerIntro(.milliseconds(150))
             }
-            guard let cell = visibleStickerSlot(for: name) else { return }
-
-            // Match the card and pocket positions in AlbumCardCell.
-            let cardTop = cell.minY + (cell.height - 99) / 2
-            let destination = CGRect(
-                x: cell.midX - stickerSize.width / 2,
-                y: cardTop,
-                width: stickerSize.width,
-                height: stickerSize.height
-            )
+            guard revealedCards.contains(name), isStickerSlotVisible(name) else { return }
             liftFeedback.impactOccurred()
             landingFeedback.prepare()
             withAnimation(.easeInOut(duration: flightDuration)) {
                 flyingStickerName = name
-                flyingStickerFrame = destination
-                landingPocketFrame = CGRect(x: cell.minX, y: cardTop + 5, width: 72, height: 94)
             }
             try await waitForStickerIntro(.seconds(flightDuration))
 
@@ -945,7 +918,6 @@ struct CollectionAlbumView: View {
             withTransaction(transaction) {
                 animatedCompletedCards.insert(name)
                 flyingStickerName = nil
-                landingPocketFrame = nil
             }
             let remaining = (UserDefaults.standard.stringArray(forKey: completedPackKey) ?? []).filter { $0 != name }
             if remaining.isEmpty {
@@ -961,13 +933,10 @@ struct CollectionAlbumView: View {
         try await revealSpecialCardIfNeeded(proxy: proxy)
     }
 
-    private func visibleStickerSlot(for name: String) -> CGRect? {
+    private func isStickerSlotVisible(_ name: String) -> Bool {
+        guard let cell = frameTracker.cellFrames[name] else { return false }
         let headerBottom = max(pinY, defaultY + scrollOffset) + headerHeight
-        guard let cell = frameTracker.cellFrames[name],
-              cell.midY >= headerBottom,
-              cell.midY < screenSize.height
-        else { return nil }
-        return cell
+        return cell.midY >= headerBottom && cell.midY < screenSize.height
     }
 
     private func waitForStickerIntro(_ duration: Duration) async throws {

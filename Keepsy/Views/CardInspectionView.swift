@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct CardInspectionView: View {
     let card: ArtworkCard
@@ -36,12 +37,7 @@ struct CardInspectionView: View {
         self._animateContent = State(initialValue: skipEntranceAnimation)
     }
 
-    enum SheetState {
-        case collapsed
-        case expanded
-    }
-    @State private var sheetState: SheetState = .collapsed
-    @State private var miniSheetDrag: CGFloat = 0
+    @State private var isSheetExpanded = false
     @State private var showFullDetail: Bool = false
 
     private var isSpecialCard: Bool {
@@ -86,7 +82,8 @@ struct CardInspectionView: View {
         if card.name.contains("_experience") || card.name == "vale" {
             if !isCollectionCompleteFor(card.name) { return "Locked" }
             if card.name == "vale" { return "Valentina" }
-            if card.name == "prado_experience" { return "Puoya" }
+            if card.name == "prado_experience" { return "Alicia" }
+            if card.name == "uffizi_experience" { return "Puoya" }
             return "Keepsy Collection"
         }
         return artwork?.artist ?? "Unknown Artist"
@@ -170,10 +167,10 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                 cornerRadius: 24
                             )
                             .gyroscopicCardMotion()
-                            .scaleEffect(sheetState == .expanded ? 0.85 : 1.0)
+                            .scaleEffect(isSheetExpanded ? 0.85 : 1.0)
                             .position(x: geometry.size.width / 2, y: cardTopY + cardH / 2)
-                            .offset(y: sheetState == .expanded ? -30 : 0)
-                            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: sheetState)
+                            .offset(y: isSheetExpanded ? -30 : 0)
+                            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: isSheetExpanded)
                         } else {
                             ArtworkCardFrontView(
                                 name: card.name,
@@ -193,21 +190,16 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                 }
                             }
                             .position(x: geometry.size.width / 2, y: cardTopY + cardH / 2)
-                            .scaleEffect(sheetState == .expanded ? 0.85 : 1.0)
-                            .offset(y: sheetState == .expanded ? -30 : 0)
-                            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: sheetState)
+                            .scaleEffect(isSheetExpanded ? 0.85 : 1.0)
+                            .offset(y: isSheetExpanded ? -30 : 0)
+                            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: isSheetExpanded)
                             .opacity(1.0)
                         }
 
                         // Mini-sheet
                         let collapsedY = screenHeight - sheetPeekHeight
                         let expandedY: CGFloat = 135
-                        let sheetY: CGFloat = {
-                            switch sheetState {
-                            case .collapsed: return collapsedY
-                            case .expanded:  return expandedY
-                            }
-                        }()
+                        let sheetY = isSheetExpanded ? expandedY : collapsedY
                         let sheetHeight: CGFloat = screenHeight * 0.90
 
                         VStack(spacing: 0) {
@@ -250,7 +242,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                 .padding(.horizontal, 24)
                                 .padding(.bottom, 40)
                             }
-                            .scrollDisabled(sheetState != .expanded)
+                            .scrollDisabled(!isSheetExpanded)
                         }
                         .frame(width: geometry.size.width, height: sheetHeight)
                         .background(
@@ -267,38 +259,9 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                 )
                         )
                         .shadow(color: .black.opacity(0.5), radius: 30, x: 0, y: -4)
-                        .position(x: geometry.size.width / 2, y: sheetY + miniSheetDrag + sheetHeight / 2)
+                        .modifier(ArtworkDetailsSheetDrag(isExpanded: $isSheetExpanded, onDismiss: closeAction))
+                        .position(x: geometry.size.width / 2, y: sheetY + sheetHeight / 2)
                         .offset(y: animateSheet ? 0 : screenHeight)
-                        .gesture(
-                            DragGesture()
-                                .onChanged { v in
-                                    let trans = v.translation.height
-                                    if sheetState == .expanded && trans < 0 {
-                                        // Elastic rubber-banding above the expanded top limit
-                                        miniSheetDrag = -log(1 + abs(trans)) * 10
-                                    } else {
-                                        miniSheetDrag = trans
-                                    }
-                                }
-                                .onEnded { v in
-                                    let drag = v.translation.height
-                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
-                                        miniSheetDrag = 0
-                                        if sheetState == .collapsed {
-                                            if drag < -60 {
-                                                sheetState = .expanded
-                                            } else if drag > 60 {
-                                                closeAction()
-                                            }
-                                        } else {
-                                            // sheetState == .expanded
-                                            if drag > 100 {
-                                                sheetState = .collapsed
-                                            }
-                                        }
-                                    }
-                                }
-                        )
                     }
 
                 } else {
@@ -413,7 +376,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
 
     private func closeAction() {
         HapticManager.shared.triggerImpact(style: .light)
-        sheetState = .collapsed
+        isSheetExpanded = false
         if isZoomingFromAlbum {
             onClose()
         } else {
@@ -433,6 +396,121 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
 
     private var currentRotation: Double {
         accumulatedRotation
+    }
+}
+
+struct ArtworkDetailsSheetDrag: ViewModifier {
+    static let settleAnimation = Animation.spring(response: 0.4, dampingFraction: 0.82)
+
+    @Binding var isExpanded: Bool
+    let onDismiss: () -> Void
+
+    @State private var dragOffset: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .gesture(ArtworkDetailsSheetPan(
+                isExpanded: isExpanded,
+                onChange: trackDrag,
+                onEnd: endDrag
+            ))
+            .offset(y: dragOffset)
+    }
+
+    private func trackDrag(_ travel: CGFloat) {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            dragOffset = isExpanded && travel < 0 ? -log1p(-travel / 10) * 10 : travel
+        }
+    }
+
+    private func endDrag(_ travel: CGFloat?) {
+        if let travel, !isExpanded && travel > 60 {
+            onDismiss()
+            return
+        }
+        withAnimation(Self.settleAnimation) {
+            dragOffset = 0
+            if let travel {
+                if isExpanded && travel > 100 {
+                    isExpanded = false
+                } else if !isExpanded && travel < -60 {
+                    isExpanded = true
+                }
+            }
+        }
+    }
+}
+
+private struct ArtworkDetailsSheetPan: UIGestureRecognizerRepresentable {
+    let isExpanded: Bool
+    let onChange: (CGFloat) -> Void
+    let onEnd: (CGFloat?) -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let pan = UIPanGestureRecognizer()
+        pan.maximumNumberOfTouches = 1
+        pan.delegate = context.coordinator
+        return pan
+    }
+
+    func updateUIGestureRecognizer(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        context.coordinator.isExpanded = isExpanded
+    }
+
+    func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
+        // The window stays fixed while the panel moves underneath the finger.
+        let travel = pan.translation(in: pan.view?.window).y
+        switch pan.state {
+        case .began, .changed:
+            onChange(travel)
+        case .ended:
+            onEnd(travel)
+        case .cancelled, .failed:
+            onEnd(nil)
+        default:
+            break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var isExpanded = false
+        private weak var touchedScrollView: UIScrollView?
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            touchedScrollView = nil
+            var view = touch.view
+            while let candidate = view {
+                if let scrollView = candidate as? UIScrollView {
+                    touchedScrollView = scrollView
+                    break
+                }
+                if candidate === gestureRecognizer.view { break }
+                view = candidate.superview
+            }
+            return true
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+            let direction = pan.velocity(in: pan.view?.window)
+            guard abs(direction.y) > abs(direction.x) else { return false }
+            guard isExpanded, let scrollView = touchedScrollView else { return true }
+            return direction.y > 0 && scrollView.contentOffset.y <= 1 - scrollView.adjustedContentInset.top
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            // Let the panel decide first. It declines drags that should scroll the text.
+            otherGestureRecognizer === touchedScrollView?.panGestureRecognizer
+        }
     }
 }
 
