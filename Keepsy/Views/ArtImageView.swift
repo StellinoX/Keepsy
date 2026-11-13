@@ -21,7 +21,9 @@ struct ArtImageView: View {
     
     var body: some View {
         Group {
-            if let img = localImage {
+            if cardName == "uffizi_experience" {
+                KeepsyCardPlaceholderView()
+            } else if let img = localImage {
                 if cardName.contains("_experience") || cardName == "vale" {
                     SpecialCardImageView(image: img)
                 } else {
@@ -131,4 +133,3 @@ struct ArtImageView: View {
         .id(cardName)
     }
 }
-

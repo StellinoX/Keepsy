@@ -39,6 +39,36 @@ struct SpecialCardImageView: View {
     }
 }
 
+/// Temporary face used when a museum's special card artwork is not ready yet.
+struct KeepsyCardPlaceholderView: View {
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color(hex: "0D0D0F")
+
+                Image("LogoKeepsy")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(
+                        width: geometry.size.width * 0.39,
+                        height: geometry.size.width * 0.39
+                    )
+
+                RoundedRectangle(cornerRadius: max(3, geometry.size.width * 0.027))
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color(hex: "FF9000"), Color(hex: "FF5100")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: max(2, geometry.size.width / 60)
+                    )
+            }
+            .clipShape(RoundedRectangle(cornerRadius: max(3, geometry.size.width * 0.027)))
+        }
+    }
+}
+
 private extension CGImage {
     func visibleCardBounds() -> CGRect? {
         let bytesPerRow = width * 4

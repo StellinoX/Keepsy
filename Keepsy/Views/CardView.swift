@@ -109,25 +109,7 @@ struct SpecialCardLockedBackView: View {
             } else if cardName == "prado_experience" {
                 SpecialCardImageView(image: UIImage(named: "prado_locked"))
             } else {
-                ZStack {
-                    Color(hex: "0D0D0F")
-
-                    Image("LogoKeepsy")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: width * 0.39, height: width * 0.39)
-
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color(hex: "FF9000"), Color(hex: "FF5100")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: max(2, width / 60)
-                        )
-                }
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                KeepsyCardPlaceholderView()
             }
         }
         .frame(width: width, height: height)
@@ -178,7 +160,6 @@ struct ArtworkCardFrontView: View {
 
             // 1. Full-bleed image
             ArtImageView(cardName: name, isRevealed: isRevealed)
-                .aspectRatio(contentMode: .fill)
                 .frame(width: width, height: height)
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: isSpecialCard ? 0 : cr))
@@ -194,7 +175,7 @@ struct ArtworkCardFrontView: View {
                         .multilineTextAlignment(.leading)
                         .padding(.horizontal, 5 * scale)
                         .padding(.vertical, 3 * scale)
-                        .frame(width: 105 * scale)
+                        .frame(width: 105 * scale, alignment: .leading)
                         .frame(minHeight: 19 * scale, alignment: .leading)
                         .background(
                             RoundedRectangle(cornerRadius: 3 * scale)
