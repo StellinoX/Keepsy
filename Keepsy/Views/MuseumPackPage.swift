@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MuseumPackPage: View {
-    let museum: Museum
+    let pack: CarouselPack
     let revealedCards: Set<String>
     let isScrolling: Bool
     let onTapActivePack: () -> Void
@@ -9,19 +9,14 @@ struct MuseumPackPage: View {
 
     @State private var savedTearMask: UIImage? = nil
 
-    private var packetImage: String {
-        museum.packetImageName
-    }
-
     private var activePack: [String]? {
-        guard CardDatabase.hasActivePack(for: museum.id),
-              let pack = CardDatabase.getActivePack(for: museum.id),
-              !pack.isEmpty else { return nil }
-        return pack
+        guard let cards = CardDatabase.getActivePack(for: pack.id),
+              !cards.isEmpty else { return nil }
+        return cards
     }
 
     private var isComplete: Bool {
-        let artworks = CardDatabase.artworksFor(location: museum.id)
+        let artworks = CardDatabase.artworksFor(location: pack.id)
         return !artworks.isEmpty && artworks.allSatisfy { revealedCards.contains($0) }
     }
 
@@ -31,8 +26,8 @@ struct MuseumPackPage: View {
                 if let activePack = activePack {
                     let firstCardName = activePack[0]
                     SceneKitPacketView(interactive: false, isTorn: true,
-                                       museumId: museum.id,
-                                       packetImageName: packetImage,
+                                       museumId: pack.id,
+                                       packetImageName: pack.packetImageName,
                                        firstCardName: firstCardName,
                                        isFirstCardRevealed: revealedCards.contains(firstCardName),
                                        tearMaskImage: savedTearMask,
@@ -42,20 +37,20 @@ struct MuseumPackPage: View {
                         .contentShape(Rectangle())
                         .onTapGesture { onTapActivePack() }
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("\(museum.name) pack, in progress")
+                        .accessibilityLabel("\(pack.name) pack, in progress")
                         .accessibilityHint("Double-tap to continue opening pack")
                         .accessibilityAddTraits(.isButton)
                 } else {
                     SceneKitPacketView(interactive: false, isTorn: false,
-                                       museumId: museum.id,
-                                       packetImageName: packetImage,
+                                       museumId: pack.id,
+                                       packetImageName: pack.packetImageName,
                                        isScrolling: isScrolling)
                         .frame(width: 380, height: 515)
                         .shadow(color: .black.opacity(0.55), radius: 30, x: 0, y: 15)
                         .contentShape(Rectangle())
                         .onTapGesture { onTapStart() }
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(isComplete ? "\(museum.name) pack, collection complete" : "\(museum.name) card pack")
+                        .accessibilityLabel(isComplete ? "\(pack.name) pack, collection complete" : "\(pack.name) card pack")
                         .accessibilityHint(isComplete ? "" : "Double-tap to open pack")
                         .accessibilityAddTraits(isComplete ? .isStaticText : .isButton)
                 }
@@ -75,8 +70,7 @@ struct MuseumPackPage: View {
             }
         }
         .onAppear {
-            if let data = UserDefaults.standard.data(forKey: "activePackTearMask_\(museum.id)")
-                ?? UserDefaults.standard.data(forKey: "activePackTearMask") {
+            if let data = CardDatabase.activePackTearMask(for: pack.id) {
                 savedTearMask = UIImage(data: data)
             }
         }

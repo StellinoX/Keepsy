@@ -12,13 +12,16 @@ struct SingleScrollPackView: View {
 
     @State private var revealedCards: Set<String> = []
 
-    private var museums: [Museum] {
-        locationManager.sortedMuseums(MuseumConfig.shared.museums)
+    private var packs: [CarouselPack] {
+        locationManager.sortedMuseums(MuseumConfig.shared.museums).map { museum in
+            CarouselPack(id: museum.id, name: museum.name, packetImageName: museum.packetImageName)
+        } + [MuseumConfig.fareImpresa]
     }
 
-    private var activePackMuseum: String? {
-        guard CardDatabase.hasActivePack() else { return nil }
-        return UserDefaults.standard.string(forKey: "currentCity") ?? museums.first?.id
+    private func openAlbum(_ id: String) {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+            activeView = .collection(id)
+        }
     }
 
     private var displayedCity: String {
@@ -60,8 +63,10 @@ struct SingleScrollPackView: View {
                     .accessibilityHint("Double-tap to change museum")
                     .accessibilityAddTraits(.isButton)
 
+                let isSelectedActive = CardDatabase.hasActivePack(for: selectedMuseumId)
+
                 MuseumPackCarousel(
-                    museums: museums,
+                    packs: packs,
                     revealedCards: revealedCards,
                     selectedMuseumId: $selectedMuseumId,
                     onTapActivePack: onTapActivePack,
@@ -69,7 +74,6 @@ struct SingleScrollPackView: View {
                 )
                 .frame(height: 400)
 
-                let isSelectedActive = CardDatabase.hasActivePack(for: selectedMuseumId)
                 Button(action: isSelectedActive ? onTapActivePack : onStart) {
                     Text(isSelectedActive ? "CONTINUE" : "START")
                         .font(.custom("Helvetica-BoldOblique", size: 18))
@@ -87,20 +91,15 @@ struct SingleScrollPackView: View {
                 .padding(.top, 25)
                 .padding(.bottom, 36)
                 .accessibilityLabel(isSelectedActive ? "Continue pack" : "Start new pack")
-                .accessibilityHint(isSelectedActive ? "Returns to cards in active pack" : "Opens a new card pack from \(displayedCity)")
+                .accessibilityHint(isSelectedActive ? "Returns to cards in active pack" : "Opens a new card pack")
 
                 VStack(spacing: 14) {
-                    ForEach(museums) { museum in
-                        let info = progressFor(museum.id)
+                    ForEach(packs) { pack in
                         PackExpansionRow(
-                            museumId: museum.id,
-                            title: museum.name,
-                            progress: info.progress,
-                            onTap: {
-                                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                                    activeView = .collection(museum.id)
-                                }
-                            }
+                            museumId: pack.id,
+                            title: pack.name,
+                            progress: progressFor(pack.id).progress,
+                            onTap: { openAlbum(pack.id) }
                         )
                     }
                 }

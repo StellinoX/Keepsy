@@ -64,7 +64,7 @@ struct PackOpeningView: View {
         ZStack {
             SceneKitPacketView(
                 museumId: selectedMuseumId,
-                packetImageName: MuseumConfig.shared.museums.first(where: { $0.id == selectedMuseumId })?.packetImageName ?? "uffizi_pacchetto",
+                packetImageName: MuseumConfig.shared.packetImageName(for: selectedMuseumId) ?? "uffizi_pacchetto",
                 // raised = pacchetto ANCORA in alto (preview): contenuto 3D centrato a scala 1.0,
                 // identico a come lo incornicia il rullo → all'handoff non c'è scatto/zoom improvviso.
                 // Quando si abbassa (lowered), passa alla cornice "tearing" (shiftato + 1.18).
@@ -200,7 +200,7 @@ struct PackOpeningView: View {
                                 // Riga 1: carte 0,1,2
                                 HStack(spacing: 12) {
                                     ForEach(0..<min(3, cards.count), id: \.self) { index in
-                                        CardView(card: $cards[index], cardIndex: CardDatabase.remoteArtworks[cards[index].name]?.cardNumber) {
+                                        CardView(card: $cards[index], cardIndex: CardDatabase.cardNumber(for: cards[index].name)) {
                                             handleCardTap(index: index)
                                         }
                                         .id(cards[index].id)
@@ -221,8 +221,8 @@ struct PackOpeningView: View {
                                 }
                                 // Riga 2: carte 3,4
                                 HStack(spacing: 12) {
-                                    ForEach(3..<min(5, cards.count), id: \.self) { index in
-                                        CardView(card: $cards[index], cardIndex: CardDatabase.remoteArtworks[cards[index].name]?.cardNumber) {
+                                    ForEach(3..<max(3, min(5, cards.count)), id: \.self) { index in
+                                        CardView(card: $cards[index], cardIndex: CardDatabase.cardNumber(for: cards[index].name)) {
                                             handleCardTap(index: index)
                                         }
                                         .id(cards[index].id)
@@ -439,7 +439,7 @@ struct PackOpeningView: View {
             UserDefaults.standard.set(newValue, forKey: "lastSelectedMuseumId")
         }
         .onChange(of: locationManager.lastKnownLocation) { _, newLocation in
-            guard newLocation != nil else { return }
+            guard newLocation != nil, packState == .selecting, selectedMuseumId != MuseumConfig.fareImpresa.id else { return }
             // Auto-select the closest museum if there is no active pack in progress
             if !CardDatabase.hasActivePack(),
                let closest = locationManager.closestMuseum(from: MuseumConfig.shared.museums) {
@@ -451,6 +451,8 @@ struct PackOpeningView: View {
             if CardDatabase.hasActivePack(),
                let activeMuseum = UserDefaults.standard.string(forKey: "currentCity") {
                 selectedMuseumId = activeMuseum
+            } else if UserDefaults.standard.string(forKey: "lastSelectedMuseumId") == MuseumConfig.fareImpresa.id {
+                selectedMuseumId = MuseumConfig.fareImpresa.id
             } else if let closest = locationManager.closestMuseum(from: MuseumConfig.shared.museums) {
                 selectedMuseumId = closest.id
             } else if let lastSelected = UserDefaults.standard.string(forKey: "lastSelectedMuseumId") {
@@ -543,12 +545,11 @@ struct PackOpeningView: View {
         cardOpacity = Array(repeating: 0, count: 5)
         cardRotation = finalRotations
 
-        let revealOrder: [Int] = [0, 3, 1, 4, 2]
+        let revealOrder = [0, 3, 1, 4, 2].filter { cards.indices.contains($0) }
         let stagger = 0.14
         let baseDelay = 0.12
 
-        for seq in 0..<min(5, cards.count) {
-            let i = revealOrder[seq]
+        for (seq, i) in revealOrder.enumerated() {
             let delay = baseDelay + Double(seq) * stagger
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 guard cards.first?.id == firstCardID else { return }
@@ -630,7 +631,7 @@ struct PackOpeningView: View {
         }
         // Traccia doppie PRIMA di aggiungere a foundCards, altrimenti tutte risultano doppie.
         // Scrivi SEMPRE (anche vuoto) per non ereditare doppie stale dal pack precedente.
-        let duplicates = CardDatabase.trackDuplicates(in: selectedArtworks)
+        let duplicates = CardDatabase.trackDuplicates(in: selectedArtworks, for: selectedMuseumId)
         UserDefaults.standard.set(duplicates, forKey: "activePackDuplicates_\(selectedMuseumId)")
 
         CardDatabase.addFoundCards(selectedArtworks)

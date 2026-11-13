@@ -64,6 +64,16 @@ struct CardDatabaseStateTests {
         #expect(CardDatabase.trackDuplicates(in: ["r"]) == ["r"])
     }
 
+    @Test func fareImpresaCountsOnlyScannedCardsAsDuplicates() {
+        CardDatabase.addFoundCards(["fare-impresa-01"])
+        CardDatabase.addRevealedCard("fare-impresa-02")
+
+        let duplicates = CardDatabase.trackDuplicates(
+            in: ["fare-impresa-01", "fare-impresa-02"], for: MuseumConfig.fareImpresa.id
+        )
+        #expect(duplicates == ["fare-impresa-02"])
+    }
+
     // MARK: - Active pack accessors
 
     @Test func getActivePackNilWhenNone() {
@@ -79,6 +89,26 @@ struct CardDatabaseStateTests {
 
     @Test func getActivePackFallsBackToLegacyKey() {
         UserDefaults.standard.set(["legacy"], forKey: "activePackCards")
+        #expect(CardDatabase.getActivePack(for: city) == ["legacy"])
+    }
+
+    @Test func fareImpresaRequiresItsOwnActivePack() {
+        let catalogID = MuseumConfig.fareImpresa.id
+        TestSupport.resetState(city: catalogID)
+        defer { TestSupport.resetState(city: catalogID) }
+
+        let defaults = UserDefaults.standard
+        defaults.set(["legacy"], forKey: "activePackCards")
+        defaults.set(["fare-impresa-01"], forKey: "activePackDuplicates")
+        defaults.set(Data([0]), forKey: "activePackTearMask")
+        #expect(CardDatabase.getActivePack(for: catalogID) == nil)
+        #expect(CardDatabase.activePackTearMask(for: catalogID) == nil)
+
+        defaults.set(["fare-impresa-01"], forKey: "activePackCards_\(catalogID)")
+        #expect(!CardDatabase.isActivePackAllDuplicates(for: catalogID))
+        CardDatabase.addRevealedCard("fare-impresa-01")
+        CardDatabase.clearActivePackIfNeeded(for: catalogID)
+        #expect(CardDatabase.getActivePack(for: catalogID) == nil)
         #expect(CardDatabase.getActivePack(for: city) == ["legacy"])
     }
 

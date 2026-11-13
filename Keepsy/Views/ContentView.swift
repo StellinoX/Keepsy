@@ -127,12 +127,11 @@ struct ContentView: View {
     }
 
     private func prefetchAllImages() async {
-        let museums = MuseumConfig.shared.museums.map { $0.id }
         var allMissing: [String] = []
         
-        for museum in museums {
-            let artworks = CardDatabase.artworksFor(location: museum)
-            let downloaded = CardDatabase.downloadedArtworkNames(for: museum)
+        for catalogID in MuseumConfig.shared.artworkCatalogIDs {
+            let artworks = CardDatabase.artworksFor(location: catalogID)
+            let downloaded = CardDatabase.downloadedArtworkNames(for: catalogID)
             let missing = artworks.filter { !downloaded.contains($0) }
             allMissing.append(contentsOf: missing)
         }

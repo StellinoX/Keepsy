@@ -146,7 +146,7 @@ struct ArtworkCardFrontView: View {
 
     private var scale: CGFloat { width / 111.0 }
     private var cr: CGFloat { 3 * scale }
-    private var artwork: NetworkArtwork? { CardDatabase.remoteArtworks[name] }
+    private var artwork: NetworkArtwork? { CardDatabase.artwork(for: name) }
     private var isSpecialCard: Bool { name.contains("_experience") || name == "vale" }
 
     var body: some View {
@@ -160,6 +160,7 @@ struct ArtworkCardFrontView: View {
 
             // 1. Full-bleed image
             ArtImageView(cardName: name, isRevealed: isRevealed)
+                .padding(.bottom, CardDatabase.fareImpresaPhotoNames.contains(name) ? 24 * scale : 0)
                 .frame(width: width, height: height)
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: isSpecialCard ? 0 : cr))

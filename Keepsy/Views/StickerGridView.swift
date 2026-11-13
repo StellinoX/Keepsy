@@ -43,7 +43,7 @@ struct StickerGridView: View, Equatable {
     }
 
     private func cellLabel(name: String, index: Int) -> String {
-        let cardNum = CardDatabase.remoteArtworks[name]?.cardNumber ?? (index + 1)
+        let cardNum = CardDatabase.cardNumber(for: name) ?? (index + 1)
         let num = String(format: "%02d", cardNum)
         if revealedCards.contains(name) {
             let title = CardDatabase.remoteArtworks[name]?.title ?? CardDatabase.cleanedArtworkName(name)

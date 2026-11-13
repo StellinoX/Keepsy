@@ -4,7 +4,7 @@ import UIKit
 /// Hosts a fixed pool of pages. Only UIKit transforms change on animation frames;
 /// the home screen and the SceneKit content do not rebuild for every drag sample.
 struct MuseumPackCarousel: UIViewControllerRepresentable {
-    let museums: [Museum]
+    let packs: [CarouselPack]
     let revealedCards: Set<String>
     @Binding var selectedMuseumId: String
     let onTapActivePack: () -> Void
@@ -20,7 +20,7 @@ struct MuseumPackCarousel: UIViewControllerRepresentable {
         controller.onSelect = { selectedMuseumId = $0 }
         controller.onTapActivePack = onTapActivePack
         controller.onTapStart = onTapStart
-        controller.configure(museums: museums, revealedCards: revealedCards,
+        controller.configure(packs: packs, revealedCards: revealedCards,
                              selectedMuseumId: selectedMuseumId)
     }
 
@@ -35,10 +35,10 @@ final class MuseumPackCarouselController: UIViewController, UIGestureRecognizerD
     var onTapActivePack: (() -> Void)?
     var onTapStart: (() -> Void)?
 
-    private var museums: [Museum] = []
+    private var packs: [CarouselPack] = []
     private var revealedCards: Set<String> = []
     private var pages: [UIHostingController<MuseumPackPage>] = []
-    private var slotMuseums: [Museum] = []
+    private var slotPacks: [CarouselPack] = []
     private var rendering: [Bool] = []
     private var motion = PackCarouselMotion()
     private var displayLink: CADisplayLink?
@@ -54,10 +54,10 @@ final class MuseumPackCarouselController: UIViewController, UIGestureRecognizerD
         view.addGestureRecognizer(pan)
     }
 
-    func configure(museums: [Museum], revealedCards: Set<String>, selectedMuseumId: String) {
+    func configure(packs: [CarouselPack], revealedCards: Set<String>, selectedMuseumId: String) {
         loadViewIfNeeded()
-        let orderChanged = self.museums.map(\.id) != museums.map(\.id)
-        let poolChanged = Set(self.museums.map(\.id)) != Set(museums.map(\.id))
+        let orderChanged = self.packs.map(\.id) != packs.map(\.id)
+        let poolChanged = Set(self.packs.map(\.id)) != Set(packs.map(\.id))
         if poolChanged {
             stop()
             for page in pages {
@@ -66,16 +66,16 @@ final class MuseumPackCarouselController: UIViewController, UIGestureRecognizerD
                 page.removeFromParent()
             }
             pages.removeAll()
-            slotMuseums.removeAll()
+            slotPacks.removeAll()
             rendering.removeAll()
         }
-        self.museums = museums
+        self.packs = packs
         self.revealedCards = revealedCards
-        pan.isEnabled = museums.count > 1
+        pan.isEnabled = packs.count > 1
 
         if poolChanged {
-            for slot in 0..<PackCarouselMotion.slotCount(museumCount: museums.count) {
-                slotMuseums.append(museums[slot % museums.count])
+            for slot in 0..<PackCarouselMotion.slotCount(museumCount: packs.count) {
+                slotPacks.append(packs[slot % packs.count])
                 let page = UIHostingController(rootView: makePage(slot: slot, isScrolling: false))
                 page.safeAreaRegions = []
                 addChild(page)
@@ -91,9 +91,9 @@ final class MuseumPackCarouselController: UIViewController, UIGestureRecognizerD
 
         if orderChanged {
             stop()
-            motion.reset(to: museums.firstIndex(where: { $0.id == selectedMuseumId }) ?? 0)
-        } else if let index = museums.firstIndex(where: { $0.id == selectedMuseumId }) {
-            motion.select(index: index, museumCount: museums.count)
+            motion.reset(to: packs.firstIndex(where: { $0.id == selectedMuseumId }) ?? 0)
+        } else if let index = packs.firstIndex(where: { $0.id == selectedMuseumId }) {
+            motion.select(index: index, museumCount: packs.count)
         }
         refreshPages()
         layoutPages()
@@ -102,7 +102,7 @@ final class MuseumPackCarouselController: UIViewController, UIGestureRecognizerD
 
     private func makePage(slot: Int, isScrolling: Bool) -> MuseumPackPage {
         MuseumPackPage(
-            museum: slotMuseums[slot],
+            pack: slotPacks[slot],
             revealedCards: revealedCards,
             isScrolling: isScrolling,
             onTapActivePack: { [weak self] in self?.onTapActivePack?() },
@@ -126,10 +126,10 @@ final class MuseumPackCarouselController: UIViewController, UIGestureRecognizerD
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         for slot in pages.indices {
-            // A location update may reorder museums. Keep each scene attached to
-            // its museum and change only its physical place in the ring.
-            let museumIndex = museums.firstIndex(where: { $0.id == slotMuseums[slot].id }) ?? 0
-            let ringIndex = museumIndex + (slot / museums.count) * museums.count
+            // A location update may reorder packs. Keep each scene attached to
+            // its pack and change only its physical place in the ring.
+            let packIndex = packs.firstIndex(where: { $0.id == slotPacks[slot].id }) ?? 0
+            let ringIndex = packIndex + (slot / packs.count) * packs.count
             let distance = PackCarouselMotion.distance(slot: ringIndex, position: motion.position, slotCount: pages.count)
             let magnitude = abs(distance)
             let page = pages[slot].view!
@@ -155,7 +155,7 @@ final class MuseumPackCarouselController: UIViewController, UIGestureRecognizerD
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         let velocity = pan.velocity(in: view)
-        return museums.count > 1 && abs(velocity.x) > abs(velocity.y)
+        return packs.count > 1 && abs(velocity.x) > abs(velocity.y)
     }
 
     @objc private func dragged(_ gesture: UIPanGestureRecognizer) {
@@ -169,8 +169,8 @@ final class MuseumPackCarouselController: UIViewController, UIGestureRecognizerD
             motion.drag(translation: translation)
         case .ended:
             motion.endDrag(translation: translation, velocity: gesture.velocity(in: view).x)
-            let index = PackCarouselMotion.wrapped(motion.target, count: museums.count)
-            onSelect?(museums[index].id)
+            let index = PackCarouselMotion.wrapped(motion.target, count: packs.count)
+            onSelect?(packs[index].id)
             startDisplayLink()
         case .cancelled, .failed:
             motion.cancelDrag()

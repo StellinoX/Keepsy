@@ -57,8 +57,11 @@ struct PackExpansionRow: View {
         }
     }
 
-    private var fannedPacketsView: some View {
-        let imageName = MuseumConfig.shared.museums.first(where: { $0.id == museumId })?.packetImageName ?? "uffizi_pacchetto"
+    private var packetImageName: String? {
+        MuseumConfig.shared.packetImageName(for: museumId)
+    }
+
+    private func fannedPacketsView(imageName: String) -> some View {
         let ipadScale = (UIDevice.current.userInterfaceIdiom == .pad) ? 1.4 : 1.0
         return ZStack(alignment: .bottom) {
             Image(imageName)
@@ -99,9 +102,11 @@ struct PackExpansionRow: View {
                         )
                     )
 
-                Text(subtitle)
-                    .font(.custom("Helvetica-Oblique", size: 12))
-                    .foregroundStyle(Color.white.opacity(0.6))
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.custom("Helvetica-Oblique", size: 12))
+                        .foregroundStyle(Color.white.opacity(0.6))
+                }
             }
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top, 2)
@@ -125,14 +130,16 @@ struct PackExpansionRow: View {
     var body: some View {
         Button(action: onTap) {
             ZStack(alignment: .top) {
-                fannedPacketsView
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                if let packetImageName {
+                    fannedPacketsView(imageName: packetImageName)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                }
 
                 headerView
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
             }
-            .frame(height: 220)
+            .frame(height: packetImageName == nil ? 64 : 220)
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: 24)
@@ -147,7 +154,7 @@ struct PackExpansionRow: View {
         }
         .buttonStyle(PlainButtonStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title), \(subtitle)\(isComplete ? ", completed" : ", \(percentText) complete")")
+        .accessibilityLabel("\(title)\(subtitle.isEmpty ? "" : ", \(subtitle)")\(isComplete ? ", completed" : ", \(percentText) complete")")
         .accessibilityHint("Double-tap to view collection")
     }
 }

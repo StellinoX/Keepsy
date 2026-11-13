@@ -21,7 +21,7 @@ struct ARArtworkView: View {
     @State private var downloadProgress: String = "Downloading images..."
     
     // Proximity / Location variables
-    @State private var locationManager = LocationManager()
+    @State private var locationManager: LocationManager?
     @State private var carouselOffset: CGFloat = 2.0
     
     // Artwork reveal and details
@@ -36,13 +36,21 @@ struct ARArtworkView: View {
     
     private var isPresentingArtwork: Bool { presentedArtwork != nil }
 
+    private let activeCatalogID: String
+
+    init(activeView: Binding<ContentView.ActiveView>) {
+        _activeView = activeView
+        let catalogID = UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
+        activeCatalogID = catalogID
+        _locationManager = State(initialValue: catalogID == MuseumConfig.fareImpresa.id ? nil : LocationManager())
+    }
+
     var activeMuseum: Museum? {
-        let activeMuseumId = UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
-        return MuseumConfig.shared.museums.first(where: { $0.id == activeMuseumId })
+        MuseumConfig.shared.museums.first(where: { $0.id == activeCatalogID })
     }
     
     var isBlocked: Bool {
-        guard let museum = activeMuseum else { return false }
+        guard let museum = activeMuseum, let locationManager else { return false }
         
         if !locationManager.hasUsableLocation {
             return locationManager.authorizationStatus == .denied ||
@@ -53,7 +61,7 @@ struct ARArtworkView: View {
     }
     
     var distanceToActiveMuseum: CLLocationDistance? {
-        guard let museum = activeMuseum else { return nil }
+        guard let museum = activeMuseum, let locationManager else { return nil }
         return locationManager.distanceTo(museum: museum)
     }
 
@@ -93,7 +101,8 @@ struct ARArtworkView: View {
                             }
                         )
                         .ignoresSafeArea()
-                    } else if locationManager.lastKnownLocation == nil && locationManager.authorizationStatus != .denied && locationManager.authorizationStatus != .restricted {
+                    } else if let locationManager, locationManager.lastKnownLocation == nil,
+                              locationManager.authorizationStatus != .denied && locationManager.authorizationStatus != .restricted {
                         VStack(spacing: 20) {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -518,7 +527,7 @@ struct ARArtworkView: View {
         .onAppear {
             revealedCards = CardDatabase.getRevealedCards()
             duplicatesInPack = CardDatabase.getDuplicatesInActivePack()
-            locationManager.startHighAccuracyTracking()
+            locationManager?.startHighAccuracyTracking()
 
             if let active = CardDatabase.getActivePack(), !active.isEmpty {
                 let dupes = CardDatabase.getDuplicatesInActivePack()
@@ -550,19 +559,20 @@ struct ARArtworkView: View {
             }
         }
         .onDisappear {
-            locationManager.stopTracking()
+            locationManager?.stopTracking()
         }
         .task {
-            // Wait up to 1.5 seconds for location to resolve
-            for _ in 0..<15 {
-                if locationManager.hasUsableLocation || locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted {
-                    break
+            if let locationManager {
+                // Give museum scans up to 1.5 seconds to resolve the device location.
+                for _ in 0..<15 {
+                    if locationManager.hasUsableLocation || locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted {
+                        break
+                    }
+                    try? await Task.sleep(nanoseconds: 100_000_000)
                 }
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
             }
-            
-            // Now check if blocked
-            if !isBlocked {
+
+            if !Task.isCancelled && !isBlocked {
                 await checkAndDownloadImages()
             }
         }
@@ -581,9 +591,8 @@ struct ARArtworkView: View {
 }
 
     private func navigateToCollection() {
-        let activeCity = UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         withAnimation(.easeInOut(duration: 0.35)) {
-            activeView = .collection(activeCity)
+            activeView = .collection(activeCatalogID)
         }
     }
     
@@ -693,21 +702,15 @@ struct ARArtworkView: View {
     }
 
     private func checkAndDownloadImages() async {
-        // If blocked, don't download yet
-        if isBlocked && locationManager.lastKnownLocation != nil {
-            return
-        }
-        
-        let city = UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         let targetList: [String]
         if CardDatabase.hasActivePack(), let activePack = CardDatabase.getActivePack(), !activePack.isEmpty {
             targetList = activePack
         } else {
-            targetList = CardDatabase.artworksFor(location: city)
+            targetList = CardDatabase.artworksFor(location: activeCatalogID)
         }
 
-        let downloaded = CardDatabase.downloadedArtworkNames(for: city)
-        let missing = targetList.filter { !downloaded.contains($0) }
+        let downloaded = Set(CardDatabase.downloadedArtworkNames(for: activeCatalogID))
+        let missing = targetList.filter { !downloaded.contains($0) && !CardDatabase.fareImpresaPhotoNames.contains($0) }
 
         if !missing.isEmpty {
             await MainActor.run {
@@ -852,7 +855,7 @@ struct ARArtworkView: View {
                 Spacer().frame(height: 24)
                 
                 // Subtitle / Description
-                if locationManager.authorizationStatus == .denied || locationManager.authorizationStatus == .restricted {
+                if locationManager?.authorizationStatus == .denied || locationManager?.authorizationStatus == .restricted {
                     Text("Location services are required to verify you are at the museum. Please enable location permissions in Settings.")
                         .font(.custom("Helvetica", size: 12))
                         .lineSpacing(2)

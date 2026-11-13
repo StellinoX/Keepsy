@@ -66,6 +66,23 @@ struct CardDatabaseLogicTests {
         #expect(CardDatabase.artworksFor(location: "zoo") == ["z1", "z2"])
     }
 
+    @Test func fareImpresaOnlyShowsItsOwnArtworks() {
+        let collectionID = MuseumConfig.fareImpresa.id
+        let photos = ["fare-impresa-01", "fare-impresa-02", "fare-impresa-03", "fare-impresa-04", "fare-impresa-05"]
+        CardDatabase.remoteArtworks = [
+            "other": TestSupport.artwork(internalName: "other", museumId: "uffizi"),
+        ]
+        #expect(CardDatabase.artworksFor(location: collectionID) == photos)
+
+        CardDatabase.artworksByMuseum = [collectionID: []]
+        #expect(CardDatabase.artworksFor(location: collectionID) == photos)
+
+        CardDatabase.remoteArtworks["new"] = TestSupport.artwork(internalName: "new", museumId: collectionID)
+        CardDatabase.artworksByMuseum = [collectionID: ["new", photos[0]]]
+        #expect(CardDatabase.artworksFor(location: collectionID) == photos + ["new"])
+        #expect(photos.map { CardDatabase.cardNumber(for: $0) } == [1, 2, 3, 4, 5])
+    }
+
     // MARK: - downloadedArtworkNames
 
     @Test func downloadedArtworkNamesEmptyWhenNoFilesOnDisk() {

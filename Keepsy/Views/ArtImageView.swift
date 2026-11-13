@@ -29,7 +29,7 @@ struct ArtImageView: View {
                 } else {
                     Image(uiImage: img)
                         .resizable()
-                        .aspectRatio(contentMode: .fill)
+                        .aspectRatio(contentMode: CardDatabase.fareImpresaPhotoNames.contains(cardName) ? .fit : .fill)
                         .clipped()
                 }
             } else if cardName.contains("_experience") || cardName == "vale" {

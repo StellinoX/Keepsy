@@ -19,7 +19,7 @@ struct AlbumCardCell: View {
     let hidePocket: Bool
 
     private var cardNumber: Int {
-        CardDatabase.remoteArtworks[name]?.cardNumber ?? (index + 1)
+        CardDatabase.cardNumber(for: name) ?? (index + 1)
     }
 
     var body: some View {

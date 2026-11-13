@@ -31,7 +31,7 @@ struct PackSelectionView: View {
     private let selLift: CGFloat = 28
 
     private var imageName: String {
-        MuseumConfig.shared.museums.first(where: { $0.id == museumId })?.packetImageName ?? "uffizi_pacchetto"
+        MuseumConfig.shared.packetImageName(for: museumId) ?? "uffizi_pacchetto"
     }
 
     private func topOffset(forDiff diff: CGFloat) -> CGFloat {
@@ -83,8 +83,9 @@ struct PackSelectionView: View {
             // Museum name + city header with blur
             if !isOpening {
                 VStack(spacing: 4) {
-                    if let museum = MuseumConfig.shared.museums.first(where: { $0.id == museumId }) {
-                        Text(museum.name.uppercased())
+                    let museum = MuseumConfig.shared.museums.first(where: { $0.id == museumId })
+                    if let name = museum?.name ?? (museumId == MuseumConfig.fareImpresa.id ? MuseumConfig.fareImpresa.name : nil) {
+                        Text(name.uppercased())
                             .font(.system(size: 36, weight: .black, design: .default).italic())
                             .foregroundStyle(
                                 LinearGradient(
@@ -93,9 +94,11 @@ struct PackSelectionView: View {
                                     endPoint: .trailing
                                 )
                             )
-                        Text(museum.city)
-                            .font(.system(size: 16, weight: .regular, design: .default).italic())
-                            .foregroundStyle(.white.opacity(0.75))
+                        if let city = museum?.city {
+                            Text(city)
+                                .font(.system(size: 16, weight: .regular, design: .default).italic())
+                                .foregroundStyle(.white.opacity(0.75))
+                        }
                     }
                 }
                 .background(

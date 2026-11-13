@@ -149,8 +149,8 @@ struct DebugMenuView: View {
     }
 
     private func revealEveryCard() {
-        let names = MuseumConfig.shared.museums.flatMap {
-            CardDatabase.artworksFor(location: $0.id)
+        let names = MuseumConfig.shared.artworkCatalogIDs.flatMap {
+            CardDatabase.artworksFor(location: $0)
         }
         UserDefaults.standard.set(Array(Set(names)), forKey: "FoundCards")
         UserDefaults.standard.set(Array(Set(names)), forKey: "RevealedCards")
@@ -167,10 +167,10 @@ struct DebugMenuView: View {
         defaults.removeObject(forKey: "activePackTearMask")
         defaults.removeObject(forKey: "activePackDuplicates")
 
-        for museum in MuseumConfig.shared.museums {
-            defaults.removeObject(forKey: "activePackCards_\(museum.id)")
-            defaults.removeObject(forKey: "activePackTearMask_\(museum.id)")
-            defaults.removeObject(forKey: "activePackDuplicates_\(museum.id)")
+        for catalogID in MuseumConfig.shared.artworkCatalogIDs {
+            defaults.removeObject(forKey: "activePackCards_\(catalogID)")
+            defaults.removeObject(forKey: "activePackTearMask_\(catalogID)")
+            defaults.removeObject(forKey: "activePackDuplicates_\(catalogID)")
         }
         collectionRevision += 1
         NotificationCenter.default.post(name: NSNotification.Name("KeepsyCardsDidChange"), object: nil)

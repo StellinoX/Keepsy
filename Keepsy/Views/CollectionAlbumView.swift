@@ -96,10 +96,17 @@ struct CollectionAlbumView: View {
     }
 
     var headerTitle: String {
+        if isFareImpresa {
+            return MuseumConfig.fareImpresa.name.uppercased()
+        }
         if let loc = museumLocation, let museum = MuseumConfig.shared.museums.first(where: { $0.id == loc.lowercased() }) {
             return museum.name.uppercased()
         }
         return "GLOBAL COLLECTION"
+    }
+
+    private var isFareImpresa: Bool {
+        museumLocation?.lowercased() == MuseumConfig.fareImpresa.id
     }
 
     var museumCity: String {
@@ -241,19 +248,19 @@ struct CollectionAlbumView: View {
                                 .allowsHitTesting(false)
                             
                             // Foreground interactive area for the Experience Card (both locked and unlocked)
-                            Color.clear
-                                .frame(width: specialCardWidth, height: specialCardHeight)
-                                .contentShape(Rectangle())
-                                .padding(.top, showCloseButton ? 135 : 80)
-                                .onTapGesture {
-                                    tapExperienceCard()
-                                }
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel(isSpecialCardUnlocked ? "Experience card" : "Special card, locked")
-                                .accessibilityHint(isSpecialCardUnlocked ? "Double-tap to open experience card" : "Complete collection to unlock")
-                                .accessibilityAddTraits(.isButton)
-                                .accessibilityHidden(!hasSpecialCard)
-                                .allowsHitTesting(hasSpecialCard)
+                            if hasSpecialCard {
+                                Color.clear
+                                    .frame(width: specialCardWidth, height: specialCardHeight)
+                                    .contentShape(Rectangle())
+                                    .padding(.top, showCloseButton ? 135 : 80)
+                                    .onTapGesture {
+                                        tapExperienceCard()
+                                    }
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel(isSpecialCardUnlocked ? "Experience card" : "Special card, locked")
+                                    .accessibilityHint(isSpecialCardUnlocked ? "Double-tap to open experience card" : "Complete collection to unlock")
+                                    .accessibilityAddTraits(.isButton)
+                            }
                         }
                         
                         // ── ALBUM GRID CONTAINER ─────────────────────────────────
@@ -285,6 +292,16 @@ struct CollectionAlbumView: View {
                                 Rectangle()
                                     .padding(.top, offsetY + headerHeight)
                             )
+
+                            if isFareImpresa && filteredArtworks.isEmpty {
+                                Text("Non ci sono ancora quadri in questa collezione.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.white.opacity(0.7))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 24)
+                                    .padding(.top, headerHeight + 12)
+                                    .padding(.bottom, 24)
+                            }
 
                             // Touch blocker for the header area to prevent tapping cards that have scrolled underneath it
                             Color.clear
@@ -532,7 +549,7 @@ struct CollectionAlbumView: View {
             .position(x: flyingFrame.midX, y: flyingFrame.midY)
         } else {
             let isRevealed = revealedCards.contains(name) || name.contains("_experience") || name == "vale"
-            let index = CardDatabase.remoteArtworks[name]?.cardNumber ?? (filteredArtworks.firstIndex(of: name).map { $0 + 1 })
+            let index = CardDatabase.cardNumber(for: name) ?? (filteredArtworks.firstIndex(of: name).map { $0 + 1 })
             let goldBorder = LinearGradient(
                 colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
                          Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],

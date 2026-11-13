@@ -38,10 +38,10 @@ struct CardDatabase {
             UserDefaults.standard.removeObject(forKey: mapCacheKey)
             
             // Also clean up all active packs to prevent crash/inconsistency
-            for museum in MuseumConfig.shared.museums {
-                UserDefaults.standard.removeObject(forKey: "activePackCards_\(museum.id)")
-                UserDefaults.standard.removeObject(forKey: "activePackTearMask_\(museum.id)")
-                UserDefaults.standard.removeObject(forKey: "activePackDuplicates_\(museum.id)")
+            for catalogID in MuseumConfig.shared.artworkCatalogIDs {
+                UserDefaults.standard.removeObject(forKey: "activePackCards_\(catalogID)")
+                UserDefaults.standard.removeObject(forKey: "activePackTearMask_\(catalogID)")
+                UserDefaults.standard.removeObject(forKey: "activePackDuplicates_\(catalogID)")
             }
             UserDefaults.standard.removeObject(forKey: "activePackCards")
             UserDefaults.standard.removeObject(forKey: "activePackTearMask")
@@ -87,19 +87,23 @@ struct CardDatabase {
             var museumMap: [String: [String]] = [:]
             var hiddenArtworkNames: Set<String> = []
             
-            for museum in MuseumConfig.shared.museums {
-                let fetched = try await NetworkService.shared.fetchArtworks(for: museum.id)
+            for catalogID in MuseumConfig.shared.artworkCatalogIDs {
+                let fetched = try await NetworkService.shared.fetchArtworks(
+                    for: catalogID,
+                    includeBlocked: catalogID == MuseumConfig.fareImpresa.id
+                )
                 let sortedFetched = fetched.sorted { ($0.cardNumber ?? Int.max) < ($1.cardNumber ?? Int.max) }
                 var ids: [String] = []
                 for art in sortedFetched {
-                    guard art.isAppStoreAllowed != false else {
+                    guard art.isAppStoreAllowed != false,
+                          ArtworkSafetyPolicy.allows(internalName: art.internalName, remoteApproval: art.isAppStoreAllowed) else {
                         hiddenArtworkNames.insert(art.internalName)
                         continue
                     }
                     allArtworks[art.internalName] = art
                     ids.append(art.internalName)
                 }
-                museumMap[museum.id] = ids
+                museumMap[catalogID] = ids
             }
             
             remoteArtworks = allArtworks
@@ -115,7 +119,49 @@ struct CardDatabase {
     }
     
     static func cardNumber(for name: String) -> Int? {
-        remoteArtworks[name]?.cardNumber
+        artwork(for: name)?.cardNumber
+    }
+
+    static func artwork(for name: String) -> NetworkArtwork? {
+        remoteArtworks[name] ?? fareImpresaPhotos.first { $0.internalName == name }
+    }
+
+    private static let fareImpresaPhotos: [NetworkArtwork] = [
+        ("fare-impresa-01", "Cavalli tra le onde"),
+        ("fare-impresa-02", "Velieri in mare"),
+        ("fare-impresa-03", "Composizione urbana"),
+        ("fare-impresa-04", "Figure con pergamena"),
+        ("fare-impresa-05", "Atelier in rosso"),
+    ].enumerated().map { index, photo in
+        let (name, title) = photo
+        return NetworkArtwork(
+            id: name,
+            title: title,
+            description: nil,
+            artist: nil,
+            imageUrl: "",
+            createdAt: "",
+            internalName: name,
+            inventoryNumber: nil,
+            date: nil,
+            technique: nil,
+            dimensions: nil,
+            museumId: MuseumConfig.fareImpresa.id,
+            cardNumber: index + 1,
+            isAppStoreAllowed: nil
+        )
+    }
+
+    static let fareImpresaPhotoNames = Set(fareImpresaPhotos.map(\.internalName))
+
+    private static func fareImpresaArtworkNames() -> [String] {
+        let collectionID = MuseumConfig.fareImpresa.id
+        let catalogNames = artworksByMuseum[collectionID]
+            ?? remoteArtworks.values.filter { $0.museumId?.lowercased() == collectionID }
+                .map(\.internalName).sorted()
+        let hidden = hiddenArtworkNames
+        return (fareImpresaPhotos.map(\.internalName) + catalogNames.filter { !fareImpresaPhotoNames.contains($0) })
+            .filter { !hidden.contains($0) && ArtworkSafetyPolicy.allows(internalName: $0, remoteApproval: artwork(for: $0)?.isAppStoreAllowed) }
     }
 
     // MARK: - Local Image Caching
@@ -233,12 +279,14 @@ struct CardDatabase {
     }
 
     static func downloadImages(for artworks: [String]) async {
+        let names = artworks.filter { !fareImpresaPhotoNames.contains($0) }
+        guard !names.isEmpty else { return }
         if remoteArtworks.isEmpty {
             await syncWithCloud()
         }
         
         let dir = artworksDirectoryURL
-        let artworksToDownload = artworks.filter { name in
+        let artworksToDownload = names.filter { name in
             guard let art = remoteArtworks[name], !art.imageUrl.isEmpty else { return false }
             let destinationURL = dir.appendingPathComponent("\(name).jpg")
             if FileManager.default.fileExists(atPath: destinationURL.path) {
@@ -380,6 +428,9 @@ struct CardDatabase {
     
     static func artworksFor(location: String) -> [String] {
         let loc = location.lowercased()
+        if loc == MuseumConfig.fareImpresa.id {
+            return fareImpresaArtworkNames()
+        }
         if let list = artworksByMuseum[loc], !list.isEmpty {
             return list.filter { !hiddenArtworkNames.contains($0) }
         }
@@ -411,7 +462,7 @@ struct CardDatabase {
         if name == "vale" {
             return "Vale"
         }
-        if let artwork = remoteArtworks[name] {
+        if let artwork = artwork(for: name) {
             return artwork.title
         }
         
@@ -463,10 +514,19 @@ struct CardDatabase {
         return colors[hash % colors.count]
     }
     
+    private static func legacyPackKey(_ key: String, for catalogID: String) -> String? {
+        catalogID == MuseumConfig.fareImpresa.id ? nil : key
+    }
+
+    static func activePackTearMask(for catalogID: String) -> Data? {
+        UserDefaults.standard.data(forKey: "activePackTearMask_\(catalogID)")
+            ?? legacyPackKey("activePackTearMask", for: catalogID).flatMap { UserDefaults.standard.data(forKey: $0) }
+    }
+
     static func getActivePack(for museumId: String? = nil) -> [String]? {
         let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         let cards = UserDefaults.standard.stringArray(forKey: "activePackCards_\(city)")
-            ?? UserDefaults.standard.stringArray(forKey: "activePackCards")
+            ?? legacyPackKey("activePackCards", for: city).flatMap { UserDefaults.standard.stringArray(forKey: $0) }
         return cards?.filter { !hiddenArtworkNames.contains($0) }
     }
     
@@ -481,17 +541,18 @@ struct CardDatabase {
         let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         if let active = getActivePack(for: city), !active.isEmpty {
             let revealed = getRevealedCards()
-            let dupes = Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
-                            ?? UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
+            let dupes = getDuplicatesInActivePack(for: city)
             if active.allSatisfy({ revealed.contains($0) || dupes.contains($0) }) {
                 UserDefaults.standard.removeObject(forKey: "activePackCards_\(city)")
                 UserDefaults.standard.removeObject(forKey: "activePackTearMask_\(city)")
                 UserDefaults.standard.removeObject(forKey: "activePackDuplicates_\(city)")
                 
                 // Clean up legacy keys too
-                UserDefaults.standard.removeObject(forKey: "activePackCards")
-                UserDefaults.standard.removeObject(forKey: "activePackTearMask")
-                UserDefaults.standard.removeObject(forKey: "activePackDuplicates")
+                if city != MuseumConfig.fareImpresa.id {
+                    UserDefaults.standard.removeObject(forKey: "activePackCards")
+                    UserDefaults.standard.removeObject(forKey: "activePackTearMask")
+                    UserDefaults.standard.removeObject(forKey: "activePackDuplicates")
+                }
             }
         }
     }
@@ -501,10 +562,10 @@ struct CardDatabase {
     /// Incrementa il contatore doppie per le carte già possedute quando viene aperto un pacchetto.
     /// Restituisce l'array delle carte che erano doppie.
     @discardableResult
-    static func trackDuplicates(in packCards: [String]) -> [String] {
+    static func trackDuplicates(in packCards: [String], for catalogID: String? = nil) -> [String] {
         let revealed = getRevealedCards()
-        let found = getFoundCards()
-        let alreadyOwned = packCards.filter { revealed.contains($0) || found.contains($0) }
+        let owned = catalogID == MuseumConfig.fareImpresa.id ? revealed : revealed.union(getFoundCards())
+        let alreadyOwned = packCards.filter { owned.contains($0) }
         
         if !alreadyOwned.isEmpty {
             var counts = getDuplicateCounts()
@@ -538,8 +599,9 @@ struct CardDatabase {
     static func getDuplicatesInActivePack(for museumId: String? = nil) -> Set<String> {
         let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         guard getActivePack(for: city) != nil else { return [] }
-        return Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
-                   ?? UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
+        let duplicates = UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
+            ?? legacyPackKey("activePackDuplicates", for: city).flatMap { UserDefaults.standard.stringArray(forKey: $0) }
+        return Set(duplicates ?? [])
     }
     
     /// True se TUTTE le carte del pacchetto attivo sono già state rivelate (tutte doppie)
@@ -547,8 +609,7 @@ struct CardDatabase {
         let city = museumId ?? UserDefaults.standard.string(forKey: "currentCity") ?? "uffizi"
         guard let pack = getActivePack(for: city), !pack.isEmpty else { return false }
         let revealed = getRevealedCards()
-        let dupes = Set(UserDefaults.standard.stringArray(forKey: "activePackDuplicates_\(city)")
-                        ?? UserDefaults.standard.stringArray(forKey: "activePackDuplicates") ?? [])
+        let dupes = getDuplicatesInActivePack(for: city)
         return pack.allSatisfy { revealed.contains($0) || dupes.contains($0) }
     }
     

@@ -57,11 +57,14 @@ struct CardInspectionView: View {
     }
 
     private var isRevealed: Bool {
-        CardDatabase.getRevealedCards().contains(card.name) || CardDatabase.getFoundCards().contains(card.name) || card.name.contains("_experience") || card.name == "vale"
+        if CardDatabase.artwork(for: card.name)?.museumId?.lowercased() == MuseumConfig.fareImpresa.id {
+            return CardDatabase.getRevealedCards().contains(card.name)
+        }
+        return CardDatabase.getRevealedCards().contains(card.name) || CardDatabase.getFoundCards().contains(card.name) || isSpecialCard
     }
 
     private var artwork: NetworkArtwork? {
-        CardDatabase.remoteArtworks[card.name]
+        CardDatabase.artwork(for: card.name)
     }
 
     private var categoryName: String {
@@ -152,7 +155,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                         let sheetPeekHeight: CGFloat = 160
                         let cardTopY: CGFloat = max(135, (screenHeight - cardH - sheetPeekHeight) / 2 + 10)
 
-                        let index = CardDatabase.remoteArtworks[card.name]?.cardNumber
+                        let index = CardDatabase.cardNumber(for: card.name)
                         let goldBorder = LinearGradient(
                             colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"),
                                      Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
@@ -296,7 +299,7 @@ Van Gogh is one of my favourite painters, and Starry Night one of his works I en
                                     .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
                                     .opacity(isFrontShowing ? 0.0 : 1.0)
 
-                                let index = CardDatabase.remoteArtworks[card.name]?.cardNumber
+                                let index = CardDatabase.cardNumber(for: card.name)
                                 let goldBorder = LinearGradient(
                                     colors: [
                                         Color(hex: "F5E480"), Color(hex: "F1B40A"),
@@ -583,7 +586,7 @@ struct CardFullDetailView: View {
                         .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
                         .opacity(isFrontShowing ? 0.0 : 1.0)
 
-                        let index = CardDatabase.remoteArtworks[card.name]?.cardNumber
+                        let index = CardDatabase.cardNumber(for: card.name)
                         let goldBorder = LinearGradient(
                             colors: [Color(hex: "F5E480"), Color(hex: "F1B40A"), Color(hex: "9A6F00"), Color(hex: "F1B40A"), Color(hex: "F5E480")],
                             startPoint: .topLeading, endPoint: .bottomTrailing
